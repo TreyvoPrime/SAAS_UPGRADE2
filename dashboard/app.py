@@ -281,6 +281,8 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.get("/dashboard/{guild_id}", response_class=HTMLResponse)
     async def dashboard(request: Request, guild_id: int):
+        if session_user(request) is None:
+            return RedirectResponse(url="/", status_code=302)
         selected_guild, guilds = await require_guild_access(request, guild_id)
         roles = guild_roles(guild_id)
         commands, module_cards = guild_command_rows(guild_id)
@@ -304,6 +306,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "selected_guild": selected_guild,
                 "commands": commands,
                 "sections": module_cards,
+                "modules": module_cards,
                 "roles": roles,
                 "logs": logs,
                 "stats": stats,
