@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from core.access import CommandAccessManager
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
-from dashboard.app import DashboardServer
+from dashboard.app import DashboardServer, resolve_dashboard_base_url, resolve_dashboard_host, resolve_dashboard_port
 
 
 env_path = Path(__file__).parent / ".env"
@@ -102,10 +102,11 @@ bot = ServerCoreBot()
 
 @bot.event
 async def on_ready():
-    dashboard_host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
-    dashboard_port = os.getenv("DASHBOARD_PORT", "8000")
+    dashboard_host = resolve_dashboard_host()
+    dashboard_port = resolve_dashboard_port()
+    dashboard_url = resolve_dashboard_base_url(dashboard_host, dashboard_port)
     print(f"Logged in as {bot.user} ({bot.user.id})")
-    print(f"Dashboard available at http://{dashboard_host}:{dashboard_port}")
+    print(f"Dashboard available at {dashboard_url}")
     print("Voice states intent:", bot.intents.voice_states)
     print("Moderation intent:", bot.intents.moderation)
     print("Members intent:", bot.intents.members)

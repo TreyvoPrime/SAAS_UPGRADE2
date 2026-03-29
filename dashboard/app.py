@@ -30,6 +30,26 @@ class CommandPolicyPayload(BaseModel):
     allowed_role_ids: list[int] | None = None
 
 
+def resolve_dashboard_host() -> str:
+    return os.getenv("DASHBOARD_HOST") or os.getenv("HOST") or "0.0.0.0"
+
+
+def resolve_dashboard_port() -> int:
+    return int(os.getenv("PORT") or os.getenv("DASHBOARD_PORT") or "8000")
+
+
+def resolve_dashboard_base_url(host: str, port: int) -> str:
+    explicit = os.getenv("DASHBOARD_BASE_URL")
+    if explicit:
+        return explicit.rstrip("/")
+
+    railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+    if railway_domain:
+        return f"https://{railway_domain}".rstrip("/")
+
+    return f"http://{host}:{port}".rstrip("/")
+
+
 def create_dashboard_app(bot) -> FastAPI:
     app = FastAPI(title="ServerCore Dashboard")
     app.add_middleware(
@@ -41,9 +61,11 @@ def create_dashboard_app(bot) -> FastAPI:
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
+    dashboard_host = resolve_dashboard_host()
+    dashboard_port = resolve_dashboard_port()
     discord_client_id = os.getenv("DISCORD_CLIENT_ID") or os.getenv("DISCORD_APP_ID")
     discord_client_secret = os.getenv("DISCORD_CLIENT_SECRET")
-    dashboard_base_url = os.getenv("DASHBOARD_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+    dashboard_base_url = resolve_dashboard_base_url(dashboard_host, dashboard_port)
     redirect_uri = os.getenv("DISCORD_REDIRECT_URI") or f"{dashboard_base_url}/auth/callback"
     install_permissions = os.getenv("DISCORD_INSTALL_PERMISSIONS", "8")
 
@@ -382,8 +404,8 @@ class DashboardServer:
 
 
 def start_dashboard_server(bot) -> threading.Thread:
-    port = int(os.getenv("DASHBOARD_PORT", "8000"))
-    host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
+    port = resolve_dashboard_port()
+    host = resolve_dashboard_host()
     app = create_dashboard_app(bot)
     config = uvicorn.Config(app=app, host=host, port=port, log_level="info")
     server = uvicorn.Server(config=config)

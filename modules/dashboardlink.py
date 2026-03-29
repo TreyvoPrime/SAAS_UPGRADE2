@@ -4,6 +4,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from dashboard.app import resolve_dashboard_base_url, resolve_dashboard_host, resolve_dashboard_port
+
 
 class DashboardLink(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -38,11 +40,9 @@ class DashboardLink(commands.Cog):
             )
             return
 
-        base_url = os.getenv("DASHBOARD_BASE_URL")
-        if not base_url:
-            host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
-            port = os.getenv("DASHBOARD_PORT", "8000")
-            base_url = f"http://{host}:{port}"
+        host = resolve_dashboard_host()
+        port = resolve_dashboard_port()
+        base_url = resolve_dashboard_base_url(host, port)
 
         dashboard_link = f"{base_url.rstrip('/')}/dashboard/{interaction.guild.id}"
 
@@ -56,7 +56,7 @@ class DashboardLink(commands.Cog):
             value=dashboard_link,
             inline=False,
         )
-        embed.set_footer(text="Make sure your dashboard base URL is public if members should open it outside your local machine.")
+        embed.set_footer(text="Use a public DASHBOARD_BASE_URL or Railway domain so members can open this outside your machine.")
 
         await interaction.response.send_message(embed=embed)
 
