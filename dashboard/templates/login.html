@@ -6,18 +6,31 @@
     <title>{{ bot_name }} Dashboard</title>
     <link rel="stylesheet" href="/static/dashboard.css">
 </head>
-<body class="shell">
-    <main class="auth-stage">
-        <section class="auth-panel">
-            <div class="eyebrow">ServerCore Control Center</div>
-            <h1>Manage your bot like a real product surface.</h1>
-            <p>Control command access, switch commands on or off per server, and review usage activity from one Discord-connected dashboard.</p>
+<body class="nitro-shell">
+    <main class="auth-layout">
+        <section class="hero-panel">
+            <div class="eyebrow">ServerCore Dashboard</div>
+            <h1>Discord bot controls that feel closer to a real admin product.</h1>
+            <p>Manage who can run commands, keep the command surface compact, and move between servers without losing context.</p>
+            <div class="feature-strip">
+                <span>Role-based command access</span>
+                <span>Server switcher</span>
+                <span>Usage log feed</span>
+            </div>
+        </section>
+
+        <section class="login-panel">
+            <div class="panel-glow"></div>
+            <div class="eyebrow">Sign in</div>
+            <h2>Connect Discord</h2>
+            <p>Use Discord OAuth to view only the servers where you have permission to manage bot settings.</p>
             {% if oauth_ready %}
-            <a class="primary-button" href="/login">Continue with Discord</a>
+            <a class="primary-button full-width" href="/login">Continue with Discord</a>
+            <p class="footnote">Dashboard base URL: {{ dashboard_base_url }}</p>
             {% else %}
             <div class="notice-card">
                 <strong>OAuth setup required</strong>
-                <p>Add `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, and `DASHBOARD_SECRET_KEY` to launch login.</p>
+                <p>Add `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, and `DASHBOARD_SECRET_KEY` before logging in.</p>
             </div>
             {% endif %}
         </section>

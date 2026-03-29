@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import threading
-import traceback
+from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
-from core.command_catalog import build_command_catalog
+from core.command_catalog import FREE_TIER, PREMIUM_TIER, build_command_catalog
 
 MANAGE_GUILD = 0x20
 ADMINISTRATOR = 0x08
@@ -41,34 +41,43 @@ def create_dashboard_app(bot) -> FastAPI:
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
-    discord_client_id = os.getenv("DISCORD_CLIENT_ID") or os.getenv("DISCORD_APP_ID") or "1487599032170975292"
+    discord_client_id = os.getenv("DISCORD_CLIENT_ID") or os.getenv("DISCORD_APP_ID")
     discord_client_secret = os.getenv("DISCORD_CLIENT_SECRET")
     dashboard_base_url = os.getenv("DASHBOARD_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+    redirect_uri = os.getenv("DISCORD_REDIRECT_URI") or f"{dashboard_base_url}/auth/callback"
 
     def oauth_ready() -> bool:
         return bool(discord_client_id and discord_client_secret)
 
-    def build_redirect_uri() -> str:
-        return f"{dashboard_base_url}/auth/callback"
+    def session_user(request: Request) -> dict | None:
+        return request.session.get("discord_user")
+
+    def _guild_icon_url(raw_guild: dict, live_guild) -> str:
+        if live_guild and getattr(live_guild, "icon", None):
+            return live_guild.icon.url
+
+        icon_hash = raw_guild.get("icon")
+        if icon_hash:
+            return f"https://cdn.discordapp.com/icons/{raw_guild['id']}/{icon_hash}.png?size=256"
+
+        guild_id = int(raw_guild["id"])
+        return f"https://cdn.discordapp.com/embed/avatars/{guild_id % 5}.png"
 
     async def fetch_discord_token(code: str) -> dict:
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.post(
-                    "https://discord.com/api/oauth2/token",
-                    data={
-                        "client_id": discord_client_id,
-                        "client_secret": discord_client_secret,
-                        "grant_type": "authorization_code",
-                        "code": code,
-                        "redirect_uri": build_redirect_uri(),
-                    },
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                )
-                response.raise_for_status()
-                return response.json()
-        except Exception:
-            raise HTTPException(status_code=500, detail="OAuth token fetch failed")
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                "https://discord.com/api/oauth2/token",
+                data={
+                    "client_id": discord_client_id,
+                    "client_secret": discord_client_secret,
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            response.raise_for_status()
+            return response.json()
 
     async def fetch_discord_resource(access_token: str, resource: str) -> dict | list:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -86,103 +95,116 @@ def create_dashboard_app(bot) -> FastAPI:
             response.raise_for_status()
             return response.json()
 
-    def session_user(request: Request) -> dict | None:
-        return request.session.get("discord_user")
-
     async def load_user_guilds(request: Request) -> list[dict]:
         access_token = request.session.get("access_token")
         if not access_token:
             return []
+
         try:
             discord_guilds = await fetch_discord_resource(access_token, "/users/@me/guilds")
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429:
-                await asyncio.sleep(5)
-                discord_guilds = await fetch_discord_resource(access_token, "/users/@me/guilds")
-            else:
-                discord_guilds = []
-        except:
-            discord_guilds = []
+        except Exception:
+            return []
+
+        premium_enabled = any(command["tier"] == PREMIUM_TIER for command in build_command_catalog(bot))
         manageable_guilds: list[dict] = []
-        try:
-            commands = build_command_catalog(bot)
-            has_premium = any(c["tier"] == "Premium" for c in commands)
-        except:
-            has_premium = False
-
         for guild in discord_guilds:
-            try:
-                permissions = int(guild.get("permissions", 0))
-                if not (permissions & MANAGE_GUILD or permissions & ADMINISTRATOR):
-                    continue
-
-                bot_guild = bot.get_guild(int(guild["id"]))
-                if bot_guild is None:
-                    continue
-
-                manageable_guilds.append(
-                    {
-                        "id": int(guild["id"]),
-                        "name": guild["name"],
-                        "icon": guild.get("icon"),
-                        "member_count": bot_guild.member_count or len(bot_guild.members),
-                        "tier": "Premium" if has_premium else "Free",
-                    }
-                )
-            except:
+            permissions = int(guild.get("permissions", 0))
+            if not (permissions & MANAGE_GUILD or permissions & ADMINISTRATOR):
                 continue
 
-        manageable_guilds.sort(key=lambda g: g["name"].lower())
+            bot_guild = bot.get_guild(int(guild["id"]))
+            if bot_guild is None:
+                continue
+
+            manageable_guilds.append(
+                {
+                    "id": int(guild["id"]),
+                    "name": guild["name"],
+                    "icon_url": _guild_icon_url(guild, bot_guild),
+                    "initials": guild["name"][:2].upper(),
+                    "member_count": bot_guild.member_count or len(bot_guild.members),
+                    "role_count": max(len(bot_guild.roles) - 1, 0),
+                    "premium_enabled": premium_enabled,
+                }
+            )
+
+        manageable_guilds.sort(key=lambda item: item["name"].lower())
         return manageable_guilds
 
-    async def require_guild_access(request: Request, guild_id: int) -> tuple[dict, list[dict]]:
+    async def require_user(request: Request) -> dict:
         user = session_user(request)
         if user is None:
             raise HTTPException(status_code=401, detail="Login required")
+        return user
 
+    async def require_guild_access(request: Request, guild_id: int) -> tuple[dict, list[dict]]:
+        await require_user(request)
         guilds = await load_user_guilds(request)
-        selected = next((g for g in guilds if g["id"] == guild_id), None)
+        selected = next((guild for guild in guilds if guild["id"] == guild_id), None)
         if selected is None:
             raise HTTPException(status_code=403, detail="Guild access denied")
-
         return selected, guilds
 
     def guild_roles(guild_id: int) -> list[dict]:
-        try:
-            guild = bot.get_guild(guild_id)
-            if guild is None:
-                return []
-            roles = [
-                {"id": role.id, "name": role.name, "position": role.position}
-                for role in guild.roles
-                if role.name != "@everyone"
-            ]
-            roles.sort(key=lambda r: r["position"], reverse=True)
-            return roles
-        except:
+        guild = bot.get_guild(guild_id)
+        if guild is None:
             return []
 
-    def guild_command_rows(guild_id: int) -> list[dict]:
-        try:
-            commands = build_command_catalog(bot)
-        except:
-            commands = []
-        roles_list = guild_roles(guild_id)
-        roles_by_id = {r["id"]: r["name"] for r in roles_list}
-        rows = []
-        for command in commands:
-            try:
-                policy = bot.access_manager.controls.get_policy(guild_id, command["name"])
-            except:
-                policy = {"enabled": True, "allowed_role_ids": []}
-            rows.append({
+        roles = [
+            {
+                "id": role.id,
+                "name": role.name,
+                "position": role.position,
+                "label": role.name.lower(),
+            }
+            for role in guild.roles
+            if role.name != "@everyone"
+        ]
+        roles.sort(key=lambda role: role["position"], reverse=True)
+        return roles
+
+    def _slugify(value: str) -> str:
+        return "".join(character.lower() if character.isalnum() else "-" for character in value).strip("-")
+
+    def guild_command_rows(guild_id: int) -> tuple[list[dict], list[dict]]:
+        roles = guild_roles(guild_id)
+        role_names = {role["id"]: role["name"] for role in roles}
+        grouped: dict[str, list[dict]] = defaultdict(list)
+        rows: list[dict] = []
+
+        for command in build_command_catalog(bot):
+            policy = bot.access_manager.controls.get_policy(guild_id, command["name"])
+            allowed_role_ids = policy["allowed_role_ids"] or []
+            row = {
                 **command,
+                "slug": _slugify(command["name"]),
+                "module_slug": _slugify(command["module"]),
+                "tier_slug": command["tier"].lower(),
                 "enabled": policy["enabled"],
-                "allowed_role_ids": policy["allowed_role_ids"] or [],
-                "allowed_role_names": [roles_by_id.get(rid, f"Deleted ({rid})") for rid in policy["allowed_role_ids"]],
-                "allowed_roles": [{"name": roles_by_id.get(rid, f"Deleted ({rid})")} for rid in policy["allowed_role_ids"]],
-            })
-        return rows
+                "allowed_role_ids": allowed_role_ids,
+                "allowed_role_names": [role_names.get(role_id, f"Deleted ({role_id})") for role_id in allowed_role_ids],
+                "allowed_role_count": len(allowed_role_ids),
+                "status_label": "Enabled" if policy["enabled"] else "Disabled",
+            }
+            rows.append(row)
+            grouped[row["module"]].append(row)
+
+        module_cards = []
+        for module_name, commands in sorted(grouped.items(), key=lambda item: item[0].lower()):
+            module_cards.append(
+                {
+                    "name": module_name,
+                    "slug": _slugify(module_name),
+                    "count": len(commands),
+                    "disabled_count": len([command for command in commands if not command["enabled"]]),
+                    "restricted_count": len([command for command in commands if command["allowed_role_ids"]]),
+                    "tier": PREMIUM_TIER if any(command["tier"] == PREMIUM_TIER for command in commands) else FREE_TIER,
+                    "commands": sorted(commands, key=lambda item: item["name"]),
+                }
+            )
+
+        rows.sort(key=lambda item: (item["module"].lower(), item["name"]))
+        return rows, module_cards
 
     @app.get("/health")
     async def health() -> dict:
@@ -191,18 +213,34 @@ def create_dashboard_app(bot) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request):
         user = session_user(request)
-        guilds = await load_user_guilds(request) if user else []
-
-        if user and guilds:
-            return RedirectResponse(url=f"/dashboard/{guilds[0]['id']}", status_code=302)
+        if user:
+            return RedirectResponse(url="/servers", status_code=302)
 
         return templates.TemplateResponse(
             "login.html",
             {
                 "request": request,
                 "oauth_ready": oauth_ready(),
+                "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
+                "dashboard_base_url": dashboard_base_url,
+            },
+        )
+
+    @app.get("/servers", response_class=HTMLResponse)
+    async def servers(request: Request):
+        user = session_user(request)
+        if user is None:
+            return RedirectResponse(url="/", status_code=302)
+        guilds = await load_user_guilds(request)
+        premium_count = len([command for command in build_command_catalog(bot) if command["tier"] == PREMIUM_TIER])
+        return templates.TemplateResponse(
+            "guilds.html",
+            {
+                "request": request,
+                "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
                 "user": user,
                 "guilds": guilds,
+                "premium_count": premium_count,
             },
         )
 
@@ -214,7 +252,7 @@ def create_dashboard_app(bot) -> FastAPI:
         query = urlencode(
             {
                 "client_id": discord_client_id,
-                "redirect_uri": build_redirect_uri(),
+                "redirect_uri": redirect_uri,
                 "response_type": "code",
                 "scope": "identify guilds",
                 "prompt": "consent",
@@ -224,20 +262,17 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.get("/auth/callback")
     async def auth_callback(request: Request, code: str):
-        try:
-            token_data = await fetch_discord_token(code)
-            user_data = await fetch_discord_resource(token_data["access_token"], "/users/@me")
+        token_data = await fetch_discord_token(code)
+        user_data = await fetch_discord_resource(token_data["access_token"], "/users/@me")
 
-            request.session["access_token"] = token_data["access_token"]
-            request.session["discord_user"] = {
-                "id": user_data["id"],
-                "username": user_data["username"],
-                "global_name": user_data.get("global_name"),
-                "avatar": user_data.get("avatar"),
-            }
-            return RedirectResponse(url="/", status_code=302)
-        except:
-            raise HTTPException(status_code=500, detail="OAuth callback failed")
+        request.session["access_token"] = token_data["access_token"]
+        request.session["discord_user"] = {
+            "id": user_data["id"],
+            "username": user_data["username"],
+            "global_name": user_data.get("global_name"),
+            "avatar": user_data.get("avatar"),
+        }
+        return RedirectResponse(url="/servers", status_code=302)
 
     @app.get("/logout")
     async def logout(request: Request):
@@ -246,70 +281,68 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.get("/dashboard/{guild_id}", response_class=HTMLResponse)
     async def dashboard(request: Request, guild_id: int):
-        try:
-            selected_guild, guilds = await require_guild_access(request, guild_id)
-            commands = guild_command_rows(guild_id)
-            roles = guild_roles(guild_id)
-            logs = bot.command_logs.list_for_guild(guild_id, 75) if hasattr(bot, 'command_logs') else []
+        selected_guild, guilds = await require_guild_access(request, guild_id)
+        roles = guild_roles(guild_id)
+        commands, module_cards = guild_command_rows(guild_id)
+        logs = bot.command_logs.list_for_guild(guild_id, 80) if hasattr(bot, "command_logs") else []
 
-            counts = {
-                "total": len(commands),
-                "free": len([c for c in commands if c.get("tier") == "free"]),
-                "premium": len([c for c in commands if c.get("tier") == "premium"]),
-                "disabled": len([c for c in commands if not c.get("enabled", True)]),
-            }
-            stats = {
-                "commands": counts["total"],
-                "disabled": counts["disabled"],
-                "restricted": len([c for c in commands if c.get("allowed_role_ids")]),
-                "roles": len(roles),
-            }
+        stats = {
+            "commands": len(commands),
+            "disabled": len([command for command in commands if not command["enabled"]]),
+            "restricted": len([command for command in commands if command["allowed_role_ids"]]),
+            "roles": len(roles),
+            "modules": len(module_cards),
+        }
 
-            return templates.TemplateResponse(
-                "dashboard.html",
-                {
-                    "request": request,
-                    "user": session_user(request),
-                    "guilds": guilds,
-                    "selected_guild": selected_guild,
-                    "guild": selected_guild,
-                    "commands": commands,
-                    "roles": roles,
-                    "logs": logs,
-                    "counts": counts,
-                    "stats": stats,
-                },
-            )
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Dashboard load failed: {str(e)}")
+        return templates.TemplateResponse(
+            "dashboard.html",
+            {
+                "request": request,
+                "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
+                "user": session_user(request),
+                "guilds": guilds,
+                "selected_guild": selected_guild,
+                "commands": commands,
+                "sections": module_cards,
+                "roles": roles,
+                "logs": logs,
+                "stats": stats,
+                "dashboard_base_url": dashboard_base_url,
+            },
+        )
 
     @app.get("/api/guilds/{guild_id}/logs")
-    async def guild_logs(request: Request, guild_id: int, limit: int = 75):
+    async def guild_logs(request: Request, guild_id: int, limit: int = 80):
         await require_guild_access(request, guild_id)
-        logs = bot.command_logs.list_for_guild(guild_id, min(limit, 150)) if hasattr(bot, 'command_logs') else []
-        return JSONResponse(logs)
+        logs = bot.command_logs.list_for_guild(guild_id, min(limit, 150)) if hasattr(bot, "command_logs") else []
+        return JSONResponse({"entries": logs})
 
     @app.post("/api/guilds/{guild_id}/command-policy")
     async def update_command_policy(request: Request, guild_id: int, payload: CommandPolicyPayload):
         await require_guild_access(request, guild_id)
 
-        try:
-            commands = build_command_catalog(bot)
-            if not any(c["name"] == payload.command_name for c in commands):
-                raise HTTPException(status_code=404, detail="Unknown command")
+        commands = build_command_catalog(bot)
+        if not any(command["name"] == payload.command_name for command in commands):
+            raise HTTPException(status_code=404, detail="Unknown command")
 
-            policy = bot.access_manager.controls.get_policy(guild_id, payload.command_name)
-            if payload.enabled is not None:
-                policy = bot.access_manager.controls.set_enabled(guild_id, payload.command_name, payload.enabled)
-            if payload.allowed_role_ids is not None:
-                policy = bot.access_manager.controls.set_roles(guild_id, payload.command_name, payload.allowed_role_ids)
+        valid_role_ids = {role["id"] for role in guild_roles(guild_id)}
+        policy = bot.access_manager.controls.get_policy(guild_id, payload.command_name)
 
-            return JSONResponse({
+        if payload.enabled is not None:
+            policy = bot.access_manager.controls.set_enabled(guild_id, payload.command_name, payload.enabled)
+
+        if payload.allowed_role_ids is not None:
+            safe_role_ids = [role_id for role_id in payload.allowed_role_ids if role_id in valid_role_ids]
+            policy = bot.access_manager.controls.set_roles(guild_id, payload.command_name, safe_role_ids)
+
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        return JSONResponse(
+            {
                 "command_name": payload.command_name,
                 "policy": policy,
-            })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Policy update failed: {str(e)}")
+                "allowed_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in policy["allowed_role_ids"]],
+            }
+        )
 
     return app
 
@@ -323,7 +356,7 @@ class DashboardServer:
 
     async def start(self):
         self._thread = start_dashboard_server(self.bot)
-        
+
     async def stop(self):
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5)
@@ -339,4 +372,3 @@ def start_dashboard_server(bot) -> threading.Thread:
     thread = threading.Thread(target=server.run, daemon=True, name="servercore-dashboard")
     thread.start()
     return thread
-
