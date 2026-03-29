@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ bot_name }} Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body class="shell">
+    <main class="auth-stage">
+        <section class="auth-panel">
+            <div class="eyebrow">ServerCore Control Center</div>
+            <h1>Manage your bot like a real product surface.</h1>
+            <p>Control command access, switch commands on or off per server, and review usage activity from one Discord-connected dashboard.</p>
+            {% if oauth_ready %}
+            <a class="primary-button" href="/login">Continue with Discord</a>
+            {% else %}
+            <div class="notice-card">
+                <strong>OAuth setup required</strong>
+                <p>Add `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, and `DASHBOARD_SECRET_KEY` to launch login.</p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

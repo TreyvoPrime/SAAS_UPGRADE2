@@ -1,0 +1,131 @@
+import os
+from pathlib import Path
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+from dotenv import load_dotenv
+
+from core.access import CommandAccessManager
+from core.command_controls import CommandControlStore
+from core.command_logs import CommandLogStore
+from dashboard.app import DashboardServer
+
+
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
+
+TOKEN = os.getenv("DISCORD_TOKEN")
+APP_ID = os.getenv("DISCORD_APP_ID") or os.getenv("DISCORD_CLIENT_ID")
+
+if not TOKEN:
+    raise ValueError("DISCORD_TOKEN missing in .env")
+
+
+class ServerCoreTree(app_commands.CommandTree):
+    def __init__(self, client: commands.Bot):
+        super().__init__(client)
+        self.access_manager: CommandAccessManager = client.access_manager
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await self.access_manager.enforce(interaction)
+
+
+class ServerCoreBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.guilds = True
+        intents.members = True
+        intents.message_content = True
+        intents.moderation = True
+        intents.voice_states = True
+
+        self.command_controls = CommandControlStore()
+        self.command_logs = CommandLogStore()
+        self.access_manager = CommandAccessManager(self.command_controls, self.command_logs)
+
+        super().__init__(
+            command_prefix="!",
+            intents=intents,
+            application_id=int(APP_ID) if APP_ID else None,
+            tree_cls=ServerCoreTree,
+        )
+
+        self.dashboard = DashboardServer(self, self.command_controls, self.command_logs)
+
+    async def setup_hook(self) -> None:
+        await self.load_modules()
+        await self.dashboard.start()
+
+        try:
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} slash commands")
+        except Exception as error:
+            print("Sync failed:", error)
+
+    async def close(self) -> None:
+        await self.dashboard.stop()
+        await super().close()
+
+    async def load_modules(self) -> None:
+        modules_path = Path("modules")
+        premium_path = modules_path / "premium"
+
+        if not modules_path.exists():
+            print("No modules folder found.")
+            return
+
+        for filename in os.listdir(modules_path):
+            full_path = modules_path / filename
+            if full_path.is_file() and filename.endswith(".py") and filename != "__init__.py":
+                try:
+                    await self.load_extension(f"modules.{filename[:-3]}")
+                    print(f"Loaded module: {filename}")
+                except Exception as error:
+                    print(f"Failed to load {filename}: {error}")
+
+        if premium_path.exists():
+            for filename in os.listdir(premium_path):
+                full_path = premium_path / filename
+                if full_path.is_file() and filename.endswith(".py") and filename != "__init__.py":
+                    try:
+                        await self.load_extension(f"modules.premium.{filename[:-3]}")
+                        print(f"Loaded premium module: {filename}")
+                    except Exception as error:
+                        print(f"Failed to load premium module {filename}: {error}")
+        else:
+            print("No premium folder found.")
+
+
+bot = ServerCoreBot()
+
+
+@bot.event
+async def on_ready():
+    dashboard_host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
+    dashboard_port = os.getenv("DASHBOARD_PORT", "8000")
+    print(f"Logged in as {bot.user} ({bot.user.id})")
+    print(f"Dashboard available at http://{dashboard_host}:{dashboard_port}")
+    print("Voice states intent:", bot.intents.voice_states)
+    print("Moderation intent:", bot.intents.moderation)
+    print("Members intent:", bot.intents.members)
+    print("Message content intent:", bot.intents.message_content)
+
+
+@bot.event
+async def on_app_command_completion(interaction: discord.Interaction, command: app_commands.Command):
+    bot.access_manager.log_success(interaction)
+
+
+@bot.event
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    bot.access_manager.log_error(interaction, error)
+    if interaction.response.is_done():
+        return
+    await interaction.response.send_message(
+        "Something went wrong while running that command.",
+        ephemeral=True,
+    )
+
+
+bot.run(TOKEN)

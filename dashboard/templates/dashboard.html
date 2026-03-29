@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ guild.name }} Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body class="shell">
+    <main class="workspace">
+        <header class="topbar">
+            <div>
+                <div class="eyebrow">{{ guild.name }}</div>
+                <h1>Command control</h1>
+            </div>
+            <nav class="toolbar">
+                <a class="ghost-button" href="/">All servers</a>
+                <a class="ghost-button" href="/logout">Log out</a>
+            </nav>
+        </header>
+
+        <section class="stats-band">
+            <article>
+                <span>Total commands</span>
+                <strong>{{ stats.commands }}</strong>
+            </article>
+            <article>
+                <span>Disabled</span>
+                <strong>{{ stats.disabled }}</strong>
+            </article>
+            <article>
+                <span>Role locked</span>
+                <strong>{{ stats.restricted }}</strong>
+            </article>
+            <article>
+                <span>Assignable roles</span>
+                <strong>{{ stats.roles }}</strong>
+            </article>
+        </section>
+
+        <section class="surface-grid">
+            <section class="surface commands-surface">
+                <div class="section-head">
+                    <div>
+                        <div class="eyebrow">Permissions</div>
+                        <h2>Command routing</h2>
+                    </div>
+                    <input id="command-search" class="search-input" type="search" placeholder="Search commands or modules">
+                </div>
+
+                <div class="command-list" id="command-list">
+                    {% for command in commands %}
+                    <article
+                        class="command-row"
+                        data-name="{{ command.name|lower }}"
+                        data-module="{{ command.module|lower }}"
+                        data-tier="{{ command.tier|lower }}"
+                    >
+                        <div class="command-main">
+                            <div class="command-meta">
+                                <span class="tier tier-{{ command.tier|lower }}">{{ command.tier }}</span>
+                                <h3>/{{ command.name }}</h3>
+                                <span class="module-chip">{{ command.module }}</span>
+                            </div>
+                            <p>{{ command.description }}</p>
+                        </div>
+                        <div class="command-controls">
+                            <label class="toggle">
+                                <input type="checkbox" {% if command.enabled %}checked{% endif %} data-command="{{ command.name }}" data-guild="{{ guild.id }}">
+                                <span>Enabled</span>
+                            </label>
+                            <label class="role-picker">
+                                <span>Allowed roles</span>
+                                <select multiple data-role-select="{{ command.name }}" data-guild="{{ guild.id }}">
+                                    {% for role in roles %}
+                                    <option value="{{ role.id }}" {% if role.id in command.allowed_role_ids %}selected{% endif %}>
+                                        {{ role.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <div class="role-chips">
+                                {% if command.allowed_roles %}
+                                    {% for role in command.allowed_roles %}
+                                    <span>{{ role.name }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="muted">All roles with native Discord permission checks</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <aside class="surface logs-surface">
+                <div class="section-head">
+                    <div>
+                        <div class="eyebrow">Activity</div>
+                        <h2>Usage log</h2>
+                    </div>
+                </div>
+                <div class="log-list" id="log-list">
+                    {% for entry in logs %}
+                    <article class="log-row status-{{ entry.status }}">
+                        <div class="log-top">
+                            <strong>/{{ entry.command }}</strong>
+                            <span>{{ entry.status.replace("_", " ") }}</span>
+                        </div>
+                        <p>{{ entry.user_name }} in {{ entry.channel_name or "Unknown channel" }}</p>
+                        <time datetime="{{ entry.timestamp }}">{{ entry.timestamp }}</time>
+                    </article>
+                    {% endfor %}
+                    {% if not logs %}
+                    <div class="notice-card compact">
+                        <strong>No usage yet</strong>
+                        <p>Command activity will appear here once members start using the bot.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </aside>
+        </section>
+    </main>
+
+    <script>
+        const searchInput = document.getElementById("command-search");
+        const commandRows = Array.from(document.querySelectorAll(".command-row"));
+        searchInput?.addEventListener("input", (event) => {
+            const query = event.target.value.trim().toLowerCase();
+            commandRows.forEach((row) => {
+                const text = `${row.dataset.name} ${row.dataset.module} ${row.dataset.tier}`;
+                row.hidden = query.length > 0 && !text.includes(query);
+            });
+        });
+
+        document.querySelectorAll(".toggle input").forEach((input) => {
+            input.addEventListener("change", async () => {
+                await fetch(`/api/guilds/${input.dataset.guild}/commands/${encodeURIComponent(input.dataset.command)}/toggle`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled: input.checked })
+                });
+            });
+        });
+
+        document.querySelectorAll("[data-role-select]").forEach((select) => {
+            select.addEventListener("change", async () => {
+                const selected = Array.from(select.selectedOptions).map((option) => Number(option.value));
+                await fetch(`/api/guilds/${select.dataset.guild}/commands/${encodeURIComponent(select.dataset.roleSelect)}/roles`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ role_ids: selected })
+                });
+            });
+        });
+
+        async function refreshLogs() {
+            const response = await fetch(`/api/guilds/{{ guild.id }}/logs`);
+            if (!response.ok) return;
+            const data = await response.json();
+            const container = document.getElementById("log-list");
+            if (!container) return;
+            if (!data.entries.length) return;
+            container.innerHTML = data.entries.map((entry) => `
+                <article class="log-row status-${entry.status}">
+                    <div class="log-top">
+                        <strong>/${entry.command}</strong>
+                        <span>${entry.status.replaceAll("_", " ")}</span>
+                    </div>
+                    <p>${entry.user_name} in ${entry.channel_name || "Unknown channel"}</p>
+                    <time datetime="${entry.timestamp}">${entry.timestamp}</time>
+                </article>
+            `).join("");
+        }
+
+        setInterval(refreshLogs, 15000);
+    </script>
+</body>
+</html>

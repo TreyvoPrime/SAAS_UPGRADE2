@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ bot_name }} Servers</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body class="shell">
+    <main class="workspace">
+        <header class="topbar">
+            <div>
+                <div class="eyebrow">Connected as {{ user.username }}</div>
+                <h1>Select a server</h1>
+            </div>
+            <a class="ghost-button" href="/logout">Log out</a>
+        </header>
+
+        <section class="guild-grid">
+            {% for guild in guilds %}
+            <a class="guild-card" href="/dashboard/{{ guild.id }}">
+                <img src="{{ guild.icon_url }}" alt="{{ guild.name }}">
+                <div>
+                    <h2>{{ guild.name }}</h2>
+                    <p>{{ guild.member_count }} members</p>
+                </div>
+            </a>
+            {% endfor %}
+            {% if not guilds %}
+            <div class="notice-card">
+                <strong>No manageable servers yet</strong>
+                <p>Make sure the bot is in the server and your Discord account has Manage Server or Administrator.</p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+    "1485162416059842582": {
+        "panels": {
+            "1": {
+                "id": "1",
+                "title": "What is your gender",
+                "description": "decide your gender",
+                "color": "red",
+                "multi": true,
+                "buttons": [
+                    {
+                        "role_id": 1487617386919231759,
+                        "label": "gurt",
+                        "emoji": "\ud83d\udeba",
+                        "style": "primary"
+                    }
+                ],
+                "messages": [
+                    {
+                        "channel_id": 1487619400340344913,
+                        "message_id": 1487841207345221823
+                    }
+                ]
+            },
+            "2": {
+                "id": "2",
+                "title": "Waht is your gender",
+                "description": "decide your gender",
+                "color": "red",
+                "multi": true,
+                "buttons": [
+                    {
+                        "role_id": 1487617384285081716,
+                        "label": "she/her",
+                        "emoji": "\ud83d\udc67",
+                        "style": "primary"
+                    }
+                ],
+                "messages": []
+            }
+        }
+    }
+}

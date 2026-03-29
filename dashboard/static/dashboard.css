@@ -1,0 +1,362 @@
+:root {
+    --bg: #12091f;
+    --bg-soft: #1d1033;
+    --panel: rgba(34, 20, 58, 0.88);
+    --panel-strong: rgba(50, 26, 88, 0.95);
+    --line: rgba(255, 255, 255, 0.08);
+    --text: #f5efff;
+    --muted: #bbaed8;
+    --pink: #ff73c6;
+    --pink-soft: rgba(255, 115, 198, 0.18);
+    --lavender: #b98cff;
+    --blurple: #7d7aff;
+    --success: #56f0b2;
+    --warning: #ffb765;
+    --danger: #ff7a90;
+    --shadow: 0 24px 60px rgba(6, 0, 16, 0.42);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+    color: var(--text);
+    background:
+        radial-gradient(circle at top left, rgba(255, 115, 198, 0.24), transparent 26rem),
+        radial-gradient(circle at top right, rgba(125, 122, 255, 0.22), transparent 24rem),
+        linear-gradient(160deg, #0d0618, #1b0d2f 54%, #12081d);
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.shell {
+    padding: 32px;
+}
+
+.workspace,
+.auth-stage {
+    max-width: 1420px;
+    margin: 0 auto;
+}
+
+.auth-stage {
+    min-height: calc(100vh - 64px);
+    display: grid;
+    place-items: center;
+}
+
+.auth-panel,
+.surface,
+.guild-card,
+.notice-card {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    backdrop-filter: blur(18px);
+    box-shadow: var(--shadow);
+}
+
+.auth-panel {
+    width: min(100%, 680px);
+    padding: 48px;
+    border-radius: 32px;
+}
+
+.auth-panel h1,
+.topbar h1 {
+    margin: 10px 0 14px;
+    font-size: clamp(2.4rem, 4vw, 4.8rem);
+    line-height: 0.95;
+    letter-spacing: -0.05em;
+}
+
+.auth-panel p,
+.guild-card p,
+.command-row p,
+.log-row p,
+.notice-card p {
+    color: var(--muted);
+}
+
+.eyebrow {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: #f5b8e4;
+}
+
+.primary-button,
+.ghost-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 0 20px;
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.primary-button {
+    background: linear-gradient(135deg, var(--pink), var(--lavender));
+    color: #1c0e30;
+}
+
+.ghost-button {
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.topbar,
+.section-head,
+.command-meta,
+.log-top,
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.topbar,
+.section-head {
+    justify-content: space-between;
+}
+
+.topbar {
+    margin-bottom: 28px;
+}
+
+.guild-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px;
+}
+
+.guild-card {
+    padding: 20px;
+    border-radius: 26px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    transition: transform 180ms ease, border-color 180ms ease;
+}
+
+.guild-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(255, 115, 198, 0.42);
+}
+
+.guild-card img {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    object-fit: cover;
+}
+
+.stats-band {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.stats-band article {
+    padding: 18px 20px;
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--line);
+}
+
+.stats-band span {
+    display: block;
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+
+.stats-band strong {
+    font-size: 2rem;
+    letter-spacing: -0.04em;
+}
+
+.surface-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.9fr);
+    gap: 18px;
+}
+
+.surface {
+    border-radius: 30px;
+    padding: 22px;
+}
+
+.commands-surface {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+        var(--panel);
+}
+
+.search-input,
+.role-picker select {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(8, 5, 16, 0.52);
+    color: var(--text);
+    border-radius: 18px;
+    padding: 12px 14px;
+}
+
+.command-list,
+.log-list {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+}
+
+.command-row,
+.log-row {
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 18px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.command-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+}
+
+.command-meta h3,
+.guild-card h2 {
+    margin: 0;
+}
+
+.tier,
+.module-chip,
+.role-chips span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+}
+
+.tier-free {
+    background: rgba(86, 240, 178, 0.12);
+    color: var(--success);
+}
+
+.tier-premium {
+    background: var(--pink-soft);
+    color: #ffc1e6;
+}
+
+.module-chip,
+.role-chips span {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--muted);
+}
+
+.command-controls {
+    display: grid;
+    gap: 12px;
+}
+
+.toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+}
+
+.role-picker {
+    display: grid;
+    gap: 8px;
+    color: var(--muted);
+}
+
+.role-picker select {
+    min-height: 120px;
+}
+
+.role-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.log-row {
+    position: relative;
+    overflow: hidden;
+}
+
+.log-row::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+}
+
+.status-success::before {
+    background: var(--success);
+}
+
+.status-error::before {
+    background: var(--danger);
+}
+
+.status-blocked_roles::before,
+.status-blocked_disabled::before {
+    background: var(--warning);
+}
+
+.log-top span,
+time {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.notice-card {
+    padding: 20px;
+    border-radius: 24px;
+}
+
+.compact {
+    padding: 18px;
+}
+
+@media (max-width: 1080px) {
+    .surface-grid,
+    .command-row,
+    .stats-band {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 720px) {
+    .shell {
+        padding: 18px;
+    }
+
+    .auth-panel,
+    .surface {
+        padding: 18px;
+        border-radius: 24px;
+    }
+
+    .topbar,
+    .section-head {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

@@ -1,0 +1,7 @@
+discord.py
+python-dotenv
+fastapi
+uvicorn
+jinja2
+httpx
+itsdangerous
