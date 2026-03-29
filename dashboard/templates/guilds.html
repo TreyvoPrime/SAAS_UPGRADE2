@@ -7,78 +7,81 @@
     <link rel="stylesheet" href="/static/dashboard.css">
 </head>
 <body class="nitro-shell">
-    <main class="workspace-shell">
-        <aside class="sidebar">
-            <div class="sidebar-brand">
+    <main class="servers-page-shell">
+        <header class="servers-topline">
+            <a class="sidebar-brand" href="/servers">
                 <div class="brand-mark">SC</div>
                 <div>
                     <div class="eyebrow">ServerCore</div>
                     <strong>Dashboard</strong>
                 </div>
+            </a>
+            <div class="servers-user-pill">
+                <span class="eyebrow">Connected as</span>
+                <strong>{{ user.global_name or user.username }}</strong>
+                <a class="ghost-button compact-button" href="/logout">Log out</a>
             </div>
-            <nav class="sidebar-nav">
-                <a class="nav-link active" href="/servers">All servers</a>
-                <a class="nav-link" href="/logout">Log out</a>
-            </nav>
-            <div class="sidebar-card">
-                <span>Premium modules</span>
-                <strong>{{ premium_count }}</strong>
-                <p>Premium commands stay visible here so free and premium surfaces stay understandable.</p>
+        </header>
+
+        <section class="servers-hero-panel">
+            <div class="servers-copy">
+                <div class="eyebrow">Server switcher</div>
+                <h1>Choose a server without digging through a clunky list.</h1>
+                <p>Every card below is a server where the bot is present and your Discord account can manage the dashboard. Pick one and jump straight into command controls, role access, and logs.</p>
             </div>
-        </aside>
-
-        <section class="workspace-main">
-            <header class="page-header">
-                <div>
-                    <div class="eyebrow">Connected as {{ user.global_name or user.username }}</div>
-                    <h1>Choose a server</h1>
-                </div>
-                <input id="server-search" class="search-input page-search" type="search" placeholder="Search servers">
-            </header>
-
-            <section class="servers-hero">
+            <div class="servers-metric-grid">
                 <article class="metric-card">
                     <span>Manageable servers</span>
                     <strong>{{ guilds|length }}</strong>
                 </article>
                 <article class="metric-card">
-                    <span>Theme</span>
-                    <strong>Nitro</strong>
+                    <span>Premium modules</span>
+                    <strong>{{ premium_count }}</strong>
                 </article>
                 <article class="metric-card">
-                    <span>Workflow</span>
-                    <strong>Compact</strong>
+                    <span>Flow</span>
+                    <strong>Fast switch</strong>
                 </article>
-            </section>
+            </div>
+        </section>
 
-            <section class="servers-grid" id="servers-grid">
-                {% for guild in guilds %}
-                <a class="server-card" href="/dashboard/{{ guild.id }}" data-name="{{ guild.name|lower }}">
-                    <div class="server-card-top">
-                        {% if guild.icon_url %}
-                        <img src="{{ guild.icon_url }}" alt="{{ guild.name }}">
-                        {% else %}
-                        <div class="server-avatar-fallback">{{ guild.initials }}</div>
-                        {% endif %}
+        <section class="servers-toolbar">
+            <label class="search-shell server-search-shell">
+                <span>Search servers</span>
+                <input id="server-search" class="search-input page-search" type="search" placeholder="Search by server name">
+            </label>
+        </section>
+
+        <section class="server-board" id="servers-grid">
+            {% for guild in guilds %}
+            <a class="server-card server-card-redesign" href="/dashboard/{{ guild.id }}" data-name="{{ guild.name|lower }}">
+                <div class="server-card-visual">
+                    {% if guild.icon_url %}
+                    <img src="{{ guild.icon_url }}" alt="{{ guild.name }}">
+                    {% else %}
+                    <div class="server-avatar-fallback">{{ guild.initials }}</div>
+                    {% endif %}
+                </div>
+                <div class="server-card-body">
+                    <div class="server-card-titleline">
+                        <h2>{{ guild.name }}</h2>
                         <span class="server-status">{% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}</span>
                     </div>
-                    <div class="server-card-body">
-                        <h2>{{ guild.name }}</h2>
-                        <p>{{ guild.member_count }} members</p>
-                    </div>
+                    <p>Open command access, logs, and role restrictions for this server.</p>
                     <div class="server-card-meta">
+                        <span>{{ guild.member_count }} members</span>
                         <span>{{ guild.role_count }} roles</span>
-                        <span>Open dashboard</span>
                     </div>
-                </a>
-                {% endfor %}
-                {% if not guilds %}
-                <div class="notice-card wide">
-                    <strong>No manageable servers yet</strong>
-                    <p>Invite the bot to a server and make sure your Discord account has Manage Server or Administrator there.</p>
                 </div>
-                {% endif %}
-            </section>
+                <div class="server-card-cta">Open dashboard</div>
+            </a>
+            {% endfor %}
+            {% if not guilds %}
+            <div class="notice-card wide">
+                <strong>No manageable servers yet</strong>
+                <p>Invite the bot to a server and make sure your Discord account has Manage Server or Administrator there.</p>
+            </div>
+            {% endif %}
         </section>
     </main>
 

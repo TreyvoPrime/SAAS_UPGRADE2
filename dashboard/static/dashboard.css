@@ -21,6 +21,7 @@
 }
 
 html {
+    scroll-behavior: smooth;
     background:
         radial-gradient(circle at 0% 0%, rgba(255, 119, 200, 0.18), transparent 22rem),
         radial-gradient(circle at 100% 0%, rgba(111, 124, 255, 0.22), transparent 24rem),
@@ -430,15 +431,14 @@ button {
 }
 
 .module-strip {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 10px;
     margin: 18px 0 16px;
-    overflow: auto;
-    padding-bottom: 4px;
 }
 
 .module-pill {
-    min-width: 150px;
+    min-width: 0;
     padding: 14px 16px;
     border-radius: 20px;
     border: 1px solid var(--line);
@@ -658,6 +658,178 @@ time {
     background: rgba(255, 255, 255, 0.03);
 }
 
+.servers-page-shell {
+    width: min(1480px, 100%);
+    margin: 0 auto;
+    display: grid;
+    gap: 18px;
+}
+
+.servers-topline,
+.servers-hero-panel,
+.servers-toolbar,
+.servers-metric-grid,
+.server-card-titleline,
+.sidebar-brand,
+.servers-user-pill {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.servers-topline,
+.servers-hero-panel,
+.server-card-titleline {
+    justify-content: space-between;
+}
+
+.sidebar-brand {
+    color: inherit;
+}
+
+.servers-user-pill {
+    padding: 10px 12px;
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.servers-hero-panel,
+.servers-toolbar,
+.server-card-redesign {
+    border: 1px solid var(--line);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+        var(--panel);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(20px);
+}
+
+.servers-hero-panel,
+.servers-toolbar {
+    border-radius: 30px;
+    padding: 22px 24px;
+}
+
+.servers-copy {
+    max-width: 680px;
+}
+
+.servers-copy h1 {
+    margin: 12px 0;
+    line-height: 0.94;
+    letter-spacing: -0.06em;
+    font-size: clamp(2.9rem, 4vw, 5rem);
+}
+
+.servers-copy p {
+    color: var(--muted);
+    max-width: 620px;
+}
+
+.servers-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    width: min(520px, 100%);
+}
+
+.metric-card {
+    padding: 18px 20px;
+    border-radius: 22px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.metric-card span {
+    display: block;
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+
+.metric-card strong {
+    font-size: 1.8rem;
+    letter-spacing: -0.05em;
+}
+
+.server-search-shell {
+    width: min(480px, 100%);
+}
+
+.server-board {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.server-card-redesign {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr) auto;
+    gap: 18px;
+    padding: 18px;
+    border-radius: 26px;
+    transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.server-card-redesign:hover {
+    transform: translateY(-3px);
+    border-color: rgba(255, 119, 200, 0.22);
+    background:
+        linear-gradient(180deg, rgba(255, 119, 200, 0.05), rgba(255, 255, 255, 0.01)),
+        var(--panel);
+}
+
+.server-card-visual {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    padding: 4px;
+    border-radius: 28px;
+    background: linear-gradient(145deg, rgba(255, 119, 200, 0.45), rgba(111, 124, 255, 0.28));
+}
+
+.server-card-visual img,
+.server-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 24px;
+    object-fit: cover;
+    display: grid;
+    place-items: center;
+    background: rgba(15, 8, 25, 0.92);
+    color: var(--muted-strong);
+    font-weight: 800;
+    font-size: 1.45rem;
+}
+
+.server-card-redesign .server-card-body {
+    display: grid;
+    gap: 10px;
+}
+
+.server-card-redesign h2 {
+    margin: 0;
+}
+
+.server-card-redesign p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.server-card-redesign .server-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    color: var(--muted-strong);
+    font-size: 0.92rem;
+}
+
+.server-card-cta {
+    align-self: center;
+    color: var(--muted-strong);
+    font-weight: 700;
+}
+
 @media (max-width: 1340px) {
     .dashboard-shell {
         grid-template-columns: 260px minmax(0, 1fr);
@@ -674,12 +846,20 @@ time {
     .stats-band,
     .command-grid,
     .auth-feature-grid,
-    .role-checklist {
+    .role-checklist,
+    .servers-metric-grid {
         grid-template-columns: 1fr;
     }
 
     .sidebar {
         position: static;
+    }
+
+    .servers-hero-panel,
+    .servers-topline,
+    .server-card-redesign {
+        grid-template-columns: 1fr;
+        align-items: stretch;
     }
 }
 
@@ -705,12 +885,25 @@ time {
     .command-card-top,
     .command-card-bottom,
     .servers-userbar,
-    .modal-actions {
+    .modal-actions,
+    .servers-topline,
+    .servers-hero-panel,
+    .server-card-titleline,
+    .server-card-redesign {
         flex-direction: column;
         align-items: stretch;
     }
 
     .module-pill {
-        min-width: 130px;
+        min-width: 0;
+    }
+
+    .server-card-redesign {
+        grid-template-columns: 1fr;
+    }
+
+    .server-card-visual {
+        width: 84px;
+        height: 84px;
     }
 }
