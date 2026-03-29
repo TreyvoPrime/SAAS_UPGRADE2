@@ -1,11 +1,8 @@
-# TODO: Fix .env DISCORD_TOKEN issue - PROGRESS
+# Bot/Dashboard Run TODO
 
-1. ✅ Created .env.example with proper template
-2. ✅ Copied to .env (`copy .env.example .env`)
-3. ✅ Fixed ValueError - .env now loads DISCORD_TOKEN
-4. 🔄 Current status: Bot starts but `LoginFailure: Improper token has been passed.` (401 Unauthorized)
-   - .env has placeholder value. Replace with **real** Discord bot token:
-     - https://discord.com/developers/applications → Your App → Bot → Reset Token → Copy
-     - Edit .env: `DISCORD_TOKEN=MT12...` (full token, no quotes/spaces)
-5. [ ] Test `python main.py` → Should log "Logged in as {bot.user}"
-6. [ ] Cleanup: delete TODO.md + .env.example
+1. [x] Install dependencies (`pip install -r requirements.txt`)
+2. [x] Fixed dashboard/app.py (DashboardServer, indentation, bot.command_logs refs)
+3. [ ] Run `python main.py` (bot + dashboard)
+4. [ ] Verify bot login, dashboard at http://127.0.0.1:8000
+5. [ ] Test Discord commands/polls/etc.
+6. [ ] Cleanup TODO.md
