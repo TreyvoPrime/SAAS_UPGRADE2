@@ -81,6 +81,7 @@ class CustomCommands(commands.Cog):
             "reactionrole",
             "autoresponder",
             "customcommand",
+            "dashboard",
             "purge",
             "colors",
             "alert",
