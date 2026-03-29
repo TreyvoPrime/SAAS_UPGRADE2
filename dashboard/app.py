@@ -45,6 +45,7 @@ def create_dashboard_app(bot) -> FastAPI:
     discord_client_secret = os.getenv("DISCORD_CLIENT_SECRET")
     dashboard_base_url = os.getenv("DASHBOARD_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
     redirect_uri = os.getenv("DISCORD_REDIRECT_URI") or f"{dashboard_base_url}/auth/callback"
+    install_permissions = os.getenv("DISCORD_INSTALL_PERMISSIONS", "8")
 
     def oauth_ready() -> bool:
         return bool(discord_client_id and discord_client_secret)
@@ -62,6 +63,19 @@ def create_dashboard_app(bot) -> FastAPI:
 
         guild_id = int(raw_guild["id"])
         return f"https://cdn.discordapp.com/embed/avatars/{guild_id % 5}.png"
+
+    def build_install_url(guild_id: int) -> str:
+        params = urlencode(
+            {
+                "client_id": discord_client_id,
+                "permissions": install_permissions,
+                "guild_id": guild_id,
+                "disable_guild_select": "true",
+                "integration_type": "0",
+                "scope": "bot applications.commands",
+            }
+        )
+        return f"https://discord.com/oauth2/authorize?{params}"
 
     async def fetch_discord_token(code: str) -> dict:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -113,18 +127,18 @@ def create_dashboard_app(bot) -> FastAPI:
                 continue
 
             bot_guild = bot.get_guild(int(guild["id"]))
-            if bot_guild is None:
-                continue
-
             manageable_guilds.append(
                 {
                     "id": int(guild["id"]),
                     "name": guild["name"],
                     "icon_url": _guild_icon_url(guild, bot_guild),
                     "initials": guild["name"][:2].upper(),
-                    "member_count": bot_guild.member_count or len(bot_guild.members),
-                    "role_count": max(len(bot_guild.roles) - 1, 0),
+                    "member_count": (bot_guild.member_count or len(bot_guild.members)) if bot_guild else None,
+                    "role_count": max(len(bot_guild.roles) - 1, 0) if bot_guild else None,
                     "premium_enabled": premium_enabled,
+                    "bot_installed": bot_guild is not None,
+                    "dashboard_url": f"/dashboard/{guild['id']}",
+                    "install_url": build_install_url(int(guild["id"])),
                 }
             )
 
@@ -143,6 +157,8 @@ def create_dashboard_app(bot) -> FastAPI:
         selected = next((guild for guild in guilds if guild["id"] == guild_id), None)
         if selected is None:
             raise HTTPException(status_code=403, detail="Guild access denied")
+        if not selected.get("bot_installed"):
+            raise HTTPException(status_code=409, detail="Bot not installed in guild")
         return selected, guilds
 
     def guild_roles(guild_id: int) -> list[dict]:

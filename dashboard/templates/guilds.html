@@ -27,7 +27,7 @@
             <div class="servers-copy">
                 <div class="eyebrow">Server switcher</div>
                 <h1>Choose a server without digging through a clunky list.</h1>
-                <p>Every card below is a server where the bot is present and your Discord account can manage the dashboard. Pick one and jump straight into command controls, role access, and logs.</p>
+                <p>Every card below is a server your Discord account can manage. If the bot is already there, jump into the dashboard. If not, install the app straight from the same card.</p>
             </div>
             <div class="servers-metric-grid">
                 <article class="metric-card">
@@ -54,7 +54,7 @@
 
         <section class="server-board" id="servers-grid">
             {% for guild in guilds %}
-            <a class="server-card server-card-redesign" href="/dashboard/{{ guild.id }}" data-name="{{ guild.name|lower }}">
+            <a class="server-card server-card-redesign" href="{% if guild.bot_installed %}{{ guild.dashboard_url }}{% else %}{{ guild.install_url }}{% endif %}" data-name="{{ guild.name|lower }}">
                 <div class="server-card-visual">
                     {% if guild.icon_url %}
                     <img src="{{ guild.icon_url }}" alt="{{ guild.name }}">
@@ -65,15 +65,34 @@
                 <div class="server-card-body">
                     <div class="server-card-titleline">
                         <h2>{{ guild.name }}</h2>
-                        <span class="server-status">{% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}</span>
+                        <span class="server-status">
+                            {% if guild.bot_installed %}
+                                {% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}
+                            {% else %}
+                                Add app
+                            {% endif %}
+                        </span>
                     </div>
-                    <p>Open command access, logs, and role restrictions for this server.</p>
+                    <p>
+                        {% if guild.bot_installed %}
+                            Open command access, logs, and role restrictions for this server.
+                        {% else %}
+                            The bot is not installed here yet. Add the app and commands to start managing this server.
+                        {% endif %}
+                    </p>
                     <div class="server-card-meta">
+                        {% if guild.member_count is not none %}
                         <span>{{ guild.member_count }} members</span>
+                        {% endif %}
+                        {% if guild.role_count is not none %}
                         <span>{{ guild.role_count }} roles</span>
+                        {% endif %}
+                        {% if not guild.bot_installed %}
+                        <span>Bot not installed</span>
+                        {% endif %}
                     </div>
                 </div>
-                <div class="server-card-cta">Open dashboard</div>
+                <div class="server-card-cta">{% if guild.bot_installed %}Open dashboard{% else %}Add app{% endif %}</div>
             </a>
             {% endfor %}
             {% if not guilds %}
