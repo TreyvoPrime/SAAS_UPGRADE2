@@ -33,6 +33,24 @@
             "created_at": 1774802866,
             "end_time": 1774803766,
             "closed": true
+        },
+        "3": {
+            "id": "3",
+            "guild_id": 1485162416059842582,
+            "channel_id": 1485162417037250654,
+            "message_id": 1487926365251436635,
+            "author_id": 798801208537776138,
+            "question": "Test",
+            "options": [
+                "Yes",
+                "No"
+            ],
+            "votes": {
+                "798801208537776138": 0
+            },
+            "created_at": 1774819690,
+            "end_time": 1774819750,
+            "closed": true
         }
     }
 }
