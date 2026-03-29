@@ -49,7 +49,7 @@
                 <div>
                     <div class="eyebrow">Guild Operations</div>
                     <h2>Commands and access</h2>
-                    <p>Filter by module, flip commands on or off, and lock specific commands to selected roles without scrolling through one endless list.</p>
+                    <p>Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.</p>
                 </div>
                 <div class="page-actions">
                     <a class="ghost-button" href="/servers">View all servers</a>
@@ -58,7 +58,7 @@
 
             <section class="stats-band">
                 <article>
-                    <span>Shown now</span>
+                    <span>Total commands</span>
                     <strong data-stat="commands">{{ stats.commands }}</strong>
                 </article>
                 <article>
@@ -88,68 +88,88 @@
                 </div>
 
                 <div class="module-strip" id="module-strip">
-                    <button class="module-pill is-active" type="button" data-module-filter="all">
-                        <strong>All</strong>
+                    <button class="module-pill" type="button" data-module-filter="all">
+                        <strong>All modules</strong>
                         <span>{{ stats.commands }} commands</span>
                     </button>
-                    {% for module in modules %}
-                    <button class="module-pill" type="button" data-module-filter="{{ module.name|lower }}">
-                        <strong>{{ module.name }}</strong>
-                        <span>{{ module.count }} commands</span>
+                    {% for section in sections %}
+                    <button class="module-pill {% if loop.first %}is-active{% endif %}" type="button" data-module-filter="{{ section.slug }}">
+                        <strong>{{ section.name }}</strong>
+                        <span>{{ section.count }} commands</span>
                     </button>
                     {% endfor %}
                 </div>
 
-                <div class="command-grid" id="command-grid">
-                    {% for command in commands %}
-                    <article
-                        class="command-card"
-                        data-command-card
-                        data-command="{{ command.name }}"
-                        data-module="{{ command.module|lower }}"
-                        data-tier="{{ command.tier|lower }}"
-                        data-enabled="{{ 'true' if command.enabled else 'false' }}"
-                        data-role-ids='{{ command.allowed_role_ids|tojson }}'
-                    >
-                        <div class="command-card-top">
+                <div class="section-stack" id="section-stack">
+                    {% for section in sections %}
+                    <section class="command-section {% if loop.first %}is-active{% endif %}" data-section="{{ section.slug }}">
+                        <header class="section-headbar">
                             <div>
                                 <div class="command-flags">
-                                    <span class="tier tier-{{ command.tier|lower }}">{{ command.tier }}</span>
-                                    <span class="module-chip">{{ command.module }}</span>
+                                    <span class="tier tier-{{ section.tier|lower }}">{{ section.tier }}</span>
+                                    <span class="module-chip">{{ section.count }} commands</span>
                                 </div>
-                                <h4>/{{ command.name }}</h4>
+                                <h3>{{ section.name }}</h3>
                             </div>
-                            <label class="toggle">
-                                <input
-                                    type="checkbox"
-                                    {% if command.enabled %}checked{% endif %}
-                                    data-command-toggle
-                                    data-command-name="{{ command.name }}"
-                                >
-                                <span>Enabled</span>
-                            </label>
-                        </div>
+                            <div class="section-summary">
+                                <span>{{ section.disabled_count }} disabled</span>
+                                <span>{{ section.restricted_count }} restricted</span>
+                            </div>
+                        </header>
 
-                        <p>{{ command.description }}</p>
+                        <div class="command-grid">
+                            {% for command in section.commands %}
+                            <article
+                                class="command-card"
+                                data-command-card
+                                data-command="{{ command.name }}"
+                                data-module="{{ section.slug }}"
+                                data-tier="{{ command.tier|lower }}"
+                                data-enabled="{{ 'true' if command.enabled else 'false' }}"
+                                data-role-ids='{{ command.allowed_role_ids|tojson }}'
+                            >
+                                <div class="command-card-top">
+                                    <div>
+                                        <div class="command-flags">
+                                            <span class="tier tier-{{ command.tier|lower }}">{{ command.tier }}</span>
+                                            <span class="module-chip">{{ command.module }}</span>
+                                        </div>
+                                        <h4>/{{ command.name }}</h4>
+                                    </div>
+                                    <label class="toggle">
+                                        <input
+                                            type="checkbox"
+                                            {% if command.enabled %}checked{% endif %}
+                                            data-command-toggle
+                                            data-command-name="{{ command.name }}"
+                                        >
+                                        <span>Enabled</span>
+                                    </label>
+                                </div>
 
-                        <div class="command-card-bottom">
-                            <div class="role-summary" data-role-summary>
-                                {% if command.allowed_role_names %}
-                                    {{ command.allowed_role_names|join(", ") }}
-                                {% else %}
-                                    All roles that already pass native Discord checks
-                                {% endif %}
-                            </div>
-                            <div class="command-actions">
-                                <button type="button" class="ghost-button compact-button" data-role-editor data-command-name="{{ command.name }}">
-                                    Edit roles
-                                </button>
-                                <button type="button" class="ghost-button compact-button" data-clear-roles data-command-name="{{ command.name }}">
-                                    Allow all
-                                </button>
-                            </div>
+                                <p>{{ command.description }}</p>
+
+                                <div class="command-card-bottom">
+                                    <div class="role-summary" data-role-summary>
+                                        {% if command.allowed_role_names %}
+                                            {{ command.allowed_role_names|join(", ") }}
+                                        {% else %}
+                                            All roles that already pass native Discord checks
+                                        {% endif %}
+                                    </div>
+                                    <div class="command-actions">
+                                        <button type="button" class="ghost-button compact-button" data-role-editor data-command-name="{{ command.name }}">
+                                            Edit roles
+                                        </button>
+                                        <button type="button" class="ghost-button compact-button" data-clear-roles data-command-name="{{ command.name }}">
+                                            Allow all
+                                        </button>
+                                    </div>
+                                </div>
+                            </article>
+                            {% endfor %}
                         </div>
-                    </article>
+                    </section>
                     {% endfor %}
                 </div>
             </section>
@@ -196,9 +216,13 @@
                 <button class="icon-button" type="button" data-close-role-modal>Close</button>
             </div>
             <p class="modal-copy">Select the roles that can use this command. Leaving everything unchecked allows all members who already pass the command's native permission checks.</p>
+            <label class="search-shell role-search-shell">
+                <span>Find role</span>
+                <input id="role-search" class="search-input" type="search" placeholder="Search roles">
+            </label>
             <div class="role-checklist" id="role-checklist">
                 {% for role in roles %}
-                <label class="role-option">
+                <label class="role-option" data-role-name="{{ role.label }}">
                     <input type="checkbox" value="{{ role.id }}" data-role-checkbox>
                     <span>{{ role.name }}</span>
                 </label>
@@ -213,15 +237,17 @@
 
     <script>
         const guildId = {{ selected_guild.id }};
+        const sectionPanels = Array.from(document.querySelectorAll("[data-section]"));
         const commandCards = Array.from(document.querySelectorAll("[data-command-card]"));
         const moduleButtons = Array.from(document.querySelectorAll("[data-module-filter]"));
         const searchInput = document.getElementById("command-search");
         const roleModal = document.getElementById("role-modal");
         const roleModalTitle = document.getElementById("role-modal-title");
         const roleChecklist = document.getElementById("role-checklist");
+        const roleSearch = document.getElementById("role-search");
         const saveRoleSelectionButton = document.getElementById("save-role-selection");
         const clearRoleSelectionButton = document.getElementById("clear-role-selection");
-        let activeModule = "all";
+        let activeModule = "{{ sections[0].slug if sections else 'all' }}";
         let activeRoleCommand = null;
 
         function parseRoleIds(card) {
@@ -233,34 +259,41 @@
         }
 
         function updateStats() {
-            const visibleCards = commandCards.filter((card) => !card.hidden);
             const disabled = commandCards.filter((card) => card.dataset.enabled !== "true").length;
             const restricted = commandCards.filter((card) => parseRoleIds(card).length > 0).length;
-            document.querySelector('[data-stat="commands"]').textContent = visibleCards.length;
+            document.querySelector('[data-stat="commands"]').textContent = commandCards.length;
             document.querySelector('[data-stat="disabled"]').textContent = disabled;
             document.querySelector('[data-stat="restricted"]').textContent = restricted;
         }
 
-        function applyFilters() {
+        function updateSectionVisibility() {
             const query = (searchInput?.value || "").trim().toLowerCase();
+
             commandCards.forEach((card) => {
                 const text = `${card.dataset.command} ${card.dataset.module} ${card.dataset.tier}`.toLowerCase();
                 const matchesSearch = !query || text.includes(query);
-                const matchesModule = activeModule === "all" || card.dataset.module === activeModule;
+                const matchesModule = query ? true : activeModule === "all" || card.dataset.module === activeModule;
                 card.hidden = !(matchesSearch && matchesModule);
             });
-            updateStats();
+
+            sectionPanels.forEach((panel) => {
+                const visibleCards = panel.querySelectorAll("[data-command-card]:not([hidden])");
+                const matchesModule = activeModule === "all" || panel.dataset.section === activeModule;
+                const shouldShow = query ? visibleCards.length > 0 : matchesModule;
+                panel.classList.toggle("is-active", shouldShow);
+                panel.hidden = !shouldShow;
+            });
         }
 
         moduleButtons.forEach((button) => {
             button.addEventListener("click", () => {
                 activeModule = button.dataset.moduleFilter;
                 moduleButtons.forEach((item) => item.classList.toggle("is-active", item === button));
-                applyFilters();
+                updateSectionVisibility();
             });
         });
 
-        searchInput?.addEventListener("input", applyFilters);
+        searchInput?.addEventListener("input", updateSectionVisibility);
 
         async function updateCommandPolicy(commandName, payload) {
             const response = await fetch(`/api/guilds/${guildId}/command-policy`, {
@@ -296,6 +329,10 @@
             roleChecklist.querySelectorAll("[data-role-checkbox]").forEach((checkbox) => {
                 checkbox.checked = selectedRoleIds.has(checkbox.value);
             });
+            roleSearch.value = "";
+            roleChecklist.querySelectorAll(".role-option").forEach((option) => {
+                option.hidden = false;
+            });
             roleModal.hidden = false;
         }
 
@@ -330,6 +367,13 @@
             button.addEventListener("click", closeRoleModal);
         });
 
+        roleSearch?.addEventListener("input", (event) => {
+            const query = event.target.value.trim().toLowerCase();
+            roleChecklist.querySelectorAll(".role-option").forEach((option) => {
+                option.hidden = query.length > 0 && !option.dataset.roleName.includes(query);
+            });
+        });
+
         clearRoleSelectionButton?.addEventListener("click", () => {
             roleChecklist.querySelectorAll("[data-role-checkbox]").forEach((checkbox) => {
                 checkbox.checked = false;
@@ -356,23 +400,13 @@
             if (!response.ok) return;
             const data = await response.json();
             const container = document.getElementById("log-list");
-            if (!container) return;
-
-            if (!data.entries.length) {
-                container.innerHTML = `
-                    <div class="notice-card compact">
-                        <strong>No usage yet</strong>
-                        <p>Command activity will start appearing here once your members use the bot.</p>
-                    </div>
-                `;
-                return;
-            }
+            if (!container || !Array.isArray(data.entries) || !data.entries.length) return;
 
             container.innerHTML = data.entries.map((entry) => `
                 <article class="log-row status-${entry.status}">
                     <div class="log-top">
                         <strong>/${entry.command}</strong>
-                        <span>${String(entry.status).replaceAll("_", " ")}</span>
+                        <span>${entry.status.replaceAll("_", " ")}</span>
                     </div>
                     <p>${entry.user_name}${entry.channel_name ? ` in ${entry.channel_name}` : ""}</p>
                     <time datetime="${entry.timestamp}">${entry.timestamp}</time>
@@ -380,7 +414,8 @@
             `).join("");
         }
 
-        applyFilters();
+        updateStats();
+        updateSectionVisibility();
         setInterval(refreshLogs, 15000);
     </script>
 </body>

@@ -463,6 +463,36 @@ button {
     background: linear-gradient(180deg, rgba(255, 119, 200, 0.12), rgba(111, 124, 255, 0.08));
 }
 
+.section-stack {
+    display: grid;
+    gap: 16px;
+}
+
+.command-section {
+    display: none;
+    gap: 14px;
+}
+
+.command-section.is-active {
+    display: grid;
+}
+
+.section-headbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 0 2px;
+}
+
+.section-summary {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--muted-strong);
+    font-size: 0.9rem;
+}
+
 .command-grid,
 .log-list,
 .role-checklist {
@@ -614,6 +644,10 @@ time {
     margin: 18px 0;
 }
 
+.role-search-shell {
+    margin-top: 16px;
+}
+
 .role-option {
     display: flex;
     align-items: center;
@@ -667,6 +701,7 @@ time {
     .servers-head,
     .page-head,
     .workspace-topline,
+    .section-headbar,
     .command-card-top,
     .command-card-bottom,
     .servers-userbar,
