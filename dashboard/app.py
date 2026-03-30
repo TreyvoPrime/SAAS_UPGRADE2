@@ -347,7 +347,20 @@ def create_dashboard_app(bot) -> FastAPI:
                     "name": "linkblock",
                     "title": "Link Block",
                     "tag": "Inbound links",
-                    "description": "Blocks URLs and Discord invite links before they land in chat.",
+                    "description": "Blocks external URLs before they land in chat.",
+                    "enabled": False,
+                    "duration_minutes": None,
+                    "duration_label": "Until disabled",
+                    "status_label": "Offline",
+                    "remaining_label": "No timer",
+                    "tone": "muted",
+                    "rate_label": None,
+                },
+                {
+                    "name": "inviteblock",
+                    "title": "Invite Block",
+                    "tag": "Discord invites",
+                    "description": "Blocks Discord invite links separately from normal URLs.",
                     "enabled": False,
                     "duration_minutes": None,
                     "duration_label": "Until disabled",
@@ -386,7 +399,7 @@ def create_dashboard_app(bot) -> FastAPI:
                     "name": "mentionguard",
                     "title": "Mention Guard",
                     "tag": "Ping shield",
-                    "description": "Blocks @everyone and @here blasts from being posted in chat.",
+                    "description": "Blocks mass-mention bursts before they can light the whole server up.",
                     "enabled": False,
                     "duration_minutes": None,
                     "duration_label": "Until disabled",
@@ -625,7 +638,7 @@ def create_dashboard_app(bot) -> FastAPI:
         if manager is None or not hasattr(manager, "set_defense"):
             raise HTTPException(status_code=503, detail="ServerDefense is not available")
 
-        if payload.defense_name not in {"linkblock", "antispam", "antijoin", "mentionguard", "lockdown"}:
+        if payload.defense_name not in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown"}:
             raise HTTPException(status_code=404, detail="Unknown defense")
 
         result = await manager.set_defense(
@@ -643,12 +656,16 @@ def create_dashboard_app(bot) -> FastAPI:
     async def update_defense_lockdown_roles(request: Request, guild_id: int, payload: DefenseLockdownRolesPayload):
         await require_guild_access(request, guild_id, require_editor_role_management=True)
         manager = getattr(bot, "server_defense", None)
-        if manager is None or not hasattr(manager, "ensure_lockdown_roles"):
+        if manager is None or not (hasattr(manager, "ensure_lockdown_roles") or hasattr(manager, "set_lockdown_roles")):
             raise HTTPException(status_code=503, detail="ServerDefense is not available")
 
         valid_role_ids = {role["id"] for role in guild_roles(guild_id)}
         safe_role_ids = [role_id for role_id in payload.lockdown_role_ids if role_id in valid_role_ids]
-        role_ids = await manager.ensure_lockdown_roles(guild_id, safe_role_ids)
+        if hasattr(manager, "ensure_lockdown_roles"):
+            role_ids = await manager.ensure_lockdown_roles(guild_id, safe_role_ids)
+        else:
+            updated = await manager.set_lockdown_roles(guild_id, safe_role_ids)
+            role_ids = list(updated.get("allowed_role_ids", []))
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         state = manager.build_dashboard_state(guild_id, role_lookup)
         return JSONResponse(

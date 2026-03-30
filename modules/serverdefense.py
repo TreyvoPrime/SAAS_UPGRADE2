@@ -156,7 +156,7 @@ class ServerDefense(commands.Cog):
                 except Exception:
                     pass
 
-    @linkblock.command(name="enable", description="Block links and invite links in this server")
+    @linkblock.command(name="enable", description="Block external links in this server")
     async def linkblock_enable(
         self,
         interaction: discord.Interaction,
@@ -183,7 +183,7 @@ class ServerDefense(commands.Cog):
             interaction,
             "linkblock",
             "Link Block",
-            ["Behavior: Deletes messages with external links and Discord invite links."],
+            ["Behavior: Deletes messages with external URLs while active."],
         )
 
     @inviteblock.command(name="enable", description="Block Discord invite links in this server")
@@ -353,22 +353,6 @@ class ServerDefense(commands.Cog):
                 + (" " + ", ".join(allowed_roles) if allowed_roles else " No extra talk roles are configured."),
             ],
         )
-
-    @app_commands.command(name="unlock", description="Quickly unlock the server after a lockdown")
-    async def unlock(self, interaction: discord.Interaction):
-        member = await self._require_admin(interaction)
-        if member is None or interaction.guild is None:
-            return
-
-        if not await self._ensure_bot_permissions(interaction, manage_channels=True):
-            return
-
-        await self.bot.server_defense.disable_feature(
-            interaction.guild.id,
-            "lockdown",
-            actor=interaction.user,
-        )
-        await interaction.response.send_message("Server lockdown lifted.", ephemeral=True)
 
     @lockdown.command(name="role", description="Add or remove a role that can still speak during lockdown")
     @app_commands.choices(mode=[

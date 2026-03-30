@@ -135,7 +135,12 @@ class Lock(commands.Cog):
 
         defense_manager = getattr(self.bot, "server_defense", None)
         if channel is None and defense_manager is not None and defense_manager.is_enabled(interaction.guild.id, "lockdown"):
-            await defense_manager.set_defense(interaction.guild.id, "lockdown", enabled=False)
+            await defense_manager.disable_feature(
+                interaction.guild.id,
+                "lockdown",
+                actor=interaction.user,
+                reason=reason,
+            )
             embed = discord.Embed(
                 title="🔓 Server Unlocked",
                 description=f"{interaction.guild.name} has been released from lockdown.",

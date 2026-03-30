@@ -208,6 +208,26 @@ class ServerDefenseManager:
             delta = max(int((ends_at - utcnow()).total_seconds() // 60), 0)
             return delta or 1
 
+        def remaining_label(item: dict[str, Any]) -> str:
+            ends_at = from_iso(item.get("ends_at"))
+            if ends_at is None:
+                return "No timer"
+
+            seconds_left = max(int((ends_at - utcnow()).total_seconds()), 0)
+            if seconds_left < 60:
+                return "Ends in <1 min"
+
+            minutes_left = max(seconds_left // 60, 1)
+            if minutes_left < 60:
+                return f"Ends in {minutes_left}m"
+
+            hours_left, rem_minutes = divmod(minutes_left, 60)
+            if hours_left < 24:
+                return f"Ends in {hours_left}h {rem_minutes}m" if rem_minutes else f"Ends in {hours_left}h"
+
+            days_left, rem_hours = divmod(hours_left, 24)
+            return f"Ends in {days_left}d {rem_hours}h" if rem_hours else f"Ends in {days_left}d"
+
         def make_card(
             feature: str,
             title: str,
@@ -227,9 +247,9 @@ class ServerDefenseManager:
                 "description": description,
                 "enabled": item.get("enabled", False),
                 "duration_minutes": minutes_left,
-                "duration_label": "Until disabled" if not item.get("ends_at") else f"{minutes_left} minute window",
+                "duration_label": "Runs until disabled" if not item.get("ends_at") else f"{minutes_left} minute timer",
                 "status_label": "Armed" if item.get("enabled") else "Offline",
-                "remaining_label": item.get("ends_at") or "No timer",
+                "remaining_label": remaining_label(item),
                 "tone": "danger" if item.get("enabled") else "muted",
                 "rate_label": rate_label,
                 "allowed_role_ids": lockdown_roles,
@@ -480,8 +500,12 @@ class ServerDefenseManager:
         state = self.store.get_feature(guild_id, "lockdown")
         updated = self.store.patch_feature(guild_id, "lockdown", allowed_role_ids=cleaned_role_ids)
         if state.get("enabled"):
-            asyncio.create_task(self._refresh_lockdown_roles(guild_id))
+            await self._refresh_lockdown_roles(guild_id)
         return updated
+
+    async def ensure_lockdown_roles(self, guild_id: int, role_ids: list[int]) -> list[int]:
+        updated = await self.set_lockdown_roles(guild_id, role_ids)
+        return list(updated.get("allowed_role_ids", []))
 
     async def set_defense(
         self,
@@ -500,6 +524,12 @@ class ServerDefenseManager:
                 return await self.set_duration(guild_id, normalized, duration_minutes)
             return await self.enable_feature(guild_id, normalized, duration_minutes=duration_minutes)
         return await self.disable_feature(guild_id, normalized)
+
+    def is_enabled(self, guild_id: int, feature: str) -> bool:
+        normalized = "mentionguard" if feature == "mentionblock" else feature
+        if normalized not in DEFENSE_FEATURES:
+            return False
+        return self._is_active(self.store.get_feature(guild_id, normalized))
 
     async def _refresh_lockdown_roles(self, guild_id: int) -> None:
         state = self.store.get_feature(guild_id, "lockdown")
