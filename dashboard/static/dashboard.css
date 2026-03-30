@@ -768,15 +768,15 @@ time {
 
 .server-board {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: 18px;
 }
 
 .server-card-redesign {
     display: grid;
-    grid-template-rows: auto 1fr;
-    gap: 18px;
-    min-height: 280px;
+    grid-template-rows: auto 1fr auto;
+    gap: 16px;
+    min-height: 284px;
     padding: 20px;
     border-radius: 26px;
     transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
@@ -828,30 +828,26 @@ time {
 }
 
 .server-card-heading {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 16px;
-}
-
-.server-card-titleblock {
+    grid-template-columns: minmax(0, 1fr);
     align-content: center;
 }
 
 .server-card-redesign .server-card-body {
     display: grid;
-    align-content: space-between;
-    gap: 16px;
+    align-content: start;
+    gap: 14px;
     min-width: 0;
 }
 
 .server-card-redesign h2 {
     margin: 0;
-    max-width: 14ch;
-    font-size: clamp(1.18rem, 0.65vw + 1rem, 1.48rem);
-    line-height: 1.01;
+    max-width: none;
+    font-size: clamp(1.08rem, 0.88vw + 0.9rem, 1.42rem);
+    line-height: 1.08;
     letter-spacing: -0.03em;
-    overflow-wrap: break-word;
-    word-break: break-word;
+    overflow-wrap: normal;
+    word-break: normal;
+    text-wrap: balance;
     hyphens: auto;
 }
 
@@ -859,7 +855,7 @@ time {
     margin: 0;
     color: var(--muted);
     line-height: 1.55;
-    max-width: 38ch;
+    max-width: 40ch;
 }
 
 .server-card-redesign .server-card-meta {
@@ -887,8 +883,14 @@ time {
     font-weight: 700;
 }
 
+.server-card-footer {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    min-height: 42px;
+}
+
 .server-card-cta {
-    align-self: start;
     display: inline-flex;
     align-items: center;
     justify-content: center;
