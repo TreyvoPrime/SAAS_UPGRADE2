@@ -132,6 +132,20 @@ class Lock(commands.Cog):
             return
 
         assert interaction.guild is not None
+
+        defense_manager = getattr(self.bot, "server_defense", None)
+        if channel is None and defense_manager is not None and defense_manager.is_enabled(interaction.guild.id, "lockdown"):
+            await defense_manager.set_defense(interaction.guild.id, "lockdown", enabled=False)
+            embed = discord.Embed(
+                title="🔓 Server Unlocked",
+                description=f"{interaction.guild.name} has been released from lockdown.",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Moderator", value=interaction.user.mention, inline=True)
+            embed.add_field(name="Reason", value=reason or "No reason provided.", inline=True)
+            await interaction.response.send_message(embed=embed)
+            return
+
         target_channel = channel or interaction.channel
 
         if not isinstance(target_channel, discord.TextChannel):

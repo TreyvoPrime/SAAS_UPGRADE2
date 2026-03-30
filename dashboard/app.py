@@ -34,6 +34,16 @@ class DashboardAccessPayload(BaseModel):
     editor_role_ids: list[int] = Field(default_factory=list)
 
 
+class DefenseTogglePayload(BaseModel):
+    defense_name: str = Field(min_length=1)
+    enabled: bool
+    duration_minutes: int | None = Field(default=None, ge=1, le=10080)
+
+
+class DefenseLockdownRolesPayload(BaseModel):
+    lockdown_role_ids: list[int] = Field(default_factory=list)
+
+
 def resolve_dashboard_host() -> str:
     return os.getenv("DASHBOARD_HOST") or os.getenv("HOST") or "0.0.0.0"
 
@@ -162,16 +172,26 @@ def create_dashboard_app(bot) -> FastAPI:
         if guild is None:
             return None
 
-        member = guild.get_member(user_id)
-        if member is None:
-            try:
-                member = await guild.fetch_member(user_id)
-            except Exception:
-                return None
-
         owner = guild.owner_id == user_id
-        can_manage_guild = owner or member.guild_permissions.manage_guild or member.guild_permissions.administrator
-        user_role_ids = {role.id for role in getattr(member, "roles", [])}
+        member = None
+        user_role_ids: set[int] = set()
+        if not owner:
+            member = guild.get_member(user_id)
+            if member is None:
+                try:
+                    member = await guild.fetch_member(user_id)
+                except Exception:
+                    return None
+
+            user_role_ids = {role.id for role in getattr(member, "roles", [])}
+
+        can_manage_guild = owner or bool(
+            member
+            and (
+                member.guild_permissions.manage_guild
+                or member.guild_permissions.administrator
+            )
+        )
         editor_role_ids = set(bot.access_manager.controls.get_dashboard_editor_roles(guild_id))
         has_editor_role = bool(editor_role_ids & user_role_ids)
         can_edit_dashboard = can_manage_guild or has_editor_role
@@ -302,6 +322,103 @@ def create_dashboard_app(bot) -> FastAPI:
             "editor_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in editor_role_ids],
         }
 
+    def server_defense_summary(guild_id: int) -> dict:
+        defense = bot.server_defense.get_dashboard_state(guild_id)
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        lockdown = defense.get("lockdown", {})
+        lockdown_role_ids = lockdown.get("allowed_role_ids", [])
+        return {
+            **defense,
+            "lockdown_allowed_role_names": [
+                role_lookup.get(role_id, f"Deleted ({role_id})")
+                for role_id in lockdown_role_ids
+            ],
+        }
+
+    def defense_dashboard_summary(guild_id: int) -> dict:
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        manager = getattr(bot, "server_defense", None)
+        if manager is not None and hasattr(manager, "build_dashboard_state"):
+            return manager.build_dashboard_state(guild_id, role_lookup)
+
+        return {
+            "cards": [
+                {
+                    "name": "linkblock",
+                    "title": "Link Block",
+                    "tag": "Inbound links",
+                    "description": "Blocks URLs and Discord invite links before they land in chat.",
+                    "enabled": False,
+                    "duration_minutes": None,
+                    "duration_label": "Until disabled",
+                    "status_label": "Offline",
+                    "remaining_label": "No timer",
+                    "tone": "muted",
+                    "rate_label": None,
+                },
+                {
+                    "name": "antispam",
+                    "title": "Anti Spam",
+                    "tag": "Message rate",
+                    "description": "Limits each user to five messages in a short burst until the shield is turned off.",
+                    "enabled": False,
+                    "duration_minutes": None,
+                    "duration_label": "Until disabled",
+                    "status_label": "Offline",
+                    "remaining_label": "No timer",
+                    "tone": "muted",
+                    "rate_label": "5 messages / 8 seconds",
+                },
+                {
+                    "name": "antijoin",
+                    "title": "Anti Join",
+                    "tag": "Join control",
+                    "description": "Kicks new joins while active so raids cannot build momentum.",
+                    "enabled": False,
+                    "duration_minutes": None,
+                    "duration_label": "Until disabled",
+                    "status_label": "Offline",
+                    "remaining_label": "No timer",
+                    "tone": "muted",
+                    "rate_label": None,
+                },
+                {
+                    "name": "mentionguard",
+                    "title": "Mention Guard",
+                    "tag": "Ping shield",
+                    "description": "Blocks @everyone and @here blasts from being posted in chat.",
+                    "enabled": False,
+                    "duration_minutes": None,
+                    "duration_label": "Until disabled",
+                    "status_label": "Offline",
+                    "remaining_label": "No timer",
+                    "tone": "muted",
+                    "rate_label": None,
+                },
+                {
+                    "name": "lockdown",
+                    "title": "Lockdown",
+                    "tag": "Channel freeze",
+                    "description": "Locks text channels down and keeps selected talk roles moving while the server is under pressure.",
+                    "enabled": False,
+                    "duration_minutes": None,
+                    "duration_label": "Until disabled",
+                    "status_label": "Offline",
+                    "remaining_label": "No timer",
+                    "tone": "muted",
+                    "rate_label": None,
+                    "allowed_role_ids": [],
+                    "allowed_role_names": [],
+                    "allowed_role_summary": "Only server staff can talk",
+                },
+            ],
+            "active_count": 0,
+            "timed_count": 0,
+            "lockdown_role_ids": [],
+            "lockdown_role_names": [],
+            "lockdown_role_count": 0,
+        }
+
     def _slugify(value: str) -> str:
         return "".join(character.lower() if character.isalnum() else "-" for character in value).strip("-")
 
@@ -429,6 +546,7 @@ def create_dashboard_app(bot) -> FastAPI:
         commands, module_cards = guild_command_rows(guild_id)
         logs = bot.command_logs.list_for_guild(guild_id, 80) if hasattr(bot, "command_logs") else []
         access_summary = dashboard_access_summary(guild_id)
+        defense_summary = defense_dashboard_summary(guild_id)
 
         stats = {
             "commands": len(commands),
@@ -456,6 +574,9 @@ def create_dashboard_app(bot) -> FastAPI:
                 "dashboard_editor_role_ids": access_summary["editor_role_ids"],
                 "dashboard_editor_role_names": access_summary["editor_role_names"],
                 "can_manage_editor_roles": selected_guild["can_manage_editor_roles"],
+                "defense_cards": defense_summary["cards"],
+                "defense_summary": defense_summary,
+                "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
             },
         )
 
@@ -489,6 +610,52 @@ def create_dashboard_app(bot) -> FastAPI:
                 "command_name": payload.command_name,
                 "policy": policy,
                 "allowed_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in policy["allowed_role_ids"]],
+            }
+        )
+
+    @app.get("/api/guilds/{guild_id}/defense-state")
+    async def get_defense_state(request: Request, guild_id: int):
+        await require_guild_access(request, guild_id)
+        return JSONResponse(defense_dashboard_summary(guild_id))
+
+    @app.post("/api/guilds/{guild_id}/defense-state")
+    async def update_defense_state(request: Request, guild_id: int, payload: DefenseTogglePayload):
+        await require_guild_access(request, guild_id)
+        manager = getattr(bot, "server_defense", None)
+        if manager is None or not hasattr(manager, "set_defense"):
+            raise HTTPException(status_code=503, detail="ServerDefense is not available")
+
+        if payload.defense_name not in {"linkblock", "antispam", "antijoin", "mentionguard", "lockdown"}:
+            raise HTTPException(status_code=404, detail="Unknown defense")
+
+        result = await manager.set_defense(
+            guild_id,
+            payload.defense_name,
+            enabled=payload.enabled,
+            duration_minutes=payload.duration_minutes,
+        )
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        state = manager.build_dashboard_state(guild_id, role_lookup)
+        card = next((item for item in state["cards"] if item["name"] == payload.defense_name), result)
+        return JSONResponse({"card": card, "state": state})
+
+    @app.post("/api/guilds/{guild_id}/defense-lockdown-roles")
+    async def update_defense_lockdown_roles(request: Request, guild_id: int, payload: DefenseLockdownRolesPayload):
+        await require_guild_access(request, guild_id, require_editor_role_management=True)
+        manager = getattr(bot, "server_defense", None)
+        if manager is None or not hasattr(manager, "ensure_lockdown_roles"):
+            raise HTTPException(status_code=503, detail="ServerDefense is not available")
+
+        valid_role_ids = {role["id"] for role in guild_roles(guild_id)}
+        safe_role_ids = [role_id for role_id in payload.lockdown_role_ids if role_id in valid_role_ids]
+        role_ids = await manager.ensure_lockdown_roles(guild_id, safe_role_ids)
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        state = manager.build_dashboard_state(guild_id, role_lookup)
+        return JSONResponse(
+            {
+                "lockdown_role_ids": role_ids,
+                "lockdown_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in role_ids],
+                "state": state,
             }
         )
 

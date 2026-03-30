@@ -38,7 +38,7 @@
                     {% for item in guilds %}
                     <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}/dashboard/{{ item.id }}{% else %}{{ item.install_url }}{% endif %}">
                         <img src="{{ item.icon_url }}" alt="{{ item.name }}">
-                        <span>{{ item.name }}{% if not item.bot_installed %} · Add app{% endif %}</span>
+                        <span>{{ item.name }}{% if not item.bot_installed %} - Add app{% endif %}</span>
                     </a>
                     {% endfor %}
                 </div>
@@ -77,6 +77,94 @@
                     {% else %}
                     <span class="dashboard-access-note">Only the owner or members with Manage Server can change dashboard editor roles.</span>
                     {% endif %}
+                </div>
+            </section>
+
+            <section class="surface defense-workspace">
+                <div class="workspace-topline defense-topline">
+                    <div>
+                        <div class="eyebrow">ServerDefense</div>
+                        <h3>Rapid threat controls</h3>
+                        <p>Turn protections on fast, give them an optional timer, and control who can speak during lockdown without leaving the dashboard.</p>
+                    </div>
+                    <div class="section-summary">
+                        <span data-defense-summary="active">{{ defense_summary.active_count }} active</span>
+                        <span data-defense-summary="timed">{{ defense_summary.timed_count }} timed</span>
+                        <span data-defense-summary="roles">{{ defense_summary.lockdown_role_count }} lockdown roles</span>
+                    </div>
+                </div>
+
+                <div class="defense-grid" id="defense-grid">
+                    {% for defense in defense_cards %}
+                    <article
+                        class="defense-card"
+                        data-defense-card
+                        data-defense-name="{{ defense.name }}"
+                        data-enabled="{{ 'true' if defense.enabled else 'false' }}"
+                        data-duration-minutes="{{ defense.duration_minutes or '' }}"
+                        {% if defense.name == 'lockdown' %}
+                        data-lockdown-role-ids="{{ defense.allowed_role_ids|join(',') }}"
+                        {% endif %}
+                    >
+                        <div class="command-flags defense-flags">
+                            <span class="tier tier-free">Defense</span>
+                            <span class="module-chip">{{ defense.tag }}</span>
+                        </div>
+                        <div class="defense-card-head">
+                            <div>
+                                <h4>{{ defense.title }}</h4>
+                                <p>{{ defense.description }}</p>
+                            </div>
+                            <label class="toggle">
+                                <input
+                                    type="checkbox"
+                                    {% if defense.enabled %}checked{% endif %}
+                                    data-defense-toggle
+                                    data-defense-name="{{ defense.name }}"
+                                >
+                                <span>Active</span>
+                            </label>
+                        </div>
+
+                        <div class="defense-status-row">
+                            <span class="defense-status-pill" data-defense-status>{{ defense.status_label }}</span>
+                            <span class="defense-duration-pill" data-defense-remaining>{{ defense.remaining_label }}</span>
+                        </div>
+
+                        <div class="defense-card-bottom">
+                            <label class="search-shell defense-duration-shell">
+                                <span>Duration in minutes</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    class="search-input"
+                                    placeholder="Leave blank for indefinite"
+                                    data-defense-duration
+                                    data-defense-name="{{ defense.name }}"
+                                    value="{{ defense.duration_minutes or '' }}"
+                                >
+                            </label>
+                            {% if defense.rate_label %}
+                            <div class="defense-note">{{ defense.rate_label }}</div>
+                            {% endif %}
+                            {% if defense.name == 'lockdown' %}
+                            <div class="role-summary" data-lockdown-role-summary>{{ defense.allowed_role_summary }}</div>
+                            {% if can_manage_lockdown_roles %}
+                            <button type="button" class="ghost-button compact-button" data-lockdown-role-editor>Edit talk roles</button>
+                            {% else %}
+                            <span class="dashboard-access-note">Only the owner or members with Manage Server can change these roles.</span>
+                            {% endif %}
+                            {% endif %}
+                            <div class="defense-actions">
+                                {% if defense.name == 'lockdown' %}
+                                <button type="button" class="ghost-button compact-button" data-defense-release data-defense-name="{{ defense.name }}">Unlock now</button>
+                                {% endif %}
+                                <button type="button" class="primary-button compact-button" data-defense-save data-defense-name="{{ defense.name }}">Apply</button>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
                 </div>
             </section>
 
@@ -289,6 +377,36 @@
         </section>
     </div>
 
+    <div class="modal-shell" id="lockdown-role-modal" hidden>
+        <div class="modal-backdrop" data-close-lockdown-role-modal></div>
+        <section class="modal-panel">
+            <div class="section-head tight">
+                <div>
+                    <div class="eyebrow">Lockdown talk roles</div>
+                    <h3 id="lockdown-role-modal-title">Edit lockdown roles</h3>
+                </div>
+                <button class="icon-button" type="button" data-close-lockdown-role-modal>Close</button>
+            </div>
+            <p class="modal-copy">Choose the roles that can still talk while ServerDefense lockdown is active. Owners and members with Manage Server keep access regardless.</p>
+            <label class="search-shell role-search-shell">
+                <span>Find role</span>
+                <input id="lockdown-role-search" class="search-input" type="search" placeholder="Search roles">
+            </label>
+            <div class="role-checklist" id="lockdown-role-checklist">
+                {% for role in roles %}
+                <label class="role-option" data-lockdown-role-name="{{ role.label }}">
+                    <input type="checkbox" value="{{ role.id }}" data-lockdown-role-checkbox>
+                    <span>{{ role.name }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="modal-actions">
+                <button class="ghost-button" type="button" id="clear-lockdown-role-selection">Clear selection</button>
+                <button class="primary-button" type="button" id="save-lockdown-role-selection">Save roles</button>
+            </div>
+        </section>
+    </div>
+
     <script>
         const guildId = "{{ selected_guild.id }}";
         const canManageEditorRoles = {{ 'true' if can_manage_editor_roles else 'false' }};
@@ -309,9 +427,22 @@
         const dashboardAccessRoleSearch = document.getElementById("dashboard-access-role-search");
         const saveDashboardAccessSelectionButton = document.getElementById("save-dashboard-access-selection");
         const clearDashboardAccessSelectionButton = document.getElementById("clear-dashboard-access-selection");
+        const defenseCards = Array.from(document.querySelectorAll("[data-defense-card]"));
+        const defenseSummaryItems = {
+            active: document.querySelector('[data-defense-summary="active"]'),
+            timed: document.querySelector('[data-defense-summary="timed"]'),
+            roles: document.querySelector('[data-defense-summary="roles"]'),
+        };
+        const lockdownRoleModal = document.getElementById("lockdown-role-modal");
+        const lockdownRoleModalTitle = document.getElementById("lockdown-role-modal-title");
+        const lockdownRoleChecklist = document.getElementById("lockdown-role-checklist");
+        const lockdownRoleSearch = document.getElementById("lockdown-role-search");
+        const saveLockdownRoleSelectionButton = document.getElementById("save-lockdown-role-selection");
+        const clearLockdownRoleSelectionButton = document.getElementById("clear-lockdown-role-selection");
         const toastStack = document.getElementById("toast-stack");
         let activeModule = "{{ sections[0].slug if sections else 'all' }}";
         let activeRoleCommand = null;
+        let activeDefenseCard = null;
 
         function showToast(message, tone = "success") {
             if (!toastStack) return;
@@ -411,6 +542,50 @@
             return response.json();
         }
 
+        async function updateDefenseState(defenseName, payload) {
+            const response = await fetch(`/api/guilds/${guildId}/defense-state`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ defense_name: defenseName, ...payload })
+            });
+
+            if (!response.ok) {
+                let message = "Defense update failed";
+                try {
+                    const data = await response.json();
+                    if (data.detail) {
+                        message = data.detail;
+                    }
+                } catch {}
+                showToast(message, "error");
+                throw new Error("Defense update failed");
+            }
+
+            return response.json();
+        }
+
+        async function updateLockdownRoles(lockdownRoleIds) {
+            const response = await fetch(`/api/guilds/${guildId}/defense-lockdown-roles`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ lockdown_role_ids: lockdownRoleIds })
+            });
+
+            if (!response.ok) {
+                let message = "Lockdown roles update failed";
+                try {
+                    const data = await response.json();
+                    if (data.detail) {
+                        message = data.detail;
+                    }
+                } catch {}
+                showToast(message, "error");
+                throw new Error("Lockdown roles update failed");
+            }
+
+            return response.json();
+        }
+
         document.querySelectorAll("[data-command-toggle]").forEach((toggle) => {
             toggle.addEventListener("change", async () => {
                 const card = toggle.closest("[data-command-card]");
@@ -467,6 +642,82 @@
             }
         }
 
+        function parseDefenseRoleIds(card) {
+            return (card.dataset.lockdownRoleIds || "").split(",").filter(Boolean);
+        }
+
+        function getDefenseCard(defenseName) {
+            return defenseCards.find((card) => card.dataset.defenseName === defenseName) || null;
+        }
+
+        function syncDefenseSummary(state) {
+            if (!state) return;
+            if (defenseSummaryItems.active) {
+                defenseSummaryItems.active.textContent = `${state.active_count ?? 0} active`;
+            }
+            if (defenseSummaryItems.timed) {
+                defenseSummaryItems.timed.textContent = `${state.timed_count ?? 0} timed`;
+            }
+            if (defenseSummaryItems.roles) {
+                defenseSummaryItems.roles.textContent = `${state.lockdown_role_count ?? 0} lockdown roles`;
+            }
+        }
+
+        function syncDefenseCard(card, defense) {
+            const toggle = card.querySelector("[data-defense-toggle]");
+            const status = card.querySelector("[data-defense-status]");
+            const remaining = card.querySelector("[data-defense-remaining]");
+            const durationInput = card.querySelector("[data-defense-duration]");
+
+            if (toggle) {
+                toggle.checked = Boolean(defense.enabled);
+            }
+            card.dataset.enabled = defense.enabled ? "true" : "false";
+            card.dataset.durationMinutes = defense.duration_minutes ?? "";
+
+            if (status) {
+                status.textContent = defense.status_label;
+            }
+            if (remaining) {
+                remaining.textContent = defense.remaining_label;
+            }
+            if (durationInput) {
+                durationInput.value = defense.duration_minutes ?? "";
+            }
+
+            if (card.dataset.defenseName === "lockdown") {
+                const summary = card.querySelector("[data-lockdown-role-summary]");
+                if (summary && Array.isArray(defense.allowed_role_names)) {
+                    summary.textContent = defense.allowed_role_names.length
+                        ? defense.allowed_role_names.join(", ")
+                        : "Only server staff can talk";
+                }
+                card.dataset.lockdownRoleIds = (defense.allowed_role_ids || []).join(",");
+            }
+        }
+
+        function openLockdownRoleModal() {
+            if (!lockdownRoleModal || !activeDefenseCard) return;
+            const selectedRoleIds = new Set(parseDefenseRoleIds(activeDefenseCard));
+            lockdownRoleChecklist?.querySelectorAll("[data-lockdown-role-checkbox]").forEach((checkbox) => {
+                checkbox.checked = selectedRoleIds.has(checkbox.value);
+            });
+            if (lockdownRoleSearch) {
+                lockdownRoleSearch.value = "";
+            }
+            lockdownRoleChecklist?.querySelectorAll(".role-option").forEach((option) => {
+                option.hidden = false;
+            });
+            lockdownRoleModal.hidden = false;
+        }
+
+        function closeLockdownRoleModal() {
+            activeDefenseCard = null;
+            if (lockdownRoleModal) {
+                lockdownRoleModal.hidden = true;
+            }
+        }
+
         document.querySelectorAll("[data-role-editor]").forEach((button) => {
             button.addEventListener("click", () => {
                 const card = document.querySelector(`[data-command-card][data-command="${button.dataset.commandName}"]`);
@@ -500,6 +751,17 @@
 
         document.getElementById("open-dashboard-access-modal")?.addEventListener("click", openDashboardAccessModal);
 
+        document.querySelectorAll("[data-lockdown-role-editor]").forEach((button) => {
+            button.addEventListener("click", () => {
+                activeDefenseCard = getDefenseCard("lockdown");
+                openLockdownRoleModal();
+            });
+        });
+
+        document.querySelectorAll("[data-close-lockdown-role-modal]").forEach((button) => {
+            button.addEventListener("click", closeLockdownRoleModal);
+        });
+
         roleSearch?.addEventListener("input", (event) => {
             const query = event.target.value.trim().toLowerCase();
             roleChecklist.querySelectorAll(".role-option").forEach((option) => {
@@ -515,6 +777,13 @@
             });
         });
 
+        lockdownRoleSearch?.addEventListener("input", (event) => {
+            const query = event.target.value.trim().toLowerCase();
+            lockdownRoleChecklist?.querySelectorAll(".role-option").forEach((option) => {
+                option.hidden = query.length > 0 && !option.dataset.lockdownRoleName.includes(query);
+            });
+        });
+
         clearRoleSelectionButton?.addEventListener("click", () => {
             roleChecklist.querySelectorAll("[data-role-checkbox]").forEach((checkbox) => {
                 checkbox.checked = false;
@@ -524,6 +793,13 @@
         clearDashboardAccessSelectionButton?.addEventListener("click", () => {
             const dashboardRoleCheckboxes = dashboardAccessRoleChecklist?.querySelectorAll("[data-dashboard-access-role-checkbox]") || [];
             dashboardRoleCheckboxes.forEach((checkbox) => {
+                checkbox.checked = false;
+            });
+        });
+
+        clearLockdownRoleSelectionButton?.addEventListener("click", () => {
+            const lockdownRoleCheckboxes = lockdownRoleChecklist?.querySelectorAll("[data-lockdown-role-checkbox]") || [];
+            lockdownRoleCheckboxes.forEach((checkbox) => {
                 checkbox.checked = false;
             });
         });
@@ -565,6 +841,78 @@
                 );
                 closeDashboardAccessModal();
             } catch {}
+        });
+
+        saveLockdownRoleSelectionButton?.addEventListener("click", async () => {
+            if (!activeDefenseCard) return;
+            const selectedIds = Array.from(lockdownRoleChecklist?.querySelectorAll("[data-lockdown-role-checkbox]:checked") || []).map((checkbox) => checkbox.value);
+
+            try {
+                const result = await updateLockdownRoles(selectedIds);
+                const card = getDefenseCard("lockdown");
+                if (card) {
+                    card.dataset.lockdownRoleIds = (result.lockdown_role_ids || []).join(",");
+                    const summary = card.querySelector("[data-lockdown-role-summary]");
+                    if (summary) {
+                        summary.textContent = result.lockdown_role_names.length
+                            ? result.lockdown_role_names.join(", ")
+                            : "Only server staff can talk";
+                    }
+                }
+                syncDefenseSummary(result.state);
+                showToast(
+                    result.lockdown_role_names.length
+                        ? "Updated lockdown talk roles."
+                        : "Cleared lockdown talk roles."
+                );
+                closeLockdownRoleModal();
+            } catch {}
+        });
+
+        defenseCards.forEach((card) => {
+            const toggle = card.querySelector("[data-defense-toggle]");
+            const saveButton = card.querySelector("[data-defense-save]");
+            const releaseButton = card.querySelector("[data-defense-release]");
+            const durationInput = card.querySelector("[data-defense-duration]");
+
+            async function saveDefenseState(nextEnabled = toggle?.checked ?? false) {
+                const durationValue = durationInput?.value ? Number(durationInput.value) : null;
+                const result = await updateDefenseState(card.dataset.defenseName, {
+                    enabled: nextEnabled,
+                    duration_minutes: durationValue && durationValue > 0 ? durationValue : null,
+                });
+                syncDefenseCard(card, result.card);
+                syncDefenseSummary(result.state);
+                updateStats();
+                showToast(`${result.card.title} ${result.card.enabled ? "updated" : "disabled"}.`);
+            }
+
+            toggle?.addEventListener("change", async () => {
+                try {
+                    await saveDefenseState(toggle.checked);
+                } catch {
+                    toggle.checked = !toggle.checked;
+                }
+            });
+
+            saveButton?.addEventListener("click", async () => {
+                try {
+                    await saveDefenseState(toggle?.checked ?? false);
+                } catch {}
+            });
+
+            releaseButton?.addEventListener("click", async () => {
+                if (toggle) {
+                    toggle.checked = false;
+                }
+                try {
+                    await saveDefenseState(false);
+                } catch {
+                    if (toggle) {
+                        toggle.checked = true;
+                    }
+                }
+            });
         });
 
         async function refreshLogs() {
