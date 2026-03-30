@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from core.access import CommandAccessManager
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
+from core.server_defense import ServerDefenseManager, ServerDefenseStore
 from dashboard.app import DashboardServer, resolve_dashboard_base_url, resolve_dashboard_host, resolve_dashboard_port
 
 
@@ -43,6 +44,9 @@ class ServerCoreBot(commands.Bot):
         self.command_controls = CommandControlStore()
         self.command_logs = CommandLogStore()
         self.access_manager = CommandAccessManager(self.command_controls, self.command_logs)
+        self.server_defense_store = ServerDefenseStore()
+        self.server_defense = ServerDefenseManager(self, self.server_defense_store)
+        self._server_defense_initialized = False
 
         super().__init__(
             command_prefix="!",
@@ -102,6 +106,10 @@ bot = ServerCoreBot()
 
 @bot.event
 async def on_ready():
+    if not bot._server_defense_initialized:
+        await bot.server_defense.initialize()
+        bot._server_defense_initialized = True
+
     dashboard_host = resolve_dashboard_host()
     dashboard_port = resolve_dashboard_port()
     dashboard_url = resolve_dashboard_base_url(dashboard_host, dashboard_port)
