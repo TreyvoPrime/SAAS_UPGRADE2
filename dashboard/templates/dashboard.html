@@ -97,6 +97,30 @@
                     </div>
                 </div>
 
+                <section class="surface command-settings-panel defense-settings-panel">
+                    <div>
+                        <div class="eyebrow">ServerGuard</div>
+                        <h3>Purge limit</h3>
+                        <p>Choose how many recent messages `/purge` can remove at once for this server. Owners and dashboard editors can change it here. Free tier supports up to {{ purge_settings.max_limit }} right now, with room to expand to {{ purge_settings.premium_limit }} later.</p>
+                    </div>
+                    <div class="command-settings-actions">
+                        <label class="search-shell compact-setting-shell">
+                            <span>Messages per purge</span>
+                            <input
+                                id="purge-limit-input"
+                                class="search-input"
+                                type="number"
+                                min="1"
+                                max="{{ purge_settings.max_limit }}"
+                                step="1"
+                                value="{{ purge_settings.limit }}"
+                            >
+                        </label>
+                        <div class="dashboard-access-summary" id="purge-limit-summary">Current limit: {{ purge_settings.limit }} messages</div>
+                        <button type="button" class="primary-button" id="save-purge-limit">Save purge limit</button>
+                    </div>
+                </section>
+
                 <div class="defense-grid" id="defense-grid">
                     {% for defense in defense_cards %}
                     <article
@@ -258,30 +282,6 @@
             {% endif %}
 
             {% if current_view == 'commands' %}
-            <section class="surface command-settings-panel">
-                <div>
-                    <div class="eyebrow">Moderation</div>
-                    <h3>Purge limit</h3>
-                    <p>Choose how many recent messages `/purge` can remove at once for this server. Free tier supports up to {{ purge_settings.max_limit }} right now, with room to expand to {{ purge_settings.premium_limit }} later.</p>
-                </div>
-                <div class="command-settings-actions">
-                    <label class="search-shell compact-setting-shell">
-                        <span>Messages per purge</span>
-                        <input
-                            id="purge-limit-input"
-                            class="search-input"
-                            type="number"
-                            min="1"
-                            max="{{ purge_settings.max_limit }}"
-                            step="1"
-                            value="{{ purge_settings.limit }}"
-                        >
-                    </label>
-                    <div class="dashboard-access-summary" id="purge-limit-summary">Current limit: {{ purge_settings.limit }} messages</div>
-                    <button type="button" class="primary-button" id="save-purge-limit">Save purge limit</button>
-                </div>
-            </section>
-
             <section class="stats-band">
                 <article>
                     <span>Total commands</span>

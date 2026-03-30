@@ -50,7 +50,7 @@ def build_command_catalog(bot: discord.Client) -> list[dict]:
         "modules.membercount": "Member Count",
         "modules.poll": "Polls",
         "modules.profile": "Profile",
-        "modules.purge": "Purge",
+        "modules.purge": "ServerGuard",
         "modules.reactionroles": "Reaction Roles",
         "modules.reminders": "Reminders",
         "modules.serverdefense": "ServerDefense",

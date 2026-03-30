@@ -456,6 +456,11 @@ button {
     border-radius: 24px;
 }
 
+.defense-settings-panel {
+    background: rgba(255, 255, 255, 0.02);
+    box-shadow: none;
+}
+
 .dashboard-access-panel h3 {
     margin: 8px 0 6px;
 }
