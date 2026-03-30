@@ -7,6 +7,10 @@ from core.storage import read_json, write_json
 
 
 class CommandControlStore:
+    DEFAULT_PURGE_LIMIT = 100
+    FREE_PURGE_LIMIT_CAP = 500
+    PREMIUM_PURGE_LIMIT_CAP = 2000
+
     def __init__(self, path: str | Path = "dashboard_data/command_controls.json"):
         self.path = Path(path)
         self.data = read_json(self.path, {"guilds": {}})
@@ -66,3 +70,18 @@ class CommandControlStore:
         dashboard_bucket["editor_role_ids"] = sorted({int(role_id) for role_id in role_ids})
         self.save()
         return self.get_dashboard_editor_roles(guild_id)
+
+    def get_purge_limit(self, guild_id: int) -> int:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        raw_value = dashboard_bucket.get("purge_limit", self.DEFAULT_PURGE_LIMIT)
+        try:
+            normalized = int(raw_value)
+        except (TypeError, ValueError):
+            normalized = self.DEFAULT_PURGE_LIMIT
+        return max(1, min(normalized, self.PREMIUM_PURGE_LIMIT_CAP))
+
+    def set_purge_limit(self, guild_id: int, limit: int) -> int:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        dashboard_bucket["purge_limit"] = max(1, min(int(limit), self.PREMIUM_PURGE_LIMIT_CAP))
+        self.save()
+        return self.get_purge_limit(guild_id)

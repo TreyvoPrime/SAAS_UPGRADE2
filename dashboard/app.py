@@ -50,6 +50,10 @@ class GreetingConfigPayload(BaseModel):
     message: str | None = Field(default=None, max_length=1500)
 
 
+class PurgeSettingsPayload(BaseModel):
+    limit: int = Field(ge=1, le=2000)
+
+
 def resolve_dashboard_host() -> str:
     return os.getenv("DASHBOARD_HOST") or os.getenv("HOST") or "0.0.0.0"
 
@@ -358,6 +362,17 @@ def create_dashboard_app(bot) -> FastAPI:
             "editor_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in editor_role_ids],
         }
 
+    def purge_settings_summary(guild_id: int) -> dict:
+        controls = bot.access_manager.controls
+        current_limit = controls.get_purge_limit(guild_id)
+        max_limit = controls.FREE_PURGE_LIMIT_CAP
+        premium_limit = controls.PREMIUM_PURGE_LIMIT_CAP
+        return {
+            "limit": min(current_limit, max_limit),
+            "max_limit": max_limit,
+            "premium_limit": premium_limit,
+        }
+
     def greetings_dashboard_summary(guild_id: int) -> dict:
         manager = getattr(bot, "greetings", None)
         channels = guild_text_channels(guild_id)
@@ -553,6 +568,7 @@ def create_dashboard_app(bot) -> FastAPI:
         access_summary = dashboard_access_summary(guild_id)
         defense_summary = defense_dashboard_summary(guild_id)
         greetings_summary = greetings_dashboard_summary(guild_id)
+        purge_settings = purge_settings_summary(guild_id)
 
         stats = {
             "commands": len(commands),
@@ -585,6 +601,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "defense_summary": defense_summary,
                 "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
                 "greetings_summary": greetings_summary,
+                "purge_settings": purge_settings,
                 "current_view": current_view,
             },
         )
@@ -805,6 +822,19 @@ def create_dashboard_app(bot) -> FastAPI:
             manager.set_leave(guild_id, channel_id=channel_id, message=message)
 
         return JSONResponse(greetings_dashboard_summary(guild_id))
+
+    @app.get("/api/guilds/{guild_id}/purge-settings")
+    async def get_purge_settings(request: Request, guild_id: int):
+        await require_guild_access(request, guild_id)
+        return JSONResponse(purge_settings_summary(guild_id))
+
+    @app.post("/api/guilds/{guild_id}/purge-settings")
+    async def update_purge_settings(request: Request, guild_id: int, payload: PurgeSettingsPayload):
+        await require_guild_access(request, guild_id)
+        controls = bot.access_manager.controls
+        allowed_limit = min(int(payload.limit), controls.FREE_PURGE_LIMIT_CAP)
+        updated_limit = controls.set_purge_limit(guild_id, allowed_limit)
+        return JSONResponse(purge_settings_summary(guild_id) | {"limit": min(updated_limit, controls.FREE_PURGE_LIMIT_CAP)})
 
     return app
 

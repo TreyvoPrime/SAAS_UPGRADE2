@@ -258,6 +258,30 @@
             {% endif %}
 
             {% if current_view == 'commands' %}
+            <section class="surface command-settings-panel">
+                <div>
+                    <div class="eyebrow">Moderation</div>
+                    <h3>Purge limit</h3>
+                    <p>Choose how many recent messages `/purge` can remove at once for this server. Free tier supports up to {{ purge_settings.max_limit }} right now, with room to expand to {{ purge_settings.premium_limit }} later.</p>
+                </div>
+                <div class="command-settings-actions">
+                    <label class="search-shell compact-setting-shell">
+                        <span>Messages per purge</span>
+                        <input
+                            id="purge-limit-input"
+                            class="search-input"
+                            type="number"
+                            min="1"
+                            max="{{ purge_settings.max_limit }}"
+                            step="1"
+                            value="{{ purge_settings.limit }}"
+                        >
+                    </label>
+                    <div class="dashboard-access-summary" id="purge-limit-summary">Current limit: {{ purge_settings.limit }} messages</div>
+                    <button type="button" class="primary-button" id="save-purge-limit">Save purge limit</button>
+                </div>
+            </section>
+
             <section class="stats-band">
                 <article>
                     <span>Total commands</span>
@@ -518,6 +542,9 @@
         const dashboardAccessRoleSearch = document.getElementById("dashboard-access-role-search");
         const saveDashboardAccessSelectionButton = document.getElementById("save-dashboard-access-selection");
         const clearDashboardAccessSelectionButton = document.getElementById("clear-dashboard-access-selection");
+        const purgeLimitInput = document.getElementById("purge-limit-input");
+        const purgeLimitSummary = document.getElementById("purge-limit-summary");
+        const savePurgeLimitButton = document.getElementById("save-purge-limit");
         const defenseCards = Array.from(document.querySelectorAll("[data-defense-card]"));
         const defenseSummaryItems = {
             active: document.querySelector('[data-defense-summary="active"]'),
@@ -698,6 +725,26 @@
 
             if (!response.ok) {
                 let message = "Greeting update failed";
+                try {
+                    const data = await response.json();
+                    message = data.detail || message;
+                } catch {}
+                showToast(message, "error");
+                throw new Error(message);
+            }
+
+            return response.json();
+        }
+
+        async function updatePurgeLimit(limit) {
+            const response = await fetch(`/api/guilds/${guildId}/purge-settings`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ limit })
+            });
+
+            if (!response.ok) {
+                let message = "Purge limit update failed";
                 try {
                     const data = await response.json();
                     message = data.detail || message;
@@ -1079,6 +1126,26 @@
                     showToast(`${flow === "welcome" ? "Welcome" : "Leave"} flow updated.`);
                 } catch {}
             });
+        });
+
+        savePurgeLimitButton?.addEventListener("click", async () => {
+            const maxLimit = Number(purgeLimitInput?.max || "500");
+            const nextValue = Number(purgeLimitInput?.value || "0");
+            if (!Number.isInteger(nextValue) || nextValue < 1 || nextValue > maxLimit) {
+                showToast(`Choose a purge limit between 1 and ${maxLimit}.`, "error");
+                return;
+            }
+
+            try {
+                const result = await updatePurgeLimit(nextValue);
+                if (purgeLimitInput) {
+                    purgeLimitInput.value = String(result.limit);
+                }
+                if (purgeLimitSummary) {
+                    purgeLimitSummary.textContent = `Current limit: ${result.limit} messages`;
+                }
+                showToast(`Purge limit set to ${result.limit} messages.`);
+            } catch {}
         });
 
         async function refreshLogs() {

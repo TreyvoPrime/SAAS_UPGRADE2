@@ -1,6 +1,6 @@
 import discord
-from discord.ext import commands
 from discord import app_commands
+from discord.ext import commands
 
 
 class Purge(commands.Cog):
@@ -15,10 +15,10 @@ class Purge(commands.Cog):
 
     @app_commands.command(
         name="purge",
-        description="Advanced message purge system"
+        description="Delete a batch of recent messages"
     )
     @app_commands.describe(
-        amount="Number of messages to scan (1–100)",
+        amount="Number of recent messages to scan",
         user="Optional: delete only this user's messages"
     )
     async def purge(
@@ -29,15 +29,28 @@ class Purge(commands.Cog):
     ):
         await interaction.response.defer(ephemeral=True)
 
-        if not self.can_manage(interaction.user):
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
             return await interaction.followup.send(
-                "❌ No permission.",
+                "This command only works in a server.",
                 ephemeral=True
             )
 
-        if amount < 1 or amount > 100:
+        if not self.can_manage(interaction.user):
             return await interaction.followup.send(
-                "⚠️ Amount must be between 1–100.",
+                "You need Manage Messages or Administrator to use purge.",
+                ephemeral=True
+            )
+
+        if not isinstance(interaction.channel, discord.TextChannel):
+            return await interaction.followup.send(
+                "Purge only works in text channels.",
+                ephemeral=True
+            )
+
+        configured_limit = self.bot.command_controls.get_purge_limit(interaction.guild.id)
+        if amount < 1 or amount > configured_limit:
+            return await interaction.followup.send(
+                f"Choose a number between 1 and {configured_limit}.",
                 ephemeral=True
             )
 
@@ -46,16 +59,27 @@ class Purge(commands.Cog):
                 return message.author.id == user.id
             return True
 
-        deleted = await interaction.channel.purge(
-            limit=amount,
-            check=check
-        )
+        try:
+            deleted = await interaction.channel.purge(
+                limit=amount,
+                check=check
+            )
+        except discord.Forbidden:
+            return await interaction.followup.send(
+                "I need Manage Messages in this channel to do that.",
+                ephemeral=True
+            )
+        except discord.HTTPException:
+            return await interaction.followup.send(
+                "I couldn't finish the purge right now.",
+                ephemeral=True
+            )
 
-        msg = f"🧹 Deleted {len(deleted)} messages"
+        message = f"Deleted {len(deleted)} messages"
         if user:
-            msg += f" from {user.mention}"
+            message += f" from {user.mention}"
 
-        await interaction.followup.send(msg, ephemeral=True)
+        await interaction.followup.send(message, ephemeral=True)
 
 
 async def setup(bot):
