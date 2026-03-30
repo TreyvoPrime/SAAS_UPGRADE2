@@ -55,6 +55,14 @@ DEFAULT_GUILD_DEFENSES = {
     },
 }
 
+LOCKDOWN_PERMISSION_KEYS = (
+    "send_messages",
+    "send_messages_in_threads",
+    "add_reactions",
+    "create_public_threads",
+    "create_private_threads",
+)
+
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
@@ -603,10 +611,10 @@ class ServerDefenseManager:
             if not isinstance(channel, discord.TextChannel):
                 continue
 
-            await self._set_channel_send_permission(
+            await self._set_channel_lockdown_permissions(
                 channel,
                 guild.default_role,
-                False,
+                self._lockdown_deny_overrides(),
                 reason="Refreshing lockdown role permissions.",
             )
 
@@ -617,7 +625,7 @@ class ServerDefenseManager:
                 if role is None:
                     continue
                 if role_id not in allowed_role_ids:
-                    await self._set_channel_send_permission(
+                    await self._set_channel_lockdown_permissions(
                         channel,
                         role,
                         prior_value,
@@ -631,11 +639,11 @@ class ServerDefenseManager:
                     continue
                 key = str(role_id)
                 if key not in tracked_role_states:
-                    tracked_role_states[key] = channel.overwrites_for(role).send_messages
-                await self._set_channel_send_permission(
+                    tracked_role_states[key] = self._capture_lockdown_permissions(channel, role)
+                await self._set_channel_lockdown_permissions(
                     channel,
                     role,
-                    True,
+                    self._lockdown_allow_overrides(),
                     reason="Applying lockdown speaker role.",
                 )
 
@@ -655,25 +663,24 @@ class ServerDefenseManager:
 
         for channel in guild.text_channels:
             channel_snapshot = {
-                "default_send_messages": channel.overwrites_for(guild.default_role).send_messages,
+                "default_role": self._capture_lockdown_permissions(channel, guild.default_role),
                 "roles": {},
             }
-            await self._set_channel_send_permission(
+            await self._set_channel_lockdown_permissions(
                 channel,
                 guild.default_role,
-                False,
+                self._lockdown_deny_overrides(),
                 reason=reason or f"Server lockdown enabled by {actor or 'ServerDefense'}",
             )
             for role_id in allowed_role_ids:
                 role = guild.get_role(role_id)
                 if role is None:
                     continue
-                overwrite = channel.overwrites_for(role)
-                channel_snapshot["roles"][str(role.id)] = overwrite.send_messages
-                await self._set_channel_send_permission(
+                channel_snapshot["roles"][str(role.id)] = self._capture_lockdown_permissions(channel, role)
+                await self._set_channel_lockdown_permissions(
                     channel,
                     role,
-                    True,
+                    self._lockdown_allow_overrides(),
                     reason=reason or "Server lockdown speaker role update.",
                 )
             snapshot[str(channel.id)] = channel_snapshot
@@ -702,17 +709,20 @@ class ServerDefenseManager:
                 channel = guild.get_channel(int(channel_id))
                 if not isinstance(channel, discord.TextChannel):
                     continue
-                await self._set_channel_send_permission(
+                default_snapshot = channel_snapshot.get("default_role")
+                if default_snapshot is None:
+                    default_snapshot = {"send_messages": channel_snapshot.get("default_send_messages")}
+                await self._set_channel_lockdown_permissions(
                     channel,
                     guild.default_role,
-                    channel_snapshot.get("default_send_messages"),
+                    default_snapshot,
                     reason=reason or f"Server lockdown disabled by {actor or 'ServerDefense'}",
                 )
                 for role_id_str, send_state in channel_snapshot.get("roles", {}).items():
                     role = guild.get_role(int(role_id_str))
                     if role is None:
                         continue
-                    await self._set_channel_send_permission(
+                    await self._set_channel_lockdown_permissions(
                         channel,
                         role,
                         send_state,
@@ -727,16 +737,44 @@ class ServerDefenseManager:
             snapshot={},
         )
 
-    async def _set_channel_send_permission(
+    def _capture_lockdown_permissions(
         self,
         channel: discord.TextChannel,
         target: discord.Role,
-        send_messages: bool | None,
+    ) -> dict[str, bool | None]:
+        overwrite = channel.overwrites_for(target)
+        return {
+            permission_key: getattr(overwrite, permission_key, None)
+            for permission_key in LOCKDOWN_PERMISSION_KEYS
+        }
+
+    def _lockdown_deny_overrides(self) -> dict[str, bool]:
+        return {permission_key: False for permission_key in LOCKDOWN_PERMISSION_KEYS}
+
+    def _lockdown_allow_overrides(self) -> dict[str, bool]:
+        return {
+            "send_messages": True,
+            "send_messages_in_threads": True,
+            "add_reactions": True,
+            "create_public_threads": True,
+            "create_private_threads": True,
+        }
+
+    async def _set_channel_lockdown_permissions(
+        self,
+        channel: discord.TextChannel,
+        target: discord.Role,
+        permissions: dict[str, bool | None] | bool | None,
         *,
         reason: str | None = None,
     ) -> None:
         overwrite = channel.overwrites_for(target)
-        overwrite.send_messages = send_messages
+        if isinstance(permissions, dict):
+            for permission_key in LOCKDOWN_PERMISSION_KEYS:
+                if permission_key in permissions:
+                    setattr(overwrite, permission_key, permissions[permission_key])
+        else:
+            overwrite.send_messages = permissions
         try:
             await channel.set_permissions(target, overwrite=overwrite, reason=reason)
         except Exception:
