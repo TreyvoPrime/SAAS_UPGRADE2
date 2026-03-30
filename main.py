@@ -110,6 +110,16 @@ async def on_ready():
         await bot.server_defense.initialize()
         bot._server_defense_initialized = True
 
+    try:
+        synced_count = 0
+        for guild in bot.guilds:
+            synced = await bot.tree.sync(guild=guild)
+            synced_count += len(synced)
+        if bot.guilds:
+            print(f"Per-guild synced commands across {len(bot.guilds)} guild(s): {synced_count}")
+    except Exception as error:
+        print("Per-guild sync failed:", error)
+
     dashboard_host = resolve_dashboard_host()
     dashboard_port = resolve_dashboard_port()
     dashboard_url = resolve_dashboard_base_url(dashboard_host, dashboard_port)

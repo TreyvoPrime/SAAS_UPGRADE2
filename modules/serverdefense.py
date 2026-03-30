@@ -36,6 +36,10 @@ class ServerDefense(commands.Cog):
         name="lockdown",
         description="Lock or unlock the server's text channels",
     )
+    serverguard = app_commands.Group(
+        name="serverguard",
+        description="Arm or release the full ServerGuard defensive stack",
+    )
 
     async def _require_admin(self, interaction: discord.Interaction) -> discord.Member | None:
         if interaction.guild is None:
@@ -137,6 +141,11 @@ class ServerDefense(commands.Cog):
         if ends_at:
             return f" It will end at `{ends_at}`."
         return ""
+
+    def _all_features_summary(self, guild_id: int) -> str:
+        state = self.bot.server_defense.get_dashboard_state(guild_id)
+        armed = [feature.replace("mentionguard", "mention guard") for feature in state if feature in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown"} and state[feature].get("enabled")]
+        return ", ".join(armed) if armed else "none"
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -395,6 +404,66 @@ class ServerDefense(commands.Cog):
             f"Allowed roles: {', '.join(role_mentions) if role_mentions else 'No extra talk roles configured.'}",
             ephemeral=True,
         )
+
+    @serverguard.command(name="enableall", description="Enable every ServerGuard protection at once")
+    async def serverguard_enable_all(
+        self,
+        interaction: discord.Interaction,
+        duration_minutes: app_commands.Range[int, 1, MAX_DURATION_MINUTES] | None = None,
+    ):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+
+        if not await self._ensure_bot_permissions(
+            interaction,
+            manage_messages=True,
+            kick_members=True,
+            manage_channels=True,
+        ):
+            return
+
+        await self.bot.server_defense.enable_all(
+            interaction.guild.id,
+            duration_minutes=duration_minutes,
+            actor=interaction.user,
+            reason="ServerGuard enable all",
+        )
+        suffix = f" for `{duration_minutes}` minutes" if duration_minutes else ""
+        await interaction.response.send_message(
+            f"ServerGuard enabled every protection{suffix}. Armed: {self._all_features_summary(interaction.guild.id)}.",
+            ephemeral=True,
+        )
+
+    @serverguard.command(name="disableall", description="Disable every ServerGuard protection at once")
+    async def serverguard_disable_all(self, interaction: discord.Interaction):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+
+        await self.bot.server_defense.disable_all(
+            interaction.guild.id,
+            actor=interaction.user,
+            reason="ServerGuard disable all",
+        )
+        await interaction.response.send_message(
+            "ServerGuard protections disabled.",
+            ephemeral=True,
+        )
+
+    @serverguard.command(name="status", description="View which ServerGuard protections are armed")
+    async def serverguard_status(self, interaction: discord.Interaction):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+
+        embed = discord.Embed(title="ServerGuard", color=discord.Color.blurple())
+        embed.add_field(
+            name="Armed protections",
+            value=self._all_features_summary(interaction.guild.id),
+            inline=False,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

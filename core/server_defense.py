@@ -591,6 +591,42 @@ class ServerDefenseManager:
             return await self.enable_feature(guild_id, normalized, duration_minutes=duration_minutes)
         return await self.disable_feature(guild_id, normalized)
 
+    async def enable_all(
+        self,
+        guild_id: int,
+        *,
+        duration_minutes: int | None = None,
+        actor: discord.abc.User | None = None,
+        reason: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        results: dict[str, dict[str, Any]] = {}
+        for feature in DEFENSE_FEATURES:
+            results[feature] = await self.enable_feature(
+                guild_id,
+                feature,
+                duration_minutes=duration_minutes,
+                actor=actor,
+                reason=reason,
+            )
+        return results
+
+    async def disable_all(
+        self,
+        guild_id: int,
+        *,
+        actor: discord.abc.User | None = None,
+        reason: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        results: dict[str, dict[str, Any]] = {}
+        for feature in DEFENSE_FEATURES:
+            results[feature] = await self.disable_feature(
+                guild_id,
+                feature,
+                actor=actor,
+                reason=reason,
+            )
+        return results
+
     def is_enabled(self, guild_id: int, feature: str) -> bool:
         normalized = "mentionguard" if feature == "mentionblock" else feature
         if normalized not in DEFENSE_FEATURES:
