@@ -65,6 +65,11 @@ def create_dashboard_app(bot) -> FastAPI:
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
+    def render_template(name: str, request: Request, context: dict) -> HTMLResponse:
+        merged_context = {"request": request, **context}
+        template = templates.get_template(name)
+        return HTMLResponse(template.render(merged_context))
+
     dashboard_host = resolve_dashboard_host()
     dashboard_port = resolve_dashboard_port()
     discord_client_id = os.getenv("DISCORD_CLIENT_ID") or os.getenv("DISCORD_APP_ID")
@@ -350,11 +355,10 @@ def create_dashboard_app(bot) -> FastAPI:
         if user:
             return RedirectResponse(url="/servers", status_code=302)
 
-        return templates.TemplateResponse(
-            request,
+        return render_template(
             "login.html",
+            request,
             {
-                "request": request,
                 "oauth_ready": oauth_ready(),
                 "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
                 "dashboard_base_url": dashboard_base_url,
@@ -368,11 +372,10 @@ def create_dashboard_app(bot) -> FastAPI:
             return RedirectResponse(url="/", status_code=302)
         guilds = await load_user_guilds(request)
         premium_count = len([command for command in build_command_catalog(bot) if command["tier"] == PREMIUM_TIER])
-        return templates.TemplateResponse(
-            request,
+        return render_template(
             "guilds.html",
+            request,
             {
-                "request": request,
                 "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
                 "user": user,
                 "guilds": guilds,
@@ -435,11 +438,10 @@ def create_dashboard_app(bot) -> FastAPI:
             "modules": len(module_cards),
         }
 
-        return templates.TemplateResponse(
-            request,
+        return render_template(
             "dashboard.html",
+            request,
             {
-                "request": request,
                 "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
                 "user": session_user(request),
                 "guilds": guilds,
