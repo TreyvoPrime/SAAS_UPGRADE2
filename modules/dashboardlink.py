@@ -12,7 +12,7 @@ class DashboardCommands(commands.Cog):
 
     dashboard = app_commands.Group(
         name="dashboard",
-        description="Open and manage the ServerCore dashboard for this server",
+        description="Website tools for managing this server",
     )
 
     def _dashboard_url(self, guild_id: int) -> str:
@@ -73,7 +73,7 @@ class DashboardCommands(commands.Cog):
                 break
         return choices
 
-    @dashboard.command(name="open", description="Get the dashboard link for this server")
+    @dashboard.command(name="open", description="Get the website link to manage this server")
     async def open_dashboard(self, interaction: discord.Interaction):
         member = await self._require_manage_server(interaction)
         if member is None or interaction.guild is None:
@@ -81,15 +81,15 @@ class DashboardCommands(commands.Cog):
 
         dashboard_link = self._dashboard_url(interaction.guild.id)
         embed = discord.Embed(
-            title="Server Dashboard",
-            description=f"[Open the dashboard for **{interaction.guild.name}**]({dashboard_link})",
+            title="Manage This Server",
+            description=f"[Open the ServerCore website for **{interaction.guild.name}**]({dashboard_link})",
             color=discord.Color.blurple(),
         )
-        embed.add_field(name="Direct link", value=dashboard_link, inline=False)
+        embed.add_field(name="Website link", value=dashboard_link, inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @dashboard.command(name="overview", description="View dashboard status for this server")
+    @dashboard.command(name="overview", description="See a quick summary of this server's settings")
     async def overview(self, interaction: discord.Interaction):
         member = await self._require_manage_server(interaction)
         if member is None or interaction.guild is None:
@@ -107,17 +107,17 @@ class DashboardCommands(commands.Cog):
                 restricted_count += 1
 
         embed = discord.Embed(
-            title=f"{interaction.guild.name} Dashboard Overview",
+            title=f"{interaction.guild.name} Settings Summary",
             color=discord.Color.blurple(),
         )
-        embed.add_field(name="Commands", value=str(len(commands_list)), inline=True)
-        embed.add_field(name="Disabled", value=str(disabled_count), inline=True)
-        embed.add_field(name="Restricted", value=str(restricted_count), inline=True)
-        embed.add_field(name="Dashboard", value=self._dashboard_url(interaction.guild.id), inline=False)
+        embed.add_field(name="Commands available", value=str(len(commands_list)), inline=True)
+        embed.add_field(name="Turned off", value=str(disabled_count), inline=True)
+        embed.add_field(name="Role-limited", value=str(restricted_count), inline=True)
+        embed.add_field(name="Manage online", value=self._dashboard_url(interaction.guild.id), inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @dashboard.command(name="command", description="View dashboard permissions for a specific command")
+    @dashboard.command(name="command", description="Check whether a command is on and who can use it")
     @app_commands.autocomplete(command_name=_command_autocomplete)
     async def command_info(self, interaction: discord.Interaction, command_name: str):
         member = await self._require_manage_server(interaction)
@@ -137,22 +137,22 @@ class DashboardCommands(commands.Cog):
         ]
 
         embed = discord.Embed(
-            title=f"/{command['name']}",
+            title=f"Command Check: /{command['name']}",
             description=command["description"],
             color=discord.Color.blurple(),
         )
-        embed.add_field(name="Module", value=command["module"], inline=True)
-        embed.add_field(name="Tier", value=command["tier"], inline=True)
-        embed.add_field(name="Enabled", value="Yes" if policy["enabled"] else "No", inline=True)
+        embed.add_field(name="Section", value=command["module"], inline=True)
+        embed.add_field(name="Plan", value=command["tier"], inline=True)
+        embed.add_field(name="Turned on", value="Yes" if policy["enabled"] else "No", inline=True)
         embed.add_field(
-            name="Allowed roles",
-            value=", ".join(role_mentions) if role_mentions else "All roles that pass the command's built-in checks",
+            name="Who can use it",
+            value=", ".join(role_mentions) if role_mentions else "Anyone who already passes the command's built-in checks",
             inline=False,
         )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @dashboard.command(name="toggle", description="Enable or disable a command from Discord")
+    @dashboard.command(name="toggle", description="Turn a command on or off from Discord")
     @app_commands.autocomplete(command_name=_command_autocomplete)
     async def toggle_command(self, interaction: discord.Interaction, command_name: str, enabled: bool):
         member = await self._require_manage_server(interaction)
@@ -166,11 +166,11 @@ class DashboardCommands(commands.Cog):
 
         policy = self.bot.access_manager.controls.set_enabled(interaction.guild.id, command["name"], enabled)
         await interaction.response.send_message(
-            f"/{command['name']} is now {'enabled' if policy['enabled'] else 'disabled'}.",
+            f"/{command['name']} is now {'turned on' if policy['enabled'] else 'turned off'}.",
             ephemeral=True,
         )
 
-    @dashboard.command(name="role", description="Add or remove an allowed role for a command")
+    @dashboard.command(name="role", description="Choose which roles can use a command")
     @app_commands.autocomplete(command_name=_command_autocomplete)
     @app_commands.choices(mode=[
         app_commands.Choice(name="add", value="add"),
@@ -219,11 +219,12 @@ class DashboardCommands(commands.Cog):
             for role_id in updated["allowed_role_ids"]
             if interaction.guild.get_role(role_id) is not None
         ]
+        access_summary = ", ".join(role_mentions) if role_mentions else "Anyone who passes the command's built-in checks"
 
         await interaction.response.send_message(
             (
-                f"Updated roles for /{command['name']}.\n"
-                f"Allowed roles: {', '.join(role_mentions) if role_mentions else 'All roles that pass built-in checks'}"
+                f"Updated access for /{command['name']}.\n"
+                f"Who can use it: {access_summary}"
             ),
             ephemeral=True,
         )

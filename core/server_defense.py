@@ -642,10 +642,23 @@ class ServerDefenseManager:
 
         allowed_role_ids = set(state.get("allowed_role_ids", []))
         updated_snapshot = copy.deepcopy(snapshot)
-        for channel_id, channel_snapshot in snapshot.items():
+        for channel_id, channel_snapshot in updated_snapshot.items():
             channel = guild.get_channel(int(channel_id))
             if not isinstance(channel, discord.TextChannel):
                 continue
+
+            tracked_role_states = channel_snapshot.setdefault("roles", {})
+            tracked_member_states = channel_snapshot.setdefault("members", {})
+            for target in channel.overwrites:
+                if isinstance(target, discord.Role) and target != guild.default_role:
+                    tracked_role_states.setdefault(str(target.id), self._capture_lockdown_permissions(channel, target))
+                elif isinstance(target, discord.Member):
+                    tracked_member_states.setdefault(str(target.id), self._capture_lockdown_permissions(channel, target))
+
+            for role_id in allowed_role_ids:
+                role = guild.get_role(role_id)
+                if role is not None and role != guild.default_role:
+                    tracked_role_states.setdefault(str(role.id), self._capture_lockdown_permissions(channel, role))
 
             await self._set_channel_lockdown_permissions(
                 channel,
@@ -654,33 +667,29 @@ class ServerDefenseManager:
                 reason="Refreshing lockdown role permissions.",
             )
 
-            tracked_role_states = channel_snapshot.setdefault("roles", {})
-            for role_id_str, prior_value in list(tracked_role_states.items()):
+            for role_id_str in list(tracked_role_states):
                 role_id = int(role_id_str)
                 role = guild.get_role(role_id)
                 if role is None:
                     continue
-                if role_id not in allowed_role_ids:
-                    await self._set_channel_lockdown_permissions(
-                        channel,
-                        role,
-                        prior_value,
-                        reason="Restoring role permission removed from lockdown allow-list.",
-                    )
-                    tracked_role_states.pop(role_id_str, None)
-
-            for role_id in allowed_role_ids:
-                role = guild.get_role(role_id)
-                if role is None:
-                    continue
-                key = str(role_id)
-                if key not in tracked_role_states:
-                    tracked_role_states[key] = self._capture_lockdown_permissions(channel, role)
                 await self._set_channel_lockdown_permissions(
                     channel,
                     role,
-                    self._lockdown_allow_overrides(),
-                    reason="Applying lockdown speaker role.",
+                    self._lockdown_allow_overrides() if role_id in allowed_role_ids else self._lockdown_deny_overrides(),
+                    reason="Refreshing lockdown role permissions.",
+                )
+
+            for member_id_str in list(tracked_member_states):
+                member = guild.get_member(int(member_id_str))
+                if member is None:
+                    continue
+                await self._set_channel_lockdown_permissions(
+                    channel,
+                    member,
+                    self._lockdown_allow_overrides()
+                    if self._member_can_talk_during_lockdown(member, allowed_role_ids)
+                    else self._lockdown_deny_overrides(),
+                    reason="Refreshing lockdown member permissions.",
                 )
 
         self.store.set_lockdown_snapshot(guild_id, updated_snapshot)
@@ -701,23 +710,50 @@ class ServerDefenseManager:
             channel_snapshot = {
                 "default_role": self._capture_lockdown_permissions(channel, guild.default_role),
                 "roles": {},
+                "members": {},
             }
+            for target in channel.overwrites:
+                if isinstance(target, discord.Role) and target != guild.default_role:
+                    channel_snapshot["roles"][str(target.id)] = self._capture_lockdown_permissions(channel, target)
+                elif isinstance(target, discord.Member):
+                    channel_snapshot["members"][str(target.id)] = self._capture_lockdown_permissions(channel, target)
+
+            for role_id in allowed_role_ids:
+                role = guild.get_role(role_id)
+                if role is not None and role != guild.default_role:
+                    channel_snapshot["roles"].setdefault(str(role.id), self._capture_lockdown_permissions(channel, role))
+
             await self._set_channel_lockdown_permissions(
                 channel,
                 guild.default_role,
                 self._lockdown_deny_overrides(),
                 reason=reason or f"Server lockdown enabled by {actor or 'ServerDefense'}",
             )
-            for role_id in allowed_role_ids:
-                role = guild.get_role(role_id)
+
+            for role_id_str in channel_snapshot["roles"]:
+                role = guild.get_role(int(role_id_str))
                 if role is None:
                     continue
-                channel_snapshot["roles"][str(role.id)] = self._capture_lockdown_permissions(channel, role)
                 await self._set_channel_lockdown_permissions(
                     channel,
                     role,
-                    self._lockdown_allow_overrides(),
-                    reason=reason or "Server lockdown speaker role update.",
+                    self._lockdown_allow_overrides()
+                    if role.id in allowed_role_ids
+                    else self._lockdown_deny_overrides(),
+                    reason=reason or "Server lockdown role update.",
+                )
+
+            for member_id_str in channel_snapshot["members"]:
+                member = guild.get_member(int(member_id_str))
+                if member is None:
+                    continue
+                await self._set_channel_lockdown_permissions(
+                    channel,
+                    member,
+                    self._lockdown_allow_overrides()
+                    if self._member_can_talk_during_lockdown(member, allowed_role_ids)
+                    else self._lockdown_deny_overrides(),
+                    reason=reason or "Server lockdown member update.",
                 )
             snapshot[str(channel.id)] = channel_snapshot
 
@@ -764,6 +800,16 @@ class ServerDefenseManager:
                         send_state,
                         reason=reason or "Restoring lockdown role overwrite.",
                     )
+                for member_id_str, send_state in channel_snapshot.get("members", {}).items():
+                    member = guild.get_member(int(member_id_str))
+                    if member is None:
+                        continue
+                    await self._set_channel_lockdown_permissions(
+                        channel,
+                        member,
+                        send_state,
+                        reason=reason or "Restoring lockdown member overwrite.",
+                    )
 
         return self.store.patch_feature(
             guild_id,
@@ -776,13 +822,16 @@ class ServerDefenseManager:
     def _capture_lockdown_permissions(
         self,
         channel: discord.TextChannel,
-        target: discord.Role,
+        target: discord.Role | discord.Member,
     ) -> dict[str, bool | None]:
         overwrite = channel.overwrites_for(target)
         return {
             permission_key: getattr(overwrite, permission_key, None)
             for permission_key in LOCKDOWN_PERMISSION_KEYS
         }
+
+    def _member_can_talk_during_lockdown(self, member: discord.Member, allowed_role_ids: set[int]) -> bool:
+        return any(role.id in allowed_role_ids for role in member.roles)
 
     def _lockdown_deny_overrides(self) -> dict[str, bool]:
         return {permission_key: False for permission_key in LOCKDOWN_PERMISSION_KEYS}
@@ -799,7 +848,7 @@ class ServerDefenseManager:
     async def _set_channel_lockdown_permissions(
         self,
         channel: discord.TextChannel,
-        target: discord.Role,
+        target: discord.Role | discord.Member,
         permissions: dict[str, bool | None] | bool | None,
         *,
         reason: str | None = None,
