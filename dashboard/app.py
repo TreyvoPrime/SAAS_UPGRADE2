@@ -255,8 +255,9 @@ def create_dashboard_app(bot) -> FastAPI:
             return RedirectResponse(url="/servers", status_code=302)
 
         return templates.TemplateResponse(
-            name="login.html",
-            context={
+            request,
+            "login.html",
+            {
                 "request": request,
                 "oauth_ready": oauth_ready(),
                 "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
@@ -272,8 +273,9 @@ def create_dashboard_app(bot) -> FastAPI:
         guilds = await load_user_guilds(request)
         premium_count = len([command for command in build_command_catalog(bot) if command["tier"] == PREMIUM_TIER])
         return templates.TemplateResponse(
-            name="guilds.html",
-            context={
+            request,
+            "guilds.html",
+            {
                 "request": request,
                 "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
                 "user": user,
@@ -335,8 +337,9 @@ def create_dashboard_app(bot) -> FastAPI:
         }
 
         return templates.TemplateResponse(
-            name="dashboard.html",
-            context={
+            request,
+            "dashboard.html",
+            {
                 "request": request,
                 "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
                 "user": session_user(request),
