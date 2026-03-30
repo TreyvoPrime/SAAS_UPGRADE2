@@ -55,24 +55,29 @@
         <section class="server-board" id="servers-grid">
             {% for guild in guilds %}
             <a class="server-card server-card-redesign" href="{% if guild.bot_installed %}{{ guild.dashboard_url }}{% else %}{{ guild.install_url }}{% endif %}" data-name="{{ guild.name|lower }}">
-                <div class="server-card-visual">
-                    {% if guild.icon_url %}
-                    <img src="{{ guild.icon_url }}" alt="{{ guild.name }}">
-                    {% else %}
-                    <div class="server-avatar-fallback">{{ guild.initials }}</div>
-                    {% endif %}
+                <div class="server-card-top">
+                    <div class="server-card-visual">
+                        {% if guild.icon_url %}
+                        <img src="{{ guild.icon_url }}" alt="{{ guild.name }}">
+                        {% else %}
+                        <div class="server-avatar-fallback">{{ guild.initials }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="server-card-heading">
+                        <div class="server-card-titleblock">
+                            <h2 title="{{ guild.name }}">{{ guild.name }}</h2>
+                            <span class="server-status">
+                                {% if guild.bot_installed %}
+                                    {% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}
+                                {% else %}
+                                    Add app
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="server-card-cta">{% if guild.bot_installed %}Open dashboard{% else %}Add app{% endif %}</div>
+                    </div>
                 </div>
                 <div class="server-card-body">
-                    <div class="server-card-titleline">
-                        <h2 title="{{ guild.name }}">{{ guild.name }}</h2>
-                        <span class="server-status">
-                            {% if guild.bot_installed %}
-                                {% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}
-                            {% else %}
-                                Add app
-                            {% endif %}
-                        </span>
-                    </div>
                     <p>
                         {% if guild.bot_installed %}
                             Open command access, logs, and role restrictions for this server.
@@ -92,7 +97,6 @@
                         {% endif %}
                     </div>
                 </div>
-                <div class="server-card-cta">{% if guild.bot_installed %}Open dashboard{% else %}Add app{% endif %}</div>
             </a>
             {% endfor %}
             {% if not guilds %}
