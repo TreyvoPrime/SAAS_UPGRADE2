@@ -6,7 +6,7 @@
     <title>{{ selected_guild.name }} Dashboard</title>
     <link rel="stylesheet" href="/static/dashboard.css">
 </head>
-<body class="shell">
+<body class="shell dashboard-view-{{ current_view|default('commands') }}">
     <main class="workspace dashboard-shell">
         <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
         <aside class="sidebar surface">
@@ -27,7 +27,8 @@
             </div>
 
             <nav class="sidebar-nav">
-                <a class="nav-link active" href="/dashboard/{{ selected_guild.id }}">Command Control</a>
+                <a class="nav-link {% if current_view != 'defense' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}">Command Control</a>
+                <a class="nav-link {% if current_view == 'defense' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense">ServerGuard</a>
                 <a class="nav-link" href="/servers">All Servers</a>
                 <a class="nav-link" href="/logout">Log Out</a>
             </nav>
@@ -36,7 +37,7 @@
                 <div class="eyebrow">Servers</div>
                 <div class="server-list">
                     {% for item in guilds %}
-                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}/dashboard/{{ item.id }}{% else %}{{ item.install_url }}{% endif %}">
+                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}{% if current_view == 'defense' %}/dashboard/{{ item.id }}/defense{% else %}/dashboard/{{ item.id }}{% endif %}{% else %}{{ item.install_url }}{% endif %}">
                         <img src="{{ item.icon_url }}" alt="{{ item.name }}">
                         <span>{{ item.name }}{% if not item.bot_installed %} - Add app{% endif %}</span>
                     </a>
@@ -49,9 +50,9 @@
         <section class="main-column">
             <header class="page-head">
                 <div>
-                    <div class="eyebrow">Guild Operations</div>
-                    <h2>Commands and access</h2>
-                    <p>Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.</p>
+                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% else %}Guild Operations{% endif %}</div>
+                    <h2>{% if current_view == 'defense' %}Server defense controls{% else %}Commands and access{% endif %}</h2>
+                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
                 </div>
                 <div class="page-actions">
                     <a class="ghost-button" href="/servers">View all servers</a>
@@ -80,10 +81,11 @@
                 </div>
             </section>
 
+            {% if current_view == 'defense' %}
             <section class="surface defense-workspace">
                 <div class="workspace-topline defense-topline">
                     <div>
-                        <div class="eyebrow">ServerDefense</div>
+                        <div class="eyebrow">ServerGuard</div>
                         <h3>Rapid threat controls</h3>
                         <p>Turn protections on fast, give them an optional timer, and control who can speak during lockdown without leaving the dashboard.</p>
                     </div>
@@ -167,7 +169,9 @@
                     {% endfor %}
                 </div>
             </section>
+            {% endif %}
 
+            {% if current_view != 'defense' %}
             <section class="stats-band">
                 <article>
                     <span>Total commands</span>
@@ -285,6 +289,7 @@
                     {% endfor %}
                 </div>
             </section>
+            {% endif %}
         </section>
 
         <aside class="activity-column">
@@ -433,6 +438,11 @@
             timed: document.querySelector('[data-defense-summary="timed"]'),
             roles: document.querySelector('[data-defense-summary="roles"]'),
         };
+        const statItems = {
+            commands: document.querySelector('[data-stat="commands"]'),
+            disabled: document.querySelector('[data-stat="disabled"]'),
+            restricted: document.querySelector('[data-stat="restricted"]'),
+        };
         const lockdownRoleModal = document.getElementById("lockdown-role-modal");
         const lockdownRoleModalTitle = document.getElementById("lockdown-role-modal-title");
         const lockdownRoleChecklist = document.getElementById("lockdown-role-checklist");
@@ -464,9 +474,15 @@
         function updateStats() {
             const disabled = commandCards.filter((card) => card.dataset.enabled !== "true").length;
             const restricted = commandCards.filter((card) => parseRoleIds(card).length > 0).length;
-            document.querySelector('[data-stat="commands"]').textContent = commandCards.length;
-            document.querySelector('[data-stat="disabled"]').textContent = disabled;
-            document.querySelector('[data-stat="restricted"]').textContent = restricted;
+            if (statItems.commands) {
+                statItems.commands.textContent = commandCards.length;
+            }
+            if (statItems.disabled) {
+                statItems.disabled.textContent = disabled;
+            }
+            if (statItems.restricted) {
+                statItems.restricted.textContent = restricted;
+            }
         }
 
         function updateSectionVisibility() {

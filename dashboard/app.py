@@ -373,14 +373,14 @@ def create_dashboard_app(bot) -> FastAPI:
                     "name": "antispam",
                     "title": "Anti Spam",
                     "tag": "Message rate",
-                    "description": "Limits each user to five messages in a short burst until the shield is turned off.",
+                    "description": "Catches rapid message bursts early, clears the burst, and cools the user down with a timeout.",
                     "enabled": False,
                     "duration_minutes": None,
                     "duration_label": "Until disabled",
                     "status_label": "Offline",
                     "remaining_label": "No timer",
                     "tone": "muted",
-                    "rate_label": "5 messages / 8 seconds",
+                    "rate_label": "5 messages / 6 seconds",
                 },
                 {
                     "name": "antijoin",
@@ -399,14 +399,14 @@ def create_dashboard_app(bot) -> FastAPI:
                     "name": "mentionguard",
                     "title": "Mention Guard",
                     "tag": "Ping shield",
-                    "description": "Blocks mass-mention bursts before they can light the whole server up.",
+                    "description": "Tracks mention bursts across messages so staff can stop ping raids before they spread.",
                     "enabled": False,
                     "duration_minutes": None,
                     "duration_label": "Until disabled",
                     "status_label": "Offline",
                     "remaining_label": "No timer",
                     "tone": "muted",
-                    "rate_label": None,
+                    "rate_label": "5 mentions / 10 seconds",
                 },
                 {
                     "name": "lockdown",
@@ -474,6 +474,51 @@ def create_dashboard_app(bot) -> FastAPI:
 
         rows.sort(key=lambda item: (item["module"].lower(), item["name"]))
         return rows, module_cards
+
+    async def render_dashboard_view(request: Request, guild_id: int, current_view: str) -> HTMLResponse | RedirectResponse:
+        if session_user(request) is None:
+            return RedirectResponse(url="/", status_code=302)
+        selected_guild, guilds = await require_guild_access(request, guild_id, require_bot_installed=False)
+        if not selected_guild.get("bot_installed"):
+            return RedirectResponse(url=selected_guild["install_url"], status_code=302)
+        roles = guild_roles(guild_id)
+        commands, module_cards = guild_command_rows(guild_id)
+        logs = bot.command_logs.list_for_guild(guild_id, 80) if hasattr(bot, "command_logs") else []
+        access_summary = dashboard_access_summary(guild_id)
+        defense_summary = defense_dashboard_summary(guild_id)
+
+        stats = {
+            "commands": len(commands),
+            "disabled": len([command for command in commands if not command["enabled"]]),
+            "restricted": len([command for command in commands if command["allowed_role_ids"]]),
+            "roles": len(roles),
+            "modules": len(module_cards),
+        }
+
+        return render_template(
+            "dashboard.html",
+            request,
+            {
+                "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
+                "user": session_user(request),
+                "guilds": guilds,
+                "selected_guild": selected_guild,
+                "commands": commands,
+                "sections": module_cards,
+                "modules": module_cards,
+                "roles": roles,
+                "logs": logs,
+                "stats": stats,
+                "dashboard_base_url": dashboard_base_url,
+                "dashboard_editor_role_ids": access_summary["editor_role_ids"],
+                "dashboard_editor_role_names": access_summary["editor_role_names"],
+                "can_manage_editor_roles": selected_guild["can_manage_editor_roles"],
+                "defense_cards": defense_summary["cards"],
+                "defense_summary": defense_summary,
+                "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
+                "current_view": current_view,
+            },
+        )
 
     @app.get("/health")
     async def health() -> dict:
@@ -550,48 +595,11 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.get("/dashboard/{guild_id}", response_class=HTMLResponse)
     async def dashboard(request: Request, guild_id: int):
-        if session_user(request) is None:
-            return RedirectResponse(url="/", status_code=302)
-        selected_guild, guilds = await require_guild_access(request, guild_id, require_bot_installed=False)
-        if not selected_guild.get("bot_installed"):
-            return RedirectResponse(url=selected_guild["install_url"], status_code=302)
-        roles = guild_roles(guild_id)
-        commands, module_cards = guild_command_rows(guild_id)
-        logs = bot.command_logs.list_for_guild(guild_id, 80) if hasattr(bot, "command_logs") else []
-        access_summary = dashboard_access_summary(guild_id)
-        defense_summary = defense_dashboard_summary(guild_id)
+        return await render_dashboard_view(request, guild_id, "commands")
 
-        stats = {
-            "commands": len(commands),
-            "disabled": len([command for command in commands if not command["enabled"]]),
-            "restricted": len([command for command in commands if command["allowed_role_ids"]]),
-            "roles": len(roles),
-            "modules": len(module_cards),
-        }
-
-        return render_template(
-            "dashboard.html",
-            request,
-            {
-                "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
-                "user": session_user(request),
-                "guilds": guilds,
-                "selected_guild": selected_guild,
-                "commands": commands,
-                "sections": module_cards,
-                "modules": module_cards,
-                "roles": roles,
-                "logs": logs,
-                "stats": stats,
-                "dashboard_base_url": dashboard_base_url,
-                "dashboard_editor_role_ids": access_summary["editor_role_ids"],
-                "dashboard_editor_role_names": access_summary["editor_role_names"],
-                "can_manage_editor_roles": selected_guild["can_manage_editor_roles"],
-                "defense_cards": defense_summary["cards"],
-                "defense_summary": defense_summary,
-                "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
-            },
-        )
+    @app.get("/dashboard/{guild_id}/defense", response_class=HTMLResponse)
+    async def defense_dashboard(request: Request, guild_id: int):
+        return await render_dashboard_view(request, guild_id, "defense")
 
     @app.get("/api/guilds/{guild_id}/logs")
     async def guild_logs(request: Request, guild_id: int, limit: int = 80):

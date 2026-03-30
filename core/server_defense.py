@@ -32,8 +32,8 @@ DEFAULT_GUILD_DEFENSES = {
         "enabled": False,
         "ends_at": None,
         "message_limit": 5,
-        "window_seconds": 8,
-        "timeout_seconds": 60,
+        "window_seconds": 6,
+        "timeout_seconds": 90,
     },
     "antijoin": {
         "enabled": False,
@@ -44,7 +44,8 @@ DEFAULT_GUILD_DEFENSES = {
         "enabled": False,
         "ends_at": None,
         "mention_limit": 5,
-        "timeout_seconds": 60,
+        "window_seconds": 10,
+        "timeout_seconds": 90,
     },
     "lockdown": {
         "enabled": False,
@@ -139,7 +140,8 @@ class ServerDefenseManager:
         self.bot = bot
         self.store = store or ServerDefenseStore()
         self._expiry_tasks: dict[tuple[int, str], asyncio.Task] = {}
-        self._spam_windows: dict[tuple[int, int], deque[datetime]] = defaultdict(deque)
+        self._spam_windows: dict[tuple[int, int], deque[tuple[datetime, discord.Message]]] = defaultdict(deque)
+        self._mention_windows: dict[tuple[int, int], deque[tuple[datetime, discord.Message, int]]] = defaultdict(deque)
         self._started = False
 
     async def start(self) -> None:
@@ -161,6 +163,7 @@ class ServerDefenseManager:
                 pass
         self._expiry_tasks.clear()
         self._spam_windows.clear()
+        self._mention_windows.clear()
 
     async def initialize(self) -> None:
         for guild_id in self.store.all_guild_ids():
@@ -274,8 +277,8 @@ class ServerDefenseManager:
                 "antispam",
                 "Anti Spam",
                 "Message rate",
-                "Limits each user to five messages in a short burst until the shield is turned off.",
-                rate_label="5 messages / 8 seconds",
+                "Catches rapid message bursts early, clears the burst, and cools the user down with a timeout.",
+                rate_label="5 messages / 6 seconds",
             ),
             make_card(
                 "antijoin",
@@ -287,8 +290,8 @@ class ServerDefenseManager:
                 "mentionguard",
                 "Mention Guard",
                 "Ping shield",
-                "Blocks mention bursts before someone can light the whole server up.",
-                rate_label="5 mentions / message",
+                "Tracks mention bursts across messages so staff can stop ping raids before they spread.",
+                rate_label="5 mentions / 10 seconds",
             ),
             make_card(
                 "lockdown",
@@ -347,6 +350,24 @@ class ServerDefenseManager:
         except Exception:
             return
 
+    def _trim_message_bucket(
+        self,
+        bucket: deque[tuple[datetime, discord.Message]],
+        now: datetime,
+        window_seconds: int,
+    ) -> None:
+        while bucket and (now - bucket[0][0]).total_seconds() > window_seconds:
+            bucket.popleft()
+
+    def _trim_mention_bucket(
+        self,
+        bucket: deque[tuple[datetime, discord.Message, int]],
+        now: datetime,
+        window_seconds: int,
+    ) -> None:
+        while bucket and (now - bucket[0][0]).total_seconds() > window_seconds:
+            bucket.popleft()
+
     async def _timeout_member(self, member: discord.Member, seconds: int, reason: str) -> None:
         if seconds <= 0:
             return
@@ -365,6 +386,23 @@ class ServerDefenseManager:
             return
         await self._warn_channel(message.channel, warning)
 
+    async def _delete_messages(
+        self,
+        messages: list[discord.Message],
+        warning_channel: discord.abc.Messageable,
+        warning: str,
+    ) -> None:
+        seen_ids: set[int] = set()
+        for buffered_message in messages:
+            if buffered_message.id in seen_ids:
+                continue
+            seen_ids.add(buffered_message.id)
+            try:
+                await buffered_message.delete()
+            except Exception:
+                continue
+        await self._warn_channel(warning_channel, warning)
+
     def _is_active(self, state: dict[str, Any]) -> bool:
         if not state.get("enabled"):
             return False
@@ -376,6 +414,9 @@ class ServerDefenseManager:
 
     def _contains_invite(self, text: str) -> bool:
         return bool(INVITE_PATTERN.search(text or "")) or _is_discord_invite_text(text or "")
+
+    def _mention_count(self, message: discord.Message) -> int:
+        return len(message.mentions) + len(message.role_mentions) + int(message.mention_everyone)
 
     async def process_message(self, message: discord.Message) -> bool:
         if message.guild is None or not isinstance(message.author, discord.Member):
@@ -398,36 +439,53 @@ class ServerDefenseManager:
 
         mentionguard = self.store.get_feature(guild_id, "mentionguard")
         mention_limit = int(mentionguard.get("mention_limit", 5))
-        if self._is_active(mentionguard) and len(message.mentions) >= mention_limit:
-            await self._delete_message(message, f"Mention Guard blocked that message ({mention_limit}+ mentions).")
-            await self._timeout_member(
-                message.author,
-                int(mentionguard.get("timeout_seconds", 60)),
-                "Mention Guard triggered.",
-            )
-            return True
 
         antispam = self.store.get_feature(guild_id, "antispam")
         if self._is_active(antispam):
             bucket = self._spam_windows[(guild_id, message.author.id)]
             now = utcnow()
-            bucket.append(now)
-            window_seconds = int(antispam.get("window_seconds", 8))
+            bucket.append((now, message))
+            window_seconds = int(antispam.get("window_seconds", 6))
             message_limit = int(antispam.get("message_limit", 5))
-            while bucket and (now - bucket[0]).total_seconds() > window_seconds:
-                bucket.popleft()
-            if len(bucket) > message_limit:
-                await self._delete_message(
-                    message,
-                    f"Anti-spam active: more than {message_limit} messages in {window_seconds} seconds.",
+            self._trim_message_bucket(bucket, now, window_seconds)
+            if len(bucket) >= message_limit:
+                burst_messages = [item[1] for item in bucket]
+                await self._delete_messages(
+                    burst_messages,
+                    message.channel,
+                    f"Anti-spam cleared a {message_limit}-message burst in {window_seconds} seconds.",
                 )
                 await self._timeout_member(
                     message.author,
-                    int(antispam.get("timeout_seconds", 60)),
+                    int(antispam.get("timeout_seconds", 90)),
                     "Anti-spam triggered.",
                 )
                 bucket.clear()
                 return True
+
+        if self._is_active(mentionguard):
+            mention_count = self._mention_count(message)
+            if mention_count > 0:
+                bucket = self._mention_windows[(guild_id, message.author.id)]
+                now = utcnow()
+                bucket.append((now, message, mention_count))
+                window_seconds = int(mentionguard.get("window_seconds", 10))
+                self._trim_mention_bucket(bucket, now, window_seconds)
+                total_mentions = sum(item[2] for item in bucket)
+                if total_mentions >= mention_limit:
+                    burst_messages = [item[1] for item in bucket]
+                    await self._delete_messages(
+                        burst_messages,
+                        message.channel,
+                        f"Mention Guard cleared a burst of {total_mentions} mentions in {window_seconds} seconds.",
+                    )
+                    await self._timeout_member(
+                        message.author,
+                        int(mentionguard.get("timeout_seconds", 90)),
+                        "Mention Guard triggered.",
+                    )
+                    bucket.clear()
+                    return True
 
         return False
 

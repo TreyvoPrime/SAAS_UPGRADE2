@@ -216,7 +216,7 @@ class ServerDefense(commands.Cog):
             ["Behavior: Deletes Discord invite links while active."],
         )
 
-    @antispam.command(name="enable", description="Rate-limit messages at 5 per 8 seconds")
+    @antispam.command(name="enable", description="Shut down rapid message bursts at 5 messages in 6 seconds")
     async def antispam_enable(
         self,
         interaction: discord.Interaction,
@@ -244,8 +244,8 @@ class ServerDefense(commands.Cog):
             "antispam",
             "Anti-spam",
             [
-                "Rate limit: 5 messages in 8 seconds.",
-                "Action: Deletes overflow messages and attempts a short timeout.",
+                "Rate limit: 5 messages in 6 seconds.",
+                "Action: Clears the burst and attempts a short timeout.",
             ],
         )
 
@@ -279,7 +279,7 @@ class ServerDefense(commands.Cog):
             ["Action: Kicks new members while protection is active."],
         )
 
-    @mentionguard.command(name="enable", description="Block messages with too many mentions")
+    @mentionguard.command(name="enable", description="Block rapid mention bursts across messages")
     async def mentionguard_enable(
         self,
         interaction: discord.Interaction,
@@ -307,8 +307,8 @@ class ServerDefense(commands.Cog):
             "mentionguard",
             "Mention Guard",
             [
-                "Mention limit: 5 or more mentions in one message.",
-                "Action: Deletes the message and attempts a short timeout.",
+                "Mention limit: 5 mentions in 10 seconds.",
+                "Action: Clears the burst and attempts a short timeout.",
             ],
         )
 
