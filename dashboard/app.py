@@ -135,19 +135,59 @@ def create_dashboard_app(bot) -> FastAPI:
             response.raise_for_status()
             return response.json()
 
-    async def fetch_user_guild_member_roles(access_token: str, guild_id: int) -> set[int]:
-        try:
-            member = await fetch_discord_resource(access_token, f"/users/@me/guilds/{guild_id}/member")
-        except Exception:
+    async def fetch_user_guild_member_roles(user_id: int, guild_id: int) -> set[int]:
+        guild = bot.get_guild(guild_id)
+        if guild is None:
             return set()
 
-        if not isinstance(member, dict):
-            return set()
+        member = guild.get_member(user_id)
+        if member is None:
+            try:
+                member = await guild.fetch_member(user_id)
+            except Exception:
+                return set()
+
+        return {role.id for role in getattr(member, "roles", [])}
+
+    def premium_enabled() -> bool:
+        return any(command["tier"] == PREMIUM_TIER for command in build_command_catalog(bot))
+
+    async def build_live_guild_entry(guild_id: int, user_id: int) -> dict | None:
+        guild = bot.get_guild(guild_id)
+        if guild is None:
+            return None
+
+        member = guild.get_member(user_id)
+        if member is None:
+            try:
+                member = await guild.fetch_member(user_id)
+            except Exception:
+                return None
+
+        owner = guild.owner_id == user_id
+        can_manage_guild = owner or member.guild_permissions.manage_guild or member.guild_permissions.administrator
+        user_role_ids = {role.id for role in getattr(member, "roles", [])}
+        editor_role_ids = set(bot.access_manager.controls.get_dashboard_editor_roles(guild_id))
+        has_editor_role = bool(editor_role_ids & user_role_ids)
+        can_edit_dashboard = can_manage_guild or has_editor_role
+        if not can_edit_dashboard:
+            return None
 
         return {
-            int(role_id)
-            for role_id in member.get("roles", [])
-            if str(role_id).isdigit()
+            "id": guild.id,
+            "name": guild.name,
+            "icon_url": _guild_icon_url({"id": str(guild.id), "icon": getattr(guild.icon, "key", None)}, guild),
+            "initials": guild.name[:2].upper(),
+            "member_count": guild.member_count or len(guild.members),
+            "role_count": max(len(guild.roles) - 1, 0),
+            "premium_enabled": premium_enabled(),
+            "bot_installed": True,
+            "dashboard_url": f"/dashboard/{guild.id}",
+            "install_url": build_install_url(guild.id),
+            "owner": owner,
+            "can_manage_guild": can_manage_guild,
+            "can_edit_dashboard": can_edit_dashboard,
+            "can_manage_editor_roles": can_manage_guild,
         }
 
     async def load_user_guilds(request: Request) -> list[dict]:
@@ -163,7 +203,8 @@ def create_dashboard_app(bot) -> FastAPI:
         except Exception:
             return []
 
-        premium_enabled = any(command["tier"] == PREMIUM_TIER for command in build_command_catalog(bot))
+        premium_available = premium_enabled()
+        user_id = int(user["id"])
         manageable_guilds: list[dict] = []
         for guild in discord_guilds:
             permissions = int(guild.get("permissions", 0))
@@ -173,7 +214,7 @@ def create_dashboard_app(bot) -> FastAPI:
             editor_role_ids = set(bot.access_manager.controls.get_dashboard_editor_roles(guild_id))
             has_editor_role = False
             if editor_role_ids and not can_manage_guild:
-                has_editor_role = bool(editor_role_ids & await fetch_user_guild_member_roles(access_token, guild_id))
+                has_editor_role = bool(editor_role_ids & await fetch_user_guild_member_roles(user_id, guild_id))
 
             can_edit_dashboard = can_manage_guild or has_editor_role
             if not can_edit_dashboard:
@@ -188,7 +229,7 @@ def create_dashboard_app(bot) -> FastAPI:
                     "initials": guild["name"][:2].upper(),
                     "member_count": (bot_guild.member_count or len(bot_guild.members)) if bot_guild else None,
                     "role_count": max(len(bot_guild.roles) - 1, 0) if bot_guild else None,
-                    "premium_enabled": premium_enabled,
+                    "premium_enabled": premium_available,
                     "bot_installed": bot_guild is not None,
                     "dashboard_url": f"/dashboard/{guild_id}",
                     "install_url": build_install_url(guild_id),
@@ -214,9 +255,13 @@ def create_dashboard_app(bot) -> FastAPI:
         *,
         require_editor_role_management: bool = False,
     ) -> tuple[dict, list[dict]]:
-        await require_user(request)
+        user = await require_user(request)
         guilds = await load_user_guilds(request)
         selected = next((guild for guild in guilds if guild["id"] == guild_id), None)
+        if selected is None and str(user.get("id", "")).isdigit():
+            selected = await build_live_guild_entry(guild_id, int(user["id"]))
+            if selected is not None:
+                guilds = [selected, *[guild for guild in guilds if guild["id"] != guild_id]]
         if selected is None:
             raise HTTPException(status_code=403, detail="Guild access denied")
         if not selected.get("bot_installed"):
@@ -344,7 +389,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "client_id": discord_client_id,
                 "redirect_uri": redirect_uri,
                 "response_type": "code",
-                "scope": "identify guilds guilds.members.read",
+                "scope": "identify guilds",
                 "prompt": "consent",
             }
         )

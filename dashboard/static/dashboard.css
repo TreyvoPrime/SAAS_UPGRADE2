@@ -310,7 +310,7 @@ button {
 
 .dashboard-shell {
     display: grid;
-    grid-template-columns: 280px minmax(0, 1fr) 360px;
+    grid-template-columns: 280px minmax(0, 1fr) minmax(320px, 388px);
     gap: 18px;
     align-items: start;
 }
@@ -548,6 +548,7 @@ button {
 .role-checklist {
     display: grid;
     gap: 14px;
+    min-width: 0;
 }
 
 .command-grid {
@@ -616,6 +617,7 @@ button {
 .activity-column {
     position: sticky;
     top: 22px;
+    min-width: 0;
 }
 
 .tight {
@@ -625,6 +627,9 @@ button {
 .log-row {
     position: relative;
     overflow: hidden;
+    display: grid;
+    gap: 8px;
+    min-width: 0;
 }
 
 .log-row::before {
@@ -651,6 +656,21 @@ button {
 time {
     color: var(--muted);
     font-size: 0.84rem;
+}
+
+.log-top {
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.log-top strong,
+.log-top span,
+.log-row p,
+.log-row time {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .notice-card {
