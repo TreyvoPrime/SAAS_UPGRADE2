@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 dashboard_data/
+greetings.json
+welcome_channels.json

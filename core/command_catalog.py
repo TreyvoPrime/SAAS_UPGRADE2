@@ -56,7 +56,7 @@ def build_command_catalog(bot: discord.Client) -> list[dict]:
         "modules.serverdefense": "ServerDefense",
         "modules.serverstats": "Server Stats",
         "modules.userinfo": "User Info",
-        "modules.welcome": "Welcome",
+        "modules.welcome": "Welcome / Leave",
         "modules.premium.customcomands": "Custom Commands",
     }
     return _walk_commands(bot.tree.get_commands(guild=None), module_label_map)

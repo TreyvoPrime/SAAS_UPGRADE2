@@ -27,8 +27,9 @@
             </div>
 
             <nav class="sidebar-nav">
-                <a class="nav-link {% if current_view != 'defense' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}">Command Control</a>
+                <a class="nav-link {% if current_view == 'commands' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}">Command Control</a>
                 <a class="nav-link {% if current_view == 'defense' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense">ServerGuard</a>
+                <a class="nav-link {% if current_view == 'greetings' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/greetings">Welcome / Leave</a>
                 <a class="nav-link" href="/servers">All Servers</a>
                 <a class="nav-link" href="/logout">Log Out</a>
             </nav>
@@ -37,7 +38,7 @@
                 <div class="eyebrow">Servers</div>
                 <div class="server-list">
                     {% for item in guilds %}
-                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}{% if current_view == 'defense' %}/dashboard/{{ item.id }}/defense{% else %}/dashboard/{{ item.id }}{% endif %}{% else %}{{ item.install_url }}{% endif %}">
+                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}{% if current_view == 'defense' %}/dashboard/{{ item.id }}/defense{% elif current_view == 'greetings' %}/dashboard/{{ item.id }}/greetings{% else %}/dashboard/{{ item.id }}{% endif %}{% else %}{{ item.install_url }}{% endif %}">
                         <img src="{{ item.icon_url }}" alt="{{ item.name }}">
                         <span>{{ item.name }}{% if not item.bot_installed %} - Add app{% endif %}</span>
                     </a>
@@ -50,9 +51,9 @@
         <section class="main-column">
             <header class="page-head">
                 <div>
-                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% else %}Guild Operations{% endif %}</div>
-                    <h2>{% if current_view == 'defense' %}Server defense controls{% else %}Commands and access{% endif %}</h2>
-                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
+                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% else %}Guild Operations{% endif %}</div>
+                    <h2>{% if current_view == 'defense' %}Server defense controls{% elif current_view == 'greetings' %}Greeting flows and channel setup{% else %}Commands and access{% endif %}</h2>
+                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% elif current_view == 'greetings' %}Set the welcome and leave channels, write custom messages, and use placeholders that feel personal instead of generic.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
                 </div>
                 <div class="page-actions">
                     <a class="ghost-button" href="/servers">View all servers</a>
@@ -171,7 +172,92 @@
             </section>
             {% endif %}
 
-            {% if current_view != 'defense' %}
+            {% if current_view == 'greetings' %}
+            <section class="surface greetings-workspace">
+                <div class="workspace-topline greetings-topline">
+                    <div>
+                        <div class="eyebrow">Welcome / Leave</div>
+                        <h3>Custom join and exit messaging</h3>
+                        <p>Pick the channels, write custom copy, and use placeholders so the bot sounds like your server instead of a template.</p>
+                    </div>
+                    <div class="placeholder-strip">
+                        {% for placeholder in greetings_summary.placeholders %}
+                        <span class="module-chip">{{ placeholder.token }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="greetings-grid">
+                    <article class="greeting-card" data-greeting-card data-flow="welcome">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Greeting</span>
+                            <span class="module-chip">Join flow</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Welcome message</h4>
+                                <p>Choose where new members are greeted and write the custom message they should see.</p>
+                            </div>
+                            <span class="defense-status-pill {% if not greetings_summary.welcome.enabled %}is-muted{% endif %}" data-greeting-status="welcome">
+                                {% if greetings_summary.welcome.enabled %}Active{% else %}Not configured{% endif %}
+                            </span>
+                        </div>
+                        <label class="search-shell">
+                            <span>Welcome channel</span>
+                            <select class="search-input greeting-select" data-greeting-channel="welcome">
+                                <option value="">Disable welcome messages</option>
+                                {% for channel in text_channels %}
+                                <option value="{{ channel.id }}" {% if greetings_summary.welcome.channel_id == channel.id %}selected{% endif %}>{{ channel.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label class="search-shell">
+                            <span>Welcome message</span>
+                            <textarea class="search-input greeting-textarea" rows="5" data-greeting-message="welcome">{{ greetings_summary.welcome.message }}</textarea>
+                        </label>
+                        <div class="role-summary" data-greeting-channel-name="welcome">{{ greetings_summary.welcome.channel_name }}</div>
+                        <div class="defense-actions">
+                            <button type="button" class="primary-button compact-button" data-greeting-save="welcome">Save welcome flow</button>
+                        </div>
+                    </article>
+
+                    <article class="greeting-card" data-greeting-card data-flow="leave">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Greeting</span>
+                            <span class="module-chip">Exit flow</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Leave message</h4>
+                                <p>Choose where leave notices go and write the message the server should see when someone exits.</p>
+                            </div>
+                            <span class="defense-status-pill {% if not greetings_summary.leave.enabled %}is-muted{% endif %}" data-greeting-status="leave">
+                                {% if greetings_summary.leave.enabled %}Active{% else %}Not configured{% endif %}
+                            </span>
+                        </div>
+                        <label class="search-shell">
+                            <span>Leave channel</span>
+                            <select class="search-input greeting-select" data-greeting-channel="leave">
+                                <option value="">Disable leave messages</option>
+                                {% for channel in text_channels %}
+                                <option value="{{ channel.id }}" {% if greetings_summary.leave.channel_id == channel.id %}selected{% endif %}>{{ channel.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label class="search-shell">
+                            <span>Leave message</span>
+                            <textarea class="search-input greeting-textarea" rows="5" data-greeting-message="leave">{{ greetings_summary.leave.message }}</textarea>
+                        </label>
+                        <div class="role-summary" data-greeting-channel-name="leave">{{ greetings_summary.leave.channel_name }}</div>
+                        <div class="defense-actions">
+                            <button type="button" class="primary-button compact-button" data-greeting-save="leave">Save leave flow</button>
+                        </div>
+                    </article>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if current_view == 'commands' %}
             <section class="stats-band">
                 <article>
                     <span>Total commands</span>
@@ -438,6 +524,7 @@
             timed: document.querySelector('[data-defense-summary="timed"]'),
             roles: document.querySelector('[data-defense-summary="roles"]'),
         };
+        const greetingCards = Array.from(document.querySelectorAll("[data-greeting-card]"));
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
             disabled: document.querySelector('[data-stat="disabled"]'),
@@ -602,6 +689,26 @@
             return response.json();
         }
 
+        async function updateGreeting(flow, payload) {
+            const response = await fetch(`/api/guilds/${guildId}/greetings`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ flow, ...payload })
+            });
+
+            if (!response.ok) {
+                let message = "Greeting update failed";
+                try {
+                    const data = await response.json();
+                    message = data.detail || message;
+                } catch {}
+                showToast(message, "error");
+                throw new Error(message);
+            }
+
+            return response.json();
+        }
+
         document.querySelectorAll("[data-command-toggle]").forEach((toggle) => {
             toggle.addEventListener("change", async () => {
                 const card = toggle.closest("[data-command-card]");
@@ -709,6 +816,30 @@
                         : "Only server staff can talk";
                 }
                 card.dataset.lockdownRoleIds = (defense.allowed_role_ids || []).join(",");
+            }
+        }
+
+        function syncGreetingCard(flow, state) {
+            const card = greetingCards.find((item) => item.dataset.flow === flow);
+            if (!card || !state) return;
+
+            const select = card.querySelector(`[data-greeting-channel="${flow}"]`);
+            const textarea = card.querySelector(`[data-greeting-message="${flow}"]`);
+            const status = card.querySelector(`[data-greeting-status="${flow}"]`);
+            const channelName = card.querySelector(`[data-greeting-channel-name="${flow}"]`);
+
+            if (select) {
+                select.value = state.channel_id ? String(state.channel_id) : "";
+            }
+            if (textarea) {
+                textarea.value = state.message || "";
+            }
+            if (status) {
+                status.textContent = state.enabled ? "Active" : "Not configured";
+                status.classList.toggle("is-muted", !state.enabled);
+            }
+            if (channelName) {
+                channelName.textContent = state.channel_name || "Not configured";
             }
         }
 
@@ -928,6 +1059,25 @@
                         toggle.checked = true;
                     }
                 }
+            });
+        });
+
+        greetingCards.forEach((card) => {
+            const flow = card.dataset.flow;
+            const saveButton = card.querySelector(`[data-greeting-save="${flow}"]`);
+            const select = card.querySelector(`[data-greeting-channel="${flow}"]`);
+            const textarea = card.querySelector(`[data-greeting-message="${flow}"]`);
+
+            saveButton?.addEventListener("click", async () => {
+                try {
+                    const result = await updateGreeting(flow, {
+                        channel_id: select?.value ? Number(select.value) : null,
+                        message: textarea?.value || ""
+                    });
+                    syncGreetingCard("welcome", result.welcome);
+                    syncGreetingCard("leave", result.leave);
+                    showToast(`${flow === "welcome" ? "Welcome" : "Leave"} flow updated.`);
+                } catch {}
             });
         });
 

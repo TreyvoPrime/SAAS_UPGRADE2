@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from core.access import CommandAccessManager
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
+from core.greetings import GreetingsManager, GreetingsStore
 from core.server_defense import ServerDefenseManager, ServerDefenseStore
 from dashboard.app import DashboardServer, resolve_dashboard_base_url, resolve_dashboard_host, resolve_dashboard_port
 
@@ -45,6 +46,8 @@ class ServerCoreBot(commands.Bot):
         self.command_controls = CommandControlStore()
         self.command_logs = CommandLogStore()
         self.access_manager = CommandAccessManager(self.command_controls, self.command_logs)
+        self.greetings_store = GreetingsStore()
+        self.greetings = GreetingsManager(self, self.greetings_store)
         self.server_defense_store = ServerDefenseStore()
         self.server_defense = ServerDefenseManager(self, self.server_defense_store)
         self._server_defense_initialized = False
@@ -149,5 +152,5 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         ephemeral=True,
     )
 
-
-bot.run(TOKEN)
+if __name__ == "__main__":
+    bot.run(TOKEN)

@@ -483,14 +483,39 @@ button {
     backdrop-filter: blur(20px);
 }
 
+.greetings-workspace {
+    display: grid;
+    gap: 18px;
+    padding: 22px;
+    border-radius: 28px;
+    border: 1px solid var(--line);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+        var(--panel);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(20px);
+}
+
 .defense-topline {
     align-items: flex-start;
 }
 
-.defense-topline p {
+.defense-topline p,
+.greetings-topline p {
     margin: 10px 0 0;
     color: var(--muted);
     max-width: 680px;
+}
+
+.greetings-topline {
+    align-items: flex-start;
+}
+
+.placeholder-strip {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
 .defense-grid {
@@ -499,7 +524,8 @@ button {
     gap: 16px;
 }
 
-.defense-card {
+.defense-card,
+.greeting-card {
     display: grid;
     gap: 14px;
     padding: 18px;
@@ -510,24 +536,33 @@ button {
         rgba(255, 255, 255, 0.03);
 }
 
+.greetings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
 .defense-flags {
     margin-bottom: 0;
 }
 
-.defense-card-head {
+.defense-card-head,
+.greeting-card-head {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
 }
 
-.defense-card-head h4 {
+.defense-card-head h4,
+.greeting-card-head h4 {
     margin: 0 0 8px;
     font-size: 1.12rem;
     letter-spacing: -0.03em;
 }
 
-.defense-card-head p {
+.defense-card-head p,
+.greeting-card-head p {
     margin: 0;
     color: var(--muted);
     line-height: 1.5;
@@ -558,12 +593,28 @@ button {
     color: #d7fff1;
 }
 
+.defense-status-pill.is-muted {
+    border-color: var(--line);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--muted-strong);
+}
+
 .defense-duration-shell {
     width: 100%;
 }
 
 .defense-duration-shell input {
     width: 100%;
+}
+
+.greeting-select {
+    padding-right: 42px;
+}
+
+.greeting-textarea {
+    min-height: 140px;
+    padding: 14px;
+    resize: vertical;
 }
 
 .defense-note {
@@ -1184,6 +1235,7 @@ time {
     .dashboard-shell,
     .stats-band,
     .command-grid,
+    .greetings-grid,
     .auth-feature-grid,
     .role-checklist,
     .servers-metric-grid,
@@ -1199,7 +1251,8 @@ time {
     .servers-topline,
     .server-card-top,
     .server-card-heading,
-    .defense-card-head {
+    .defense-card-head,
+    .greeting-card-head {
         grid-template-columns: 1fr;
     }
 
@@ -1209,7 +1262,8 @@ time {
         align-items: stretch;
     }
 
-    .defense-card-head {
+    .defense-card-head,
+    .greeting-card-head {
         align-items: stretch;
     }
 }
@@ -1290,11 +1344,21 @@ time {
         border-radius: 22px;
     }
 
-    .defense-card-head {
+    .greetings-workspace {
+        padding: 18px;
+        border-radius: 22px;
+    }
+
+    .defense-card-head,
+    .greeting-card-head {
         flex-direction: column;
     }
 
     .defense-actions {
+        justify-content: flex-start;
+    }
+
+    .placeholder-strip {
         justify-content: flex-start;
     }
 

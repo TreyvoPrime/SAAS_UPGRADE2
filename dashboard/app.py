@@ -44,6 +44,12 @@ class DefenseLockdownRolesPayload(BaseModel):
     lockdown_role_ids: list[int] = Field(default_factory=list)
 
 
+class GreetingConfigPayload(BaseModel):
+    flow: str = Field(min_length=1)
+    channel_id: int | None = None
+    message: str | None = Field(default=None, max_length=1500)
+
+
 def resolve_dashboard_host() -> str:
     return os.getenv("DASHBOARD_HOST") or os.getenv("HOST") or "0.0.0.0"
 
@@ -327,12 +333,58 @@ def create_dashboard_app(bot) -> FastAPI:
         roles.sort(key=lambda role: role["position"], reverse=True)
         return roles
 
+    def guild_text_channels(guild_id: int) -> list[dict]:
+        guild = bot.get_guild(guild_id)
+        if guild is None:
+            return []
+
+        channels = [
+            {
+                "id": channel.id,
+                "name": channel.name,
+                "label": f"#{channel.name}",
+                "position": channel.position,
+            }
+            for channel in guild.text_channels
+        ]
+        channels.sort(key=lambda item: item["position"])
+        return channels
+
     def dashboard_access_summary(guild_id: int) -> dict:
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         editor_role_ids = bot.access_manager.controls.get_dashboard_editor_roles(guild_id)
         return {
             "editor_role_ids": editor_role_ids,
             "editor_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in editor_role_ids],
+        }
+
+    def greetings_dashboard_summary(guild_id: int) -> dict:
+        manager = getattr(bot, "greetings", None)
+        channels = guild_text_channels(guild_id)
+        channel_lookup = {channel["id"]: channel["label"] for channel in channels}
+        if manager is not None and hasattr(manager, "get_dashboard_state"):
+            return manager.get_dashboard_state(guild_id, channel_lookup)
+
+        return {
+            "welcome": {
+                "channel_id": None,
+                "channel_name": "Not configured",
+                "message": "Hello {user}, welcome to {server}.",
+                "enabled": False,
+            },
+            "leave": {
+                "channel_id": None,
+                "channel_name": "Not configured",
+                "message": "{user_name} left {server}.",
+                "enabled": False,
+            },
+            "placeholders": [
+                {"token": "{user}", "label": "Mentions the member"},
+                {"token": "{user_name}", "label": "Uses the member name"},
+                {"token": "{display_name}", "label": "Uses the server nickname"},
+                {"token": "{server}", "label": "Uses the server name"},
+                {"token": "{membercount}", "label": "Uses the current member count"},
+            ],
         }
 
     def server_defense_summary(guild_id: int) -> dict:
@@ -495,10 +547,12 @@ def create_dashboard_app(bot) -> FastAPI:
         if not selected_guild.get("bot_installed"):
             return RedirectResponse(url=selected_guild["install_url"], status_code=302)
         roles = guild_roles(guild_id)
+        text_channels = guild_text_channels(guild_id)
         commands, module_cards = guild_command_rows(guild_id)
         logs = bot.command_logs.list_for_guild(guild_id, 80) if hasattr(bot, "command_logs") else []
         access_summary = dashboard_access_summary(guild_id)
         defense_summary = defense_dashboard_summary(guild_id)
+        greetings_summary = greetings_dashboard_summary(guild_id)
 
         stats = {
             "commands": len(commands),
@@ -520,6 +574,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "sections": module_cards,
                 "modules": module_cards,
                 "roles": roles,
+                "text_channels": text_channels,
                 "logs": logs,
                 "stats": stats,
                 "dashboard_base_url": dashboard_base_url,
@@ -529,6 +584,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "defense_cards": defense_summary["cards"],
                 "defense_summary": defense_summary,
                 "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
+                "greetings_summary": greetings_summary,
                 "current_view": current_view,
             },
         )
@@ -613,6 +669,10 @@ def create_dashboard_app(bot) -> FastAPI:
     @app.get("/dashboard/{guild_id}/defense", response_class=HTMLResponse)
     async def defense_dashboard(request: Request, guild_id: int):
         return await render_dashboard_view(request, guild_id, "defense")
+
+    @app.get("/dashboard/{guild_id}/greetings", response_class=HTMLResponse)
+    async def greetings_dashboard(request: Request, guild_id: int):
+        return await render_dashboard_view(request, guild_id, "greetings")
 
     @app.get("/api/guilds/{guild_id}/logs")
     async def guild_logs(request: Request, guild_id: int, limit: int = 80):
@@ -717,6 +777,34 @@ def create_dashboard_app(bot) -> FastAPI:
                 "editor_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in editor_role_ids],
             }
         )
+
+    @app.get("/api/guilds/{guild_id}/greetings")
+    async def get_greetings(request: Request, guild_id: int):
+        await require_guild_access(request, guild_id)
+        return JSONResponse(greetings_dashboard_summary(guild_id))
+
+    @app.post("/api/guilds/{guild_id}/greetings")
+    async def update_greetings(request: Request, guild_id: int, payload: GreetingConfigPayload):
+        await require_guild_access(request, guild_id)
+
+        manager = getattr(bot, "greetings", None)
+        if manager is None:
+            raise HTTPException(status_code=503, detail="Welcome / Leave is not available")
+
+        flow = payload.flow.strip().lower()
+        if flow not in {"welcome", "leave"}:
+            raise HTTPException(status_code=404, detail="Unknown greeting flow")
+
+        valid_channel_ids = {channel["id"] for channel in guild_text_channels(guild_id)}
+        channel_id = payload.channel_id if payload.channel_id in valid_channel_ids else None
+        message = (payload.message or "").strip() or None
+
+        if flow == "welcome":
+            manager.set_welcome(guild_id, channel_id=channel_id, message=message)
+        else:
+            manager.set_leave(guild_id, channel_id=channel_id, message=message)
+
+        return JSONResponse(greetings_dashboard_summary(guild_id))
 
     return app
 
