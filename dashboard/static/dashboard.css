@@ -416,6 +416,46 @@ button {
     padding: 8px 4px;
 }
 
+.dashboard-access-panel,
+.dashboard-access-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.dashboard-access-panel {
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-radius: 24px;
+}
+
+.dashboard-access-panel h3 {
+    margin: 8px 0 6px;
+}
+
+.dashboard-access-panel p,
+.dashboard-access-note {
+    margin: 0;
+    color: var(--muted);
+}
+
+.dashboard-access-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: min(100%, 420px);
+}
+
+.dashboard-access-summary {
+    width: min(100%, 420px);
+    min-height: 48px;
+    padding: 12px 14px;
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--muted-strong);
+    line-height: 1.5;
+}
+
 .stats-band {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -768,7 +808,7 @@ time {
 
 .server-board {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
     gap: 18px;
 }
 
@@ -792,15 +832,15 @@ time {
 
 .server-card-top {
     display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-columns: 84px minmax(0, 1fr);
     gap: 18px;
-    align-items: center;
+    align-items: start;
 }
 
 .server-card-visual {
     position: relative;
-    width: 96px;
-    height: 96px;
+    width: 84px;
+    height: 84px;
     padding: 4px;
     border-radius: 28px;
     background: linear-gradient(145deg, rgba(255, 119, 200, 0.45), rgba(111, 124, 255, 0.28));
@@ -829,26 +869,26 @@ time {
 
 .server-card-heading {
     grid-template-columns: minmax(0, 1fr);
-    align-content: center;
+    align-content: start;
 }
 
 .server-card-redesign .server-card-body {
     display: grid;
     align-content: start;
-    gap: 14px;
+    gap: 16px;
     min-width: 0;
 }
 
 .server-card-redesign h2 {
     margin: 0;
     max-width: none;
-    font-size: clamp(1.08rem, 0.88vw + 0.9rem, 1.42rem);
-    line-height: 1.08;
+    font-size: clamp(1.1rem, 0.45vw + 0.98rem, 1.34rem);
+    line-height: 1.06;
     letter-spacing: -0.03em;
-    overflow-wrap: normal;
+    overflow-wrap: anywhere;
     word-break: normal;
-    text-wrap: balance;
     hyphens: auto;
+    text-wrap: pretty;
 }
 
 .server-card-redesign p {
@@ -885,9 +925,10 @@ time {
 
 .server-card-footer {
     display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    min-height: 42px;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 14px;
+    flex-wrap: wrap;
 }
 
 .server-card-cta {
@@ -901,7 +942,7 @@ time {
     background: rgba(255, 255, 255, 0.05);
     color: var(--text);
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     white-space: nowrap;
     transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
@@ -977,6 +1018,12 @@ time {
     .server-card-heading {
         grid-template-columns: 1fr;
     }
+
+    .dashboard-access-panel,
+    .dashboard-access-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 
 @media (max-width: 720px) {
@@ -1028,8 +1075,8 @@ time {
     }
 
     .server-card-visual {
-        width: 84px;
-        height: 84px;
+        width: 76px;
+        height: 76px;
     }
 
     .server-card-heading {
@@ -1044,6 +1091,10 @@ time {
     .server-card-redesign h2,
     .server-card-redesign p {
         max-width: none;
+    }
+
+    .dashboard-access-summary {
+        width: 100%;
     }
 
     .toast-stack {

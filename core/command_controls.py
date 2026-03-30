@@ -17,7 +17,7 @@ class CommandControlStore:
     def _guild_bucket(self, guild_id: int) -> dict[str, Any]:
         guild_key = str(guild_id)
         guilds = self.data.setdefault("guilds", {})
-        return guilds.setdefault(guild_key, {"commands": {}})
+        return guilds.setdefault(guild_key, {"commands": {}, "dashboard": {"editor_role_ids": []}})
 
     def _command_bucket(self, guild_id: int, command_name: str) -> dict[str, Any]:
         commands = self._guild_bucket(guild_id).setdefault("commands", {})
@@ -51,3 +51,18 @@ class CommandControlStore:
         self.save()
         return self.get_policy(guild_id, command_name)
 
+    def get_dashboard_editor_roles(self, guild_id: int) -> list[int]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        return sorted(
+            {
+                int(role_id)
+                for role_id in dashboard_bucket.get("editor_role_ids", [])
+                if str(role_id).isdigit()
+            }
+        )
+
+    def set_dashboard_editor_roles(self, guild_id: int, role_ids: list[int]) -> list[int]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        dashboard_bucket["editor_role_ids"] = sorted({int(role_id) for role_id in role_ids})
+        self.save()
+        return self.get_dashboard_editor_roles(guild_id)

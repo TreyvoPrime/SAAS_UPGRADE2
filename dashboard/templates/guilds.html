@@ -65,13 +65,6 @@
                     </div>
                     <div class="server-card-heading">
                         <h2 title="{{ guild.name }}">{{ guild.name }}</h2>
-                        <span class="server-status">
-                            {% if guild.bot_installed %}
-                                {% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}
-                            {% else %}
-                                Ready to install
-                            {% endif %}
-                        </span>
                     </div>
                 </div>
                 <div class="server-card-body">
@@ -82,20 +75,27 @@
                             The bot is not installed here yet. Add the app and commands to start managing this server.
                         {% endif %}
                     </p>
-                    <div class="server-card-meta">
-                        {% if guild.member_count is not none %}
-                        <span>{{ guild.member_count }} members</span>
-                        {% endif %}
-                        {% if guild.role_count is not none %}
-                        <span>{{ guild.role_count }} roles</span>
-                        {% endif %}
-                        {% if not guild.bot_installed %}
-                        <span>Bot not installed</span>
-                        {% endif %}
+                    <div class="server-card-footer">
+                        <div class="server-card-meta">
+                            <span class="server-meta-badge">
+                                {% if guild.bot_installed %}
+                                    {% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}
+                                {% else %}
+                                    Ready to install
+                                {% endif %}
+                            </span>
+                            {% if guild.member_count is not none %}
+                            <span>{{ guild.member_count }} members</span>
+                            {% endif %}
+                            {% if guild.role_count is not none %}
+                            <span>{{ guild.role_count }} roles</span>
+                            {% endif %}
+                            {% if not guild.bot_installed %}
+                            <span>Bot not installed</span>
+                            {% endif %}
+                        </div>
+                        <div class="server-card-cta">{% if guild.bot_installed %}Open dashboard{% else %}Add app{% endif %}</div>
                     </div>
-                </div>
-                <div class="server-card-footer">
-                    <div class="server-card-cta">{% if guild.bot_installed %}Open dashboard{% else %}Add app{% endif %}</div>
                 </div>
             </a>
             {% endfor %}

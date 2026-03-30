@@ -43,6 +43,7 @@
                     {% endfor %}
                 </div>
             </section>
+
         </aside>
 
         <section class="main-column">
@@ -56,6 +57,28 @@
                     <a class="ghost-button" href="/servers">View all servers</a>
                 </div>
             </header>
+
+            <section class="surface dashboard-access-panel">
+                <div>
+                    <div class="eyebrow">Dashboard access</div>
+                    <h3>Who can edit this dashboard</h3>
+                    <p>Owners and members with Manage Server can always edit here. Add trusted staff roles below if you want to delegate dashboard access without giving full server management.</p>
+                </div>
+                <div class="dashboard-access-actions">
+                    <div class="dashboard-access-summary" id="dashboard-access-summary">
+                        {% if dashboard_editor_role_names %}
+                            {{ dashboard_editor_role_names|join(", ") }}
+                        {% else %}
+                            Only the owner and Manage Server members can edit this dashboard right now.
+                        {% endif %}
+                    </div>
+                    {% if can_manage_editor_roles %}
+                    <button type="button" class="ghost-button" id="open-dashboard-access-modal">Edit dashboard roles</button>
+                    {% else %}
+                    <span class="dashboard-access-note">Only the owner or members with Manage Server can change dashboard editor roles.</span>
+                    {% endif %}
+                </div>
+            </section>
 
             <section class="stats-band">
                 <article>
@@ -216,7 +239,7 @@
                 </div>
                 <button class="icon-button" type="button" data-close-role-modal>Close</button>
             </div>
-            <p class="modal-copy">Select the roles that can use this command. Leaving everything unchecked allows all members who already pass the command's native permission checks.</p>
+            <p class="modal-copy" id="role-modal-copy">Select the roles that can use this command. Leaving everything unchecked allows all members who already pass the command's native permission checks.</p>
             <label class="search-shell role-search-shell">
                 <span>Find role</span>
                 <input id="role-search" class="search-input" type="search" placeholder="Search roles">
@@ -236,8 +259,40 @@
         </section>
     </div>
 
+    <div class="modal-shell" id="dashboard-access-modal" hidden>
+        <div class="modal-backdrop" data-close-dashboard-access-modal></div>
+        <section class="modal-panel">
+            <div class="section-head tight">
+                <div>
+                    <div class="eyebrow">Dashboard editors</div>
+                    <h3>Choose who can edit this dashboard</h3>
+                </div>
+                <button class="icon-button" type="button" data-close-dashboard-access-modal>Close</button>
+            </div>
+            <p class="modal-copy">Owners and members with Manage Server always keep access. Select extra roles below for trusted moderators, admins, or staff who should manage command settings here.</p>
+            <label class="search-shell role-search-shell">
+                <span>Find role</span>
+                <input id="dashboard-access-role-search" class="search-input" type="search" placeholder="Search roles">
+            </label>
+            <div class="role-checklist" id="dashboard-access-role-checklist">
+                {% for role in roles %}
+                <label class="role-option" data-dashboard-access-role-name="{{ role.label }}">
+                    <input type="checkbox" value="{{ role.id }}" data-dashboard-access-role-checkbox>
+                    <span>{{ role.name }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="modal-actions">
+                <button class="ghost-button" type="button" id="clear-dashboard-access-selection">Clear selection</button>
+                <button class="primary-button" type="button" id="save-dashboard-access-selection">Save dashboard roles</button>
+            </div>
+        </section>
+    </div>
+
     <script>
         const guildId = {{ selected_guild.id }};
+        const canManageEditorRoles = {{ 'true' if can_manage_editor_roles else 'false' }};
+        let dashboardEditorRoleIds = {{ dashboard_editor_role_ids|tojson }};
         const sectionPanels = Array.from(document.querySelectorAll("[data-section]"));
         const commandCards = Array.from(document.querySelectorAll("[data-command-card]"));
         const moduleButtons = Array.from(document.querySelectorAll("[data-module-filter]"));
@@ -248,6 +303,12 @@
         const roleSearch = document.getElementById("role-search");
         const saveRoleSelectionButton = document.getElementById("save-role-selection");
         const clearRoleSelectionButton = document.getElementById("clear-role-selection");
+        const dashboardAccessSummary = document.getElementById("dashboard-access-summary");
+        const dashboardAccessModal = document.getElementById("dashboard-access-modal");
+        const dashboardAccessRoleChecklist = document.getElementById("dashboard-access-role-checklist");
+        const dashboardAccessRoleSearch = document.getElementById("dashboard-access-role-search");
+        const saveDashboardAccessSelectionButton = document.getElementById("save-dashboard-access-selection");
+        const clearDashboardAccessSelectionButton = document.getElementById("clear-dashboard-access-selection");
         const toastStack = document.getElementById("toast-stack");
         let activeModule = "{{ sections[0].slug if sections else 'all' }}";
         let activeRoleCommand = null;
@@ -332,6 +393,28 @@
             return response.json();
         }
 
+        async function updateDashboardAccess(editorRoleIds) {
+            const response = await fetch(`/api/guilds/${guildId}/dashboard-access`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ editor_role_ids: editorRoleIds })
+            });
+
+            if (!response.ok) {
+                let message = "Dashboard access update failed";
+                try {
+                    const data = await response.json();
+                    if (data.detail) {
+                        message = data.detail;
+                    }
+                } catch {}
+                showToast(message, "error");
+                throw new Error("Dashboard access update failed");
+            }
+
+            return response.json();
+        }
+
         document.querySelectorAll("[data-command-toggle]").forEach((toggle) => {
             toggle.addEventListener("change", async () => {
                 const card = toggle.closest("[data-command-card]");
@@ -365,6 +448,29 @@
             roleModal.hidden = true;
         }
 
+        function openDashboardAccessModal() {
+            if (!dashboardAccessModal) return;
+            const selectedRoleIds = new Set((dashboardEditorRoleIds || []).map(String));
+            const dashboardRoleCheckboxes = dashboardAccessRoleChecklist?.querySelectorAll("[data-dashboard-access-role-checkbox]") || [];
+            dashboardRoleCheckboxes.forEach((checkbox) => {
+                checkbox.checked = selectedRoleIds.has(checkbox.value);
+            });
+            if (dashboardAccessRoleSearch) {
+                dashboardAccessRoleSearch.value = "";
+            }
+            const dashboardRoleOptions = dashboardAccessRoleChecklist?.querySelectorAll(".role-option") || [];
+            dashboardRoleOptions.forEach((option) => {
+                option.hidden = false;
+            });
+            dashboardAccessModal.hidden = false;
+        }
+
+        function closeDashboardAccessModal() {
+            if (dashboardAccessModal) {
+                dashboardAccessModal.hidden = true;
+            }
+        }
+
         document.querySelectorAll("[data-role-editor]").forEach((button) => {
             button.addEventListener("click", () => {
                 const card = document.querySelector(`[data-command-card][data-command="${button.dataset.commandName}"]`);
@@ -392,6 +498,12 @@
             button.addEventListener("click", closeRoleModal);
         });
 
+        document.querySelectorAll("[data-close-dashboard-access-modal]").forEach((button) => {
+            button.addEventListener("click", closeDashboardAccessModal);
+        });
+
+        document.getElementById("open-dashboard-access-modal")?.addEventListener("click", openDashboardAccessModal);
+
         roleSearch?.addEventListener("input", (event) => {
             const query = event.target.value.trim().toLowerCase();
             roleChecklist.querySelectorAll(".role-option").forEach((option) => {
@@ -399,8 +511,23 @@
             });
         });
 
+        dashboardAccessRoleSearch?.addEventListener("input", (event) => {
+            const query = event.target.value.trim().toLowerCase();
+            const dashboardRoleOptions = dashboardAccessRoleChecklist?.querySelectorAll(".role-option") || [];
+            dashboardRoleOptions.forEach((option) => {
+                option.hidden = query.length > 0 && !option.dataset.dashboardAccessRoleName.includes(query);
+            });
+        });
+
         clearRoleSelectionButton?.addEventListener("click", () => {
             roleChecklist.querySelectorAll("[data-role-checkbox]").forEach((checkbox) => {
+                checkbox.checked = false;
+            });
+        });
+
+        clearDashboardAccessSelectionButton?.addEventListener("click", () => {
+            const dashboardRoleCheckboxes = dashboardAccessRoleChecklist?.querySelectorAll("[data-dashboard-access-role-checkbox]") || [];
+            dashboardRoleCheckboxes.forEach((checkbox) => {
                 checkbox.checked = false;
             });
         });
@@ -422,6 +549,25 @@
                 );
                 updateStats();
                 closeRoleModal();
+            } catch {}
+        });
+
+        saveDashboardAccessSelectionButton?.addEventListener("click", async () => {
+            if (!canManageEditorRoles) return;
+            const selectedIds = Array.from(dashboardAccessRoleChecklist?.querySelectorAll("[data-dashboard-access-role-checkbox]:checked") || []).map((checkbox) => Number(checkbox.value));
+
+            try {
+                const result = await updateDashboardAccess(selectedIds);
+                dashboardEditorRoleIds = result.editor_role_ids || [];
+                dashboardAccessSummary.textContent = result.editor_role_names.length
+                    ? result.editor_role_names.join(", ")
+                    : "Only the owner and Manage Server members can edit this dashboard right now.";
+                showToast(
+                    result.editor_role_names.length
+                        ? "Updated dashboard editor roles."
+                        : "Dashboard editor roles cleared."
+                );
+                closeDashboardAccessModal();
             } catch {}
         });
 
