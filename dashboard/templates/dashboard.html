@@ -8,6 +8,7 @@
 </head>
 <body class="shell">
     <main class="workspace dashboard-shell">
+        <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
         <aside class="sidebar surface">
             <div class="brand-lockup">
                 <div class="brand-mark">SC</div>
@@ -247,8 +248,22 @@
         const roleSearch = document.getElementById("role-search");
         const saveRoleSelectionButton = document.getElementById("save-role-selection");
         const clearRoleSelectionButton = document.getElementById("clear-role-selection");
+        const toastStack = document.getElementById("toast-stack");
         let activeModule = "{{ sections[0].slug if sections else 'all' }}";
         let activeRoleCommand = null;
+
+        function showToast(message, tone = "success") {
+            if (!toastStack) return;
+            const toast = document.createElement("div");
+            toast.className = `toast ${tone}`;
+            toast.textContent = message;
+            toastStack.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add("is-visible"));
+            setTimeout(() => {
+                toast.classList.remove("is-visible");
+                setTimeout(() => toast.remove(), 220);
+            }, 2800);
+        }
 
         function parseRoleIds(card) {
             try {
@@ -303,6 +318,14 @@
             });
 
             if (!response.ok) {
+                let message = "Policy update failed";
+                try {
+                    const data = await response.json();
+                    if (data.detail) {
+                        message = data.detail;
+                    }
+                } catch {}
+                showToast(message, "error");
                 throw new Error("Policy update failed");
             }
 
@@ -315,6 +338,7 @@
                 try {
                     await updateCommandPolicy(toggle.dataset.commandName, { enabled: toggle.checked });
                     card.dataset.enabled = toggle.checked ? "true" : "false";
+                    showToast(`/${toggle.dataset.commandName} ${toggle.checked ? "enabled" : "disabled"}.`);
                     updateStats();
                 } catch {
                     toggle.checked = !toggle.checked;
@@ -358,6 +382,7 @@
                     const result = await updateCommandPolicy(button.dataset.commandName, { allowed_role_ids: [] });
                     card.dataset.roleIds = JSON.stringify(result.policy.allowed_role_ids || []);
                     card.querySelector("[data-role-summary]").textContent = "All roles that already pass native Discord checks";
+                    showToast(`Cleared role limits for /${button.dataset.commandName}.`);
                     updateStats();
                 } catch {}
             });
@@ -390,6 +415,11 @@
                 activeRoleCommand.querySelector("[data-role-summary]").textContent = result.allowed_role_names.length
                     ? result.allowed_role_names.join(", ")
                     : "All roles that already pass native Discord checks";
+                showToast(
+                    result.allowed_role_names.length
+                        ? `Updated roles for /${activeRoleCommand.dataset.command}.`
+                        : `/${activeRoleCommand.dataset.command} now uses built-in Discord checks.`
+                );
                 updateStats();
                 closeRoleModal();
             } catch {}

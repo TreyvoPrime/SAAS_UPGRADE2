@@ -36,6 +36,10 @@ body {
     background: transparent;
 }
 
+.nitro-shell {
+    overflow-x: hidden;
+}
+
 a {
     color: inherit;
     text-decoration: none;
@@ -246,6 +250,12 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(8, 6, 16, 0.68);
     color: var(--text);
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: rgba(255, 119, 200, 0.28);
+    box-shadow: 0 0 0 4px rgba(255, 119, 200, 0.08);
 }
 
 .guild-grid {
@@ -805,15 +815,21 @@ time {
 .server-card-redesign .server-card-body {
     display: grid;
     gap: 10px;
+    min-width: 0;
 }
 
 .server-card-redesign h2 {
     margin: 0;
+    font-size: clamp(1.1rem, 1vw + 0.95rem, 1.45rem);
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
 }
 
 .server-card-redesign p {
     margin: 0;
     color: var(--muted);
+    line-height: 1.45;
 }
 
 .server-card-redesign .server-card-meta {
@@ -828,6 +844,42 @@ time {
     align-self: center;
     color: var(--muted-strong);
     font-weight: 700;
+    white-space: nowrap;
+}
+
+.toast-stack {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 70;
+    display: grid;
+    gap: 10px;
+    width: min(360px, calc(100vw - 32px));
+}
+
+.toast {
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 180ms ease, transform 180ms ease;
+    border-radius: 18px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    background: rgba(24, 16, 37, 0.96);
+    color: var(--text);
+    box-shadow: var(--shadow);
+}
+
+.toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.toast.success {
+    border-color: rgba(89, 236, 176, 0.28);
+}
+
+.toast.error {
+    border-color: rgba(255, 123, 149, 0.3);
 }
 
 @media (max-width: 1340px) {
@@ -905,5 +957,11 @@ time {
     .server-card-visual {
         width: 84px;
         height: 84px;
+    }
+
+    .toast-stack {
+        right: 16px;
+        left: 16px;
+        width: auto;
     }
 }

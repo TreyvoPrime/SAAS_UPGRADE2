@@ -64,7 +64,7 @@
                 </div>
                 <div class="server-card-body">
                     <div class="server-card-titleline">
-                        <h2>{{ guild.name }}</h2>
+                        <h2 title="{{ guild.name }}">{{ guild.name }}</h2>
                         <span class="server-status">
                             {% if guild.bot_installed %}
                                 {% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}
