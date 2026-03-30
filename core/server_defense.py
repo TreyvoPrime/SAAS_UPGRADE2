@@ -586,6 +586,13 @@ class ServerDefenseManager:
             raise ValueError(f"Unknown defense feature: {feature}")
         current = self.store.get_feature(guild_id, normalized)
         if enabled:
+            if normalized == "lockdown" and current.get("enabled"):
+                updated_state = await self.set_duration(guild_id, normalized, duration_minutes)
+                snapshot = updated_state.get("snapshot", {})
+                if snapshot:
+                    await self._refresh_lockdown_roles(guild_id)
+                    return self.store.get_feature(guild_id, normalized)
+                return await self.enable_feature(guild_id, normalized, duration_minutes=duration_minutes)
             if current.get("enabled"):
                 return await self.set_duration(guild_id, normalized, duration_minutes)
             return await self.enable_feature(guild_id, normalized, duration_minutes=duration_minutes)

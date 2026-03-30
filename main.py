@@ -1,3 +1,4 @@
+import asyncio
 import os
 from pathlib import Path
 
@@ -47,6 +48,7 @@ class ServerCoreBot(commands.Bot):
         self.server_defense_store = ServerDefenseStore()
         self.server_defense = ServerDefenseManager(self, self.server_defense_store)
         self._server_defense_initialized = False
+        self.runtime_loop = None
 
         super().__init__(
             command_prefix="!",
@@ -58,6 +60,7 @@ class ServerCoreBot(commands.Bot):
         self.dashboard = DashboardServer(self, self.command_controls, self.command_logs)
 
     async def setup_hook(self) -> None:
+        self.runtime_loop = asyncio.get_running_loop()
         await self.load_modules()
         await self.dashboard.start()
 

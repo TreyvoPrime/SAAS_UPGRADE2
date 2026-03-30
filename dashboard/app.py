@@ -164,6 +164,19 @@ def create_dashboard_app(bot) -> FastAPI:
 
         return {role.id for role in getattr(member, "roles", [])}
 
+    async def run_on_bot_loop(coro):
+        bot_loop = getattr(bot, "runtime_loop", None) or getattr(bot, "loop", None)
+        current_loop = asyncio.get_running_loop()
+        if bot_loop is None:
+            raise HTTPException(status_code=503, detail="Bot event loop is not available")
+        if getattr(bot_loop, "is_closed", lambda: False)():
+            raise HTTPException(status_code=503, detail="Bot event loop is closed")
+        if bot_loop == current_loop:
+            return await coro
+
+        future = asyncio.run_coroutine_threadsafe(coro, bot_loop)
+        return await asyncio.wrap_future(future)
+
     def premium_enabled() -> bool:
         return any(command["tier"] == PREMIUM_TIER for command in build_command_catalog(bot))
 
@@ -649,11 +662,13 @@ def create_dashboard_app(bot) -> FastAPI:
         if payload.defense_name not in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown"}:
             raise HTTPException(status_code=404, detail="Unknown defense")
 
-        result = await manager.set_defense(
-            guild_id,
-            payload.defense_name,
-            enabled=payload.enabled,
-            duration_minutes=payload.duration_minutes,
+        result = await run_on_bot_loop(
+            manager.set_defense(
+                guild_id,
+                payload.defense_name,
+                enabled=payload.enabled,
+                duration_minutes=payload.duration_minutes,
+            )
         )
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         state = manager.build_dashboard_state(guild_id, role_lookup)
@@ -670,9 +685,9 @@ def create_dashboard_app(bot) -> FastAPI:
         valid_role_ids = {role["id"] for role in guild_roles(guild_id)}
         safe_role_ids = [role_id for role_id in payload.lockdown_role_ids if role_id in valid_role_ids]
         if hasattr(manager, "ensure_lockdown_roles"):
-            role_ids = await manager.ensure_lockdown_roles(guild_id, safe_role_ids)
+            role_ids = await run_on_bot_loop(manager.ensure_lockdown_roles(guild_id, safe_role_ids))
         else:
-            updated = await manager.set_lockdown_roles(guild_id, safe_role_ids)
+            updated = await run_on_bot_loop(manager.set_lockdown_roles(guild_id, safe_role_ids))
             role_ids = list(updated.get("allowed_role_ids", []))
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         state = manager.build_dashboard_state(guild_id, role_lookup)
