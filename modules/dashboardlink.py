@@ -86,7 +86,6 @@ class DashboardCommands(commands.Cog):
             color=discord.Color.blurple(),
         )
         embed.add_field(name="Direct link", value=dashboard_link, inline=False)
-        embed.set_footer(text="Use a public DASHBOARD_BASE_URL or Railway domain so members can open this outside your machine.")
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

@@ -66,13 +66,6 @@
                     <div class="server-card-heading">
                         <div class="server-card-titleblock">
                             <h2 title="{{ guild.name }}">{{ guild.name }}</h2>
-                            <span class="server-status">
-                                {% if guild.bot_installed %}
-                                    {% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}
-                                {% else %}
-                                    Add app
-                                {% endif %}
-                            </span>
                         </div>
                         <div class="server-card-cta">{% if guild.bot_installed %}Open dashboard{% else %}Add app{% endif %}</div>
                     </div>
@@ -86,6 +79,13 @@
                         {% endif %}
                     </p>
                     <div class="server-card-meta">
+                        <span class="server-meta-badge">
+                            {% if guild.bot_installed %}
+                                {% if guild.premium_enabled %}Premium ready{% else %}Free tier{% endif %}
+                            {% else %}
+                                Ready to install
+                            {% endif %}
+                        </span>
                         {% if guild.member_count is not none %}
                         <span>{{ guild.member_count }} members</span>
                         {% endif %}

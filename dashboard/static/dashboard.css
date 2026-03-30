@@ -794,7 +794,7 @@ time {
     display: grid;
     grid-template-columns: 96px minmax(0, 1fr);
     gap: 18px;
-    align-items: start;
+    align-items: center;
 }
 
 .server-card-visual {
@@ -823,34 +823,18 @@ time {
 .server-card-heading,
 .server-card-titleblock {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
 }
 
 .server-card-heading {
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 14px;
+    align-items: center;
+    gap: 16px;
 }
 
 .server-card-titleblock {
-    gap: 8px;
-}
-
-.server-status {
-    display: inline-flex;
-    width: fit-content;
-    max-width: 100%;
-    align-items: center;
-    min-height: 32px;
-    padding: 0 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--muted-strong);
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
+    align-content: center;
 }
 
 .server-card-redesign .server-card-body {
@@ -862,20 +846,20 @@ time {
 
 .server-card-redesign h2 {
     margin: 0;
-    max-width: 18ch;
-    font-size: clamp(1.2rem, 0.95vw + 0.98rem, 1.55rem);
-    line-height: 1.02;
+    max-width: 14ch;
+    font-size: clamp(1.18rem, 0.65vw + 1rem, 1.48rem);
+    line-height: 1.01;
     letter-spacing: -0.03em;
     overflow-wrap: break-word;
     word-break: break-word;
-    text-wrap: balance;
+    hyphens: auto;
 }
 
 .server-card-redesign p {
     margin: 0;
     color: var(--muted);
     line-height: 1.55;
-    max-width: 34ch;
+    max-width: 38ch;
 }
 
 .server-card-redesign .server-card-meta {
@@ -896,6 +880,13 @@ time {
     background: rgba(255, 255, 255, 0.04);
 }
 
+.server-card-redesign .server-card-meta .server-meta-badge {
+    border-color: rgba(255, 119, 200, 0.18);
+    background: rgba(255, 119, 200, 0.08);
+    color: #f6d2ec;
+    font-weight: 700;
+}
+
 .server-card-cta {
     align-self: start;
     display: inline-flex;
@@ -908,7 +899,7 @@ time {
     background: rgba(255, 255, 255, 0.05);
     color: var(--text);
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     white-space: nowrap;
     transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
@@ -1041,6 +1032,11 @@ time {
 
     .server-card-heading {
         grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .server-card-cta {
+        justify-self: start;
     }
 
     .server-card-redesign h2,
