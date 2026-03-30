@@ -1,11 +1,44 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from datetime import timedelta
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 
 MAX_DURATION_MINUTES = 10080
+MAX_TIMEOUT_MINUTES = 40320
+
+
+class ModerationConfirmView(discord.ui.View):
+    def __init__(self, actor_id: int, action: Callable[[], Awaitable[str]]):
+        super().__init__(timeout=60)
+        self.actor_id = actor_id
+        self.action = action
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.actor_id:
+            await interaction.response.send_message("This confirmation is not for you.", ephemeral=True)
+            return
+
+        self.disable_all_items()
+        await interaction.response.defer()
+        try:
+            result = await self.action()
+        except Exception:
+            result = "Something went wrong while completing that action."
+        await interaction.edit_original_response(content=result, view=None)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.actor_id:
+            await interaction.response.send_message("This confirmation is not for you.", ephemeral=True)
+            return
+        self.disable_all_items()
+        await interaction.response.edit_message(content="Action canceled.", view=None)
 
 
 class ServerDefense(commands.Cog):
@@ -40,6 +73,31 @@ class ServerDefense(commands.Cog):
         name="serverguard",
         description="Arm or release the full ServerGuard defensive stack",
     )
+
+    async def _require_moderator(self, interaction: discord.Interaction) -> discord.Member | None:
+        if interaction.guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return None
+
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("I couldn't verify your server permissions.", ephemeral=True)
+            return None
+
+        if not (
+            interaction.user.guild_permissions.administrator
+            or interaction.user.guild_permissions.manage_guild
+            or interaction.user.guild_permissions.manage_messages
+            or interaction.user.guild_permissions.moderate_members
+            or interaction.user.guild_permissions.kick_members
+            or interaction.user.guild_permissions.ban_members
+        ):
+            await interaction.response.send_message(
+                "You need moderation permissions to use this command.",
+                ephemeral=True,
+            )
+            return None
+
+        return interaction.user
 
     async def _require_admin(self, interaction: discord.Interaction) -> discord.Member | None:
         if interaction.guild is None:
@@ -140,12 +198,85 @@ class ServerDefense(commands.Cog):
         ends_at = state.get("ends_at")
         if ends_at:
             return f" It will end at `{ends_at}`."
-        return ""
+            return ""
 
     def _all_features_summary(self, guild_id: int) -> str:
         state = self.bot.server_defense.get_dashboard_state(guild_id)
         armed = [feature.replace("mentionguard", "mention guard") for feature in state if feature in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown"} and state[feature].get("enabled")]
         return ", ".join(armed) if armed else "none"
+
+    def _moderation_settings(self, guild_id: int) -> dict:
+        return self.bot.command_controls.get_moderation_settings(guild_id)
+
+    async def _confirm_or_run(
+        self,
+        interaction: discord.Interaction,
+        prompt: str,
+        action: Callable[[], Awaitable[str]],
+    ) -> None:
+        assert interaction.guild is not None
+        settings = self._moderation_settings(interaction.guild.id)
+        if settings.get("confirmation_enabled", True):
+            await interaction.response.send_message(
+                prompt,
+                ephemeral=True,
+                view=ModerationConfirmView(interaction.user.id, action),
+            )
+            return
+
+        try:
+            result = await action()
+        except discord.Forbidden:
+            result = "Discord blocked that moderation action."
+        except discord.HTTPException:
+            result = "I couldn't complete that moderation action right now."
+        await interaction.response.send_message(result, ephemeral=True)
+
+    async def _validate_moderation_target(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        *,
+        action_name: str,
+        require_bot_permission: str | None = None,
+    ) -> bool:
+        assert interaction.guild is not None
+        assert isinstance(interaction.user, discord.Member)
+
+        if member.id == interaction.user.id:
+            await interaction.response.send_message(f"You can't {action_name} yourself.", ephemeral=True)
+            return False
+        if member.id == self.bot.user.id:
+            await interaction.response.send_message(f"You can't {action_name} the bot.", ephemeral=True)
+            return False
+        if member.id == interaction.guild.owner_id:
+            await interaction.response.send_message(f"You can't {action_name} the server owner.", ephemeral=True)
+            return False
+        if interaction.guild.owner_id != interaction.user.id and member.top_role >= interaction.user.top_role:
+            await interaction.response.send_message(
+                f"You can only {action_name} members below your top role.",
+                ephemeral=True,
+            )
+            return False
+
+        me = interaction.guild.me
+        if me is None:
+            await interaction.response.send_message("I couldn't verify my moderation permissions right now.", ephemeral=True)
+            return False
+        if require_bot_permission and not getattr(me.guild_permissions, require_bot_permission, False):
+            await interaction.response.send_message(
+                f"I need {require_bot_permission.replace('_', ' ').title()} to do that.",
+                ephemeral=True,
+            )
+            return False
+        if member.top_role >= me.top_role:
+            await interaction.response.send_message(
+                f"I can only {action_name} members below my top role.",
+                ephemeral=True,
+            )
+            return False
+
+        return True
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -403,6 +534,174 @@ class ServerDefense(commands.Cog):
             "Updated lockdown talk roles.\n"
             f"Allowed roles: {', '.join(role_mentions) if role_mentions else 'No extra talk roles configured.'}",
             ephemeral=True,
+        )
+
+    @app_commands.command(name="warn", description="Warn a member and save the warning")
+    @app_commands.describe(member="Member to warn", reason="Why they are being warned")
+    async def warn(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        reason: str | None = None,
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        if not await self._validate_moderation_target(interaction, member, action_name="warn"):
+            return
+
+        warning_reason = (reason or "No reason provided.").strip()
+
+        async def action() -> str:
+            self.bot.warning_store.add_warning(
+                interaction.guild.id,
+                member.id,
+                moderator_id=interaction.user.id,
+                reason=warning_reason,
+            )
+            warning_count = self.bot.warning_store.warning_count(interaction.guild.id, member.id)
+            try:
+                await member.send(f"You were warned in {interaction.guild.name}: {warning_reason}")
+            except Exception:
+                pass
+            return f"{member.mention} has been warned. Total warnings: {warning_count}."
+
+        await self._confirm_or_run(
+            interaction,
+            f"Warn {member.mention}?\nReason: {warning_reason}",
+            action,
+        )
+
+    @app_commands.command(name="timeout", description="Timeout a member for a custom amount of time")
+    @app_commands.describe(
+        member="Member to timeout",
+        duration_minutes="Minutes to timeout them for. Leave blank to use the ServerGuard default.",
+        reason="Why they are being timed out",
+    )
+    async def timeout(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        duration_minutes: app_commands.Range[int, 1, MAX_TIMEOUT_MINUTES] | None = None,
+        reason: str | None = None,
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        if not await self._validate_moderation_target(
+            interaction,
+            member,
+            action_name="timeout",
+            require_bot_permission="moderate_members",
+        ):
+            return
+
+        settings = self._moderation_settings(interaction.guild.id)
+        timeout_minutes = int(duration_minutes or settings["default_timeout_minutes"])
+        timeout_reason = (reason or "No reason provided.").strip()
+
+        async def action() -> str:
+            await member.timeout(
+                discord.utils.utcnow() + timedelta(minutes=timeout_minutes),
+                reason=f"{interaction.user}: {timeout_reason}",
+            )
+            return f"{member.mention} has been timed out for {timeout_minutes} minutes."
+
+        await self._confirm_or_run(
+            interaction,
+            f"Timeout {member.mention} for {timeout_minutes} minutes?\nReason: {timeout_reason}",
+            action,
+        )
+
+    @app_commands.command(name="kick", description="Kick a member from the server")
+    @app_commands.describe(member="Member to kick", reason="Why they are being kicked")
+    async def kick(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        reason: str | None = None,
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        if not moderator.guild_permissions.kick_members and not moderator.guild_permissions.administrator:
+            await interaction.response.send_message("You need Kick Members to use this command.", ephemeral=True)
+            return
+
+        if not await self._validate_moderation_target(
+            interaction,
+            member,
+            action_name="kick",
+            require_bot_permission="kick_members",
+        ):
+            return
+
+        kick_reason = (reason or "No reason provided.").strip()
+
+        async def action() -> str:
+            try:
+                await member.send(f"You were kicked from {interaction.guild.name}: {kick_reason}")
+            except Exception:
+                pass
+            await member.kick(reason=f"{interaction.user}: {kick_reason}")
+            return f"{member} has been kicked."
+
+        await self._confirm_or_run(
+            interaction,
+            f"Kick {member.mention}?\nReason: {kick_reason}",
+            action,
+        )
+
+    @app_commands.command(name="ban", description="Ban a member from the server")
+    @app_commands.describe(
+        member="Member to ban",
+        reason="Why they are being banned",
+        delete_message_days="Delete up to this many days of their recent messages",
+    )
+    async def ban(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        reason: str | None = None,
+        delete_message_days: app_commands.Range[int, 0, 7] = 0,
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        if not moderator.guild_permissions.ban_members and not moderator.guild_permissions.administrator:
+            await interaction.response.send_message("You need Ban Members to use this command.", ephemeral=True)
+            return
+
+        if not await self._validate_moderation_target(
+            interaction,
+            member,
+            action_name="ban",
+            require_bot_permission="ban_members",
+        ):
+            return
+
+        ban_reason = (reason or "No reason provided.").strip()
+
+        async def action() -> str:
+            try:
+                await member.send(f"You were banned from {interaction.guild.name}: {ban_reason}")
+            except Exception:
+                pass
+            await interaction.guild.ban(
+                member,
+                reason=f"{interaction.user}: {ban_reason}",
+                delete_message_days=int(delete_message_days),
+            )
+            return f"{member} has been banned."
+
+        await self._confirm_or_run(
+            interaction,
+            f"Ban {member.mention}?\nReason: {ban_reason}",
+            action,
         )
 
     @serverguard.command(name="enableall", description="Enable every ServerGuard protection at once")

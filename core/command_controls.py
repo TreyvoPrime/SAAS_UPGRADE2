@@ -10,6 +10,9 @@ class CommandControlStore:
     DEFAULT_PURGE_LIMIT = 100
     FREE_PURGE_LIMIT_CAP = 500
     PREMIUM_PURGE_LIMIT_CAP = 2000
+    DEFAULT_TIMEOUT_MINUTES = 10
+    MIN_TIMEOUT_MINUTES = 1
+    MAX_TIMEOUT_MINUTES = 40320
 
     def __init__(self, path: str | Path = "dashboard_data/command_controls.json"):
         self.path = Path(path)
@@ -85,3 +88,35 @@ class CommandControlStore:
         dashboard_bucket["purge_limit"] = max(1, min(int(limit), self.PREMIUM_PURGE_LIMIT_CAP))
         self.save()
         return self.get_purge_limit(guild_id)
+
+    def get_moderation_settings(self, guild_id: int) -> dict[str, Any]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        confirmation_enabled = bool(dashboard_bucket.get("moderation_confirmation_enabled", True))
+        raw_timeout = dashboard_bucket.get("default_timeout_minutes", self.DEFAULT_TIMEOUT_MINUTES)
+        try:
+            timeout_minutes = int(raw_timeout)
+        except (TypeError, ValueError):
+            timeout_minutes = self.DEFAULT_TIMEOUT_MINUTES
+        timeout_minutes = max(self.MIN_TIMEOUT_MINUTES, min(timeout_minutes, self.MAX_TIMEOUT_MINUTES))
+        return {
+            "confirmation_enabled": confirmation_enabled,
+            "default_timeout_minutes": timeout_minutes,
+        }
+
+    def set_moderation_settings(
+        self,
+        guild_id: int,
+        *,
+        confirmation_enabled: bool | None = None,
+        default_timeout_minutes: int | None = None,
+    ) -> dict[str, Any]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        if confirmation_enabled is not None:
+            dashboard_bucket["moderation_confirmation_enabled"] = bool(confirmation_enabled)
+        if default_timeout_minutes is not None:
+            dashboard_bucket["default_timeout_minutes"] = max(
+                self.MIN_TIMEOUT_MINUTES,
+                min(int(default_timeout_minutes), self.MAX_TIMEOUT_MINUTES),
+            )
+        self.save()
+        return self.get_moderation_settings(guild_id)

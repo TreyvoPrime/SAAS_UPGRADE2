@@ -121,6 +121,40 @@
                     </div>
                 </section>
 
+                <section class="surface command-settings-panel defense-settings-panel">
+                    <div>
+                        <div class="eyebrow">Moderation</div>
+                        <h3>Action confirmations</h3>
+                        <p>Choose whether `/warn`, `/timeout`, `/kick`, and `/ban` ask for confirmation first, and set the default timeout length staff should use when they do not enter one manually.</p>
+                    </div>
+                    <div class="command-settings-actions">
+                        <label class="toggle moderation-toggle">
+                            <input
+                                id="moderation-confirmation-toggle"
+                                type="checkbox"
+                                {% if moderation_settings.confirmation_enabled %}checked{% endif %}
+                            >
+                            <span>Require confirmation</span>
+                        </label>
+                        <label class="search-shell compact-setting-shell">
+                            <span>Default timeout length (minutes)</span>
+                            <input
+                                id="moderation-timeout-input"
+                                class="search-input"
+                                type="number"
+                                min="1"
+                                max="40320"
+                                step="1"
+                                value="{{ moderation_settings.default_timeout_minutes }}"
+                            >
+                        </label>
+                        <div class="dashboard-access-summary" id="moderation-settings-summary">
+                            {% if moderation_settings.confirmation_enabled %}Confirmation is on{% else %}Confirmation is off{% endif %}. Default timeout: {{ moderation_settings.default_timeout_minutes }} minutes
+                        </div>
+                        <button type="button" class="primary-button" id="save-moderation-settings">Save moderation settings</button>
+                    </div>
+                </section>
+
                 <div class="defense-grid" id="defense-grid">
                     {% for defense in defense_cards %}
                     <article
@@ -545,6 +579,10 @@
         const purgeLimitInput = document.getElementById("purge-limit-input");
         const purgeLimitSummary = document.getElementById("purge-limit-summary");
         const savePurgeLimitButton = document.getElementById("save-purge-limit");
+        const moderationConfirmationToggle = document.getElementById("moderation-confirmation-toggle");
+        const moderationTimeoutInput = document.getElementById("moderation-timeout-input");
+        const moderationSettingsSummary = document.getElementById("moderation-settings-summary");
+        const saveModerationSettingsButton = document.getElementById("save-moderation-settings");
         const defenseCards = Array.from(document.querySelectorAll("[data-defense-card]"));
         const defenseSummaryItems = {
             active: document.querySelector('[data-defense-summary="active"]'),
@@ -745,6 +783,26 @@
 
             if (!response.ok) {
                 let message = "Purge limit update failed";
+                try {
+                    const data = await response.json();
+                    message = data.detail || message;
+                } catch {}
+                showToast(message, "error");
+                throw new Error(message);
+            }
+
+            return response.json();
+        }
+
+        async function updateModerationSettings(payload) {
+            const response = await fetch(`/api/guilds/${guildId}/moderation-settings`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                let message = "Moderation settings update failed";
                 try {
                     const data = await response.json();
                     message = data.detail || message;
@@ -1145,6 +1203,31 @@
                     purgeLimitSummary.textContent = `Current limit: ${result.limit} messages`;
                 }
                 showToast(`Purge limit set to ${result.limit} messages.`);
+            } catch {}
+        });
+
+        saveModerationSettingsButton?.addEventListener("click", async () => {
+            const timeoutMinutes = Number(moderationTimeoutInput?.value || "0");
+            if (!Number.isInteger(timeoutMinutes) || timeoutMinutes < 1 || timeoutMinutes > 40320) {
+                showToast("Choose a default timeout between 1 and 40320 minutes.", "error");
+                return;
+            }
+
+            try {
+                const result = await updateModerationSettings({
+                    confirmation_enabled: Boolean(moderationConfirmationToggle?.checked),
+                    default_timeout_minutes: timeoutMinutes
+                });
+                if (moderationConfirmationToggle) {
+                    moderationConfirmationToggle.checked = Boolean(result.confirmation_enabled);
+                }
+                if (moderationTimeoutInput) {
+                    moderationTimeoutInput.value = String(result.default_timeout_minutes);
+                }
+                if (moderationSettingsSummary) {
+                    moderationSettingsSummary.textContent = `${result.confirmation_enabled ? "Confirmation is on" : "Confirmation is off"}. Default timeout: ${result.default_timeout_minutes} minutes`;
+                }
+                showToast("Moderation settings updated.");
             } catch {}
         });
 

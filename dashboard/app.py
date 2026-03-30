@@ -54,6 +54,11 @@ class PurgeSettingsPayload(BaseModel):
     limit: int = Field(ge=1, le=2000)
 
 
+class ModerationSettingsPayload(BaseModel):
+    confirmation_enabled: bool
+    default_timeout_minutes: int = Field(ge=1, le=40320)
+
+
 def resolve_dashboard_host() -> str:
     return os.getenv("DASHBOARD_HOST") or os.getenv("HOST") or "0.0.0.0"
 
@@ -373,6 +378,14 @@ def create_dashboard_app(bot) -> FastAPI:
             "premium_limit": premium_limit,
         }
 
+    def moderation_settings_summary(guild_id: int) -> dict:
+        controls = bot.access_manager.controls
+        settings = controls.get_moderation_settings(guild_id)
+        return {
+            "confirmation_enabled": settings["confirmation_enabled"],
+            "default_timeout_minutes": settings["default_timeout_minutes"],
+        }
+
     def greetings_dashboard_summary(guild_id: int) -> dict:
         manager = getattr(bot, "greetings", None)
         channels = guild_text_channels(guild_id)
@@ -569,6 +582,7 @@ def create_dashboard_app(bot) -> FastAPI:
         defense_summary = defense_dashboard_summary(guild_id)
         greetings_summary = greetings_dashboard_summary(guild_id)
         purge_settings = purge_settings_summary(guild_id)
+        moderation_settings = moderation_settings_summary(guild_id)
 
         stats = {
             "commands": len(commands),
@@ -602,6 +616,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
                 "greetings_summary": greetings_summary,
                 "purge_settings": purge_settings,
+                "moderation_settings": moderation_settings,
                 "current_view": current_view,
             },
         )
@@ -835,6 +850,21 @@ def create_dashboard_app(bot) -> FastAPI:
         allowed_limit = min(int(payload.limit), controls.FREE_PURGE_LIMIT_CAP)
         updated_limit = controls.set_purge_limit(guild_id, allowed_limit)
         return JSONResponse(purge_settings_summary(guild_id) | {"limit": min(updated_limit, controls.FREE_PURGE_LIMIT_CAP)})
+
+    @app.get("/api/guilds/{guild_id}/moderation-settings")
+    async def get_moderation_settings(request: Request, guild_id: int):
+        await require_guild_access(request, guild_id)
+        return JSONResponse(moderation_settings_summary(guild_id))
+
+    @app.post("/api/guilds/{guild_id}/moderation-settings")
+    async def update_moderation_settings(request: Request, guild_id: int, payload: ModerationSettingsPayload):
+        await require_guild_access(request, guild_id)
+        updated = bot.access_manager.controls.set_moderation_settings(
+            guild_id,
+            confirmation_enabled=payload.confirmation_enabled,
+            default_timeout_minutes=payload.default_timeout_minutes,
+        )
+        return JSONResponse(updated)
 
     return app
 
