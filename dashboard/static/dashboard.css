@@ -394,6 +394,7 @@ button {
     padding: 10px;
     border-radius: 16px;
     border: 1px solid transparent;
+    min-width: 0;
 }
 
 .server-link.is-current {
@@ -405,6 +406,12 @@ button {
     width: 34px;
     height: 34px;
     border-radius: 12px;
+}
+
+.server-link span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .main-column {
@@ -617,6 +624,10 @@ button {
 .activity-column {
     position: sticky;
     top: 22px;
+    min-width: 0;
+}
+
+.activity-surface {
     min-width: 0;
 }
 

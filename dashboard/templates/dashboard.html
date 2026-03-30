@@ -36,9 +36,9 @@
                 <div class="eyebrow">Servers</div>
                 <div class="server-list">
                     {% for item in guilds %}
-                    <a class="server-link {% if item.id == selected_guild.id %}is-current{% endif %}" href="/dashboard/{{ item.id }}">
+                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}/dashboard/{{ item.id }}{% else %}{{ item.install_url }}{% endif %}">
                         <img src="{{ item.icon_url }}" alt="{{ item.name }}">
-                        <span>{{ item.name }}</span>
+                        <span>{{ item.name }}{% if not item.bot_installed %} · Add app{% endif %}</span>
                     </a>
                     {% endfor %}
                 </div>
@@ -150,7 +150,7 @@
                                 data-module="{{ section.slug }}"
                                 data-tier="{{ command.tier|lower }}"
                                 data-enabled="{{ 'true' if command.enabled else 'false' }}"
-                                data-role-ids='{{ command.allowed_role_ids|tojson }}'
+                                data-role-ids="{{ command.allowed_role_ids|join(',') }}"
                             >
                                 <div class="command-card-top">
                                     <div>
@@ -290,9 +290,9 @@
     </div>
 
     <script>
-        const guildId = {{ selected_guild.id }};
+        const guildId = "{{ selected_guild.id }}";
         const canManageEditorRoles = {{ 'true' if can_manage_editor_roles else 'false' }};
-        let dashboardEditorRoleIds = {{ dashboard_editor_role_ids|tojson }};
+        let dashboardEditorRoleIds = "{{ dashboard_editor_role_ids|join(',') }}".split(",").filter(Boolean);
         const sectionPanels = Array.from(document.querySelectorAll("[data-section]"));
         const commandCards = Array.from(document.querySelectorAll("[data-command-card]"));
         const moduleButtons = Array.from(document.querySelectorAll("[data-module-filter]"));
@@ -327,11 +327,7 @@
         }
 
         function parseRoleIds(card) {
-            try {
-                return JSON.parse(card.dataset.roleIds || "[]");
-            } catch {
-                return [];
-            }
+            return (card.dataset.roleIds || "").split(",").filter(Boolean);
         }
 
         function updateStats() {
@@ -486,7 +482,7 @@
                 if (!card) return;
                 try {
                     const result = await updateCommandPolicy(button.dataset.commandName, { allowed_role_ids: [] });
-                    card.dataset.roleIds = JSON.stringify(result.policy.allowed_role_ids || []);
+                    card.dataset.roleIds = "";
                     card.querySelector("[data-role-summary]").textContent = "All roles that already pass native Discord checks";
                     showToast(`Cleared role limits for /${button.dataset.commandName}.`);
                     updateStats();
@@ -534,11 +530,11 @@
 
         saveRoleSelectionButton?.addEventListener("click", async () => {
             if (!activeRoleCommand) return;
-            const selectedIds = Array.from(roleChecklist.querySelectorAll("[data-role-checkbox]:checked")).map((checkbox) => Number(checkbox.value));
+            const selectedIds = Array.from(roleChecklist.querySelectorAll("[data-role-checkbox]:checked")).map((checkbox) => checkbox.value);
 
             try {
                 const result = await updateCommandPolicy(activeRoleCommand.dataset.command, { allowed_role_ids: selectedIds });
-                activeRoleCommand.dataset.roleIds = JSON.stringify(result.policy.allowed_role_ids || []);
+                activeRoleCommand.dataset.roleIds = selectedIds.join(",");
                 activeRoleCommand.querySelector("[data-role-summary]").textContent = result.allowed_role_names.length
                     ? result.allowed_role_names.join(", ")
                     : "All roles that already pass native Discord checks";
@@ -554,11 +550,11 @@
 
         saveDashboardAccessSelectionButton?.addEventListener("click", async () => {
             if (!canManageEditorRoles) return;
-            const selectedIds = Array.from(dashboardAccessRoleChecklist?.querySelectorAll("[data-dashboard-access-role-checkbox]:checked") || []).map((checkbox) => Number(checkbox.value));
+            const selectedIds = Array.from(dashboardAccessRoleChecklist?.querySelectorAll("[data-dashboard-access-role-checkbox]:checked") || []).map((checkbox) => checkbox.value);
 
             try {
                 const result = await updateDashboardAccess(selectedIds);
-                dashboardEditorRoleIds = result.editor_role_ids || [];
+                dashboardEditorRoleIds = [...selectedIds];
                 dashboardAccessSummary.textContent = result.editor_role_names.length
                     ? result.editor_role_names.join(", ")
                     : "Only the owner and Manage Server members can edit this dashboard right now.";

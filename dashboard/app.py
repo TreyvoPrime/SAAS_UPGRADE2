@@ -254,6 +254,7 @@ def create_dashboard_app(bot) -> FastAPI:
         guild_id: int,
         *,
         require_editor_role_management: bool = False,
+        require_bot_installed: bool = True,
     ) -> tuple[dict, list[dict]]:
         user = await require_user(request)
         guilds = await load_user_guilds(request)
@@ -264,7 +265,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 guilds = [selected, *[guild for guild in guilds if guild["id"] != guild_id]]
         if selected is None:
             raise HTTPException(status_code=403, detail="Guild access denied")
-        if not selected.get("bot_installed"):
+        if require_bot_installed and not selected.get("bot_installed"):
             raise HTTPException(status_code=409, detail="Bot not installed in guild")
         if require_editor_role_management and not selected.get("can_manage_editor_roles"):
             raise HTTPException(status_code=403, detail="Only the owner or members with Manage Server can edit dashboard roles")
@@ -418,7 +419,9 @@ def create_dashboard_app(bot) -> FastAPI:
     async def dashboard(request: Request, guild_id: int):
         if session_user(request) is None:
             return RedirectResponse(url="/", status_code=302)
-        selected_guild, guilds = await require_guild_access(request, guild_id)
+        selected_guild, guilds = await require_guild_access(request, guild_id, require_bot_installed=False)
+        if not selected_guild.get("bot_installed"):
+            return RedirectResponse(url=selected_guild["install_url"], status_code=302)
         roles = guild_roles(guild_id)
         commands, module_cards = guild_command_rows(guild_id)
         logs = bot.command_logs.list_for_guild(guild_id, 80) if hasattr(bot, "command_logs") else []
