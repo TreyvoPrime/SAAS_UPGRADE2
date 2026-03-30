@@ -4,8 +4,6 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from core.greetings import DEFAULT_LEAVE_MESSAGE, DEFAULT_WELCOME_MESSAGE
-
 
 class WelcomeLeave(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -32,101 +30,78 @@ class WelcomeLeave(commands.Cog):
 
         return True
 
-    def _state_embed(self, guild_id: int) -> discord.Embed:
-        guild = self.bot.get_guild(guild_id)
-        channel_lookup = {channel.id: f"#{channel.name}" for channel in getattr(guild, "text_channels", [])}
-        state = self.bot.greetings.get_dashboard_state(guild_id, channel_lookup)
-
-        embed = discord.Embed(
-            title="Welcome / Leave settings updated",
-            color=discord.Color.blurple(),
-        )
-        embed.add_field(
-            name="Welcome",
-            value=(
-                f"Channel: {state['welcome']['channel_name']}\n"
-                f"Message: {state['welcome']['message']}"
-            ),
-            inline=False,
-        )
-        embed.add_field(
-            name="Leave",
-            value=(
-                f"Channel: {state['leave']['channel_name']}\n"
-                f"Message: {state['leave']['message']}"
-            ),
-            inline=False,
-        )
-        embed.add_field(
-            name="Placeholders",
-            value="`{user}` `{user_name}` `{display_name}` `{server}` `{membercount}`",
-            inline=False,
-        )
-        return embed
+    def _target_channel(
+        self,
+        interaction: discord.Interaction,
+        explicit_channel: discord.TextChannel | None,
+    ) -> discord.TextChannel | None:
+        if explicit_channel is not None:
+            return explicit_channel
+        return interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None
 
     @app_commands.command(
         name="setwelcome",
-        description="Set the welcome message and optionally the welcome channel",
+        description="Choose which channel welcome messages are sent in",
     )
     @app_commands.describe(
-        message="Custom welcome message. Supports {user}, {server}, {membercount}, and more.",
-        channel="Channel to send welcome messages in. Leave blank to keep the current channel.",
+        channel="Channel to send welcome messages in. Leave blank to use the current channel.",
     )
     async def setwelcome(
         self,
         interaction: discord.Interaction,
-        message: str | None = None,
         channel: discord.TextChannel | None = None,
     ) -> None:
         if not await self._require_manager(interaction):
             return
 
         assert interaction.guild is not None
-        existing = self.bot.greetings.store.get_guild(interaction.guild.id)
-        target_channel = channel or interaction.channel if isinstance(interaction.channel, discord.TextChannel) else channel
-        next_channel = target_channel.id if target_channel is not None else existing["welcome_channel_id"]
-        next_message = (message or existing["welcome_message"] or DEFAULT_WELCOME_MESSAGE).strip()
+        target_channel = self._target_channel(interaction, channel)
+        if target_channel is None:
+            await interaction.response.send_message(
+                "Pick a text channel, or run this command inside the channel you want to use for welcome messages.",
+                ephemeral=True,
+            )
+            return
 
         self.bot.greetings.set_welcome(
             interaction.guild.id,
-            channel_id=next_channel,
-            message=next_message,
+            channel_id=target_channel.id,
         )
         await interaction.response.send_message(
-            embed=self._state_embed(interaction.guild.id),
+            f"Welcome messages will be sent in {target_channel.mention}. Edit the welcome text from the dashboard when you want to customize it.",
             ephemeral=True,
         )
 
     @app_commands.command(
         name="setleave",
-        description="Set the leave channel and optionally the leave message",
+        description="Choose which channel leave messages are sent in",
     )
     @app_commands.describe(
-        channel="Channel to send leave messages in. Leave blank to keep the current one.",
-        message="Custom leave message. Supports {user_name}, {server}, and more.",
+        channel="Channel to send leave messages in. Leave blank to use the current channel.",
     )
     async def setleave(
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel | None = None,
-        message: str | None = None,
     ) -> None:
         if not await self._require_manager(interaction):
             return
 
         assert interaction.guild is not None
-        existing = self.bot.greetings.store.get_guild(interaction.guild.id)
-        target_channel = channel or interaction.channel if isinstance(interaction.channel, discord.TextChannel) else channel
-        next_channel = target_channel.id if target_channel is not None else existing["leave_channel_id"]
-        next_message = (message or existing["leave_message"] or DEFAULT_LEAVE_MESSAGE).strip()
+        target_channel = self._target_channel(interaction, channel)
+        if target_channel is None:
+            await interaction.response.send_message(
+                "Pick a text channel, or run this command inside the channel you want to use for leave messages.",
+                ephemeral=True,
+            )
+            return
 
         self.bot.greetings.set_leave(
             interaction.guild.id,
-            channel_id=next_channel,
-            message=next_message,
+            channel_id=target_channel.id,
         )
         await interaction.response.send_message(
-            embed=self._state_embed(interaction.guild.id),
+            f"Leave messages will be sent in {target_channel.mention}.",
             ephemeral=True,
         )
 
