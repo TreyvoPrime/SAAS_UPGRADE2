@@ -25,9 +25,13 @@ class ModerationConfirmView(discord.ui.View):
             return
 
         self.disable_all_items()
-        await interaction.response.defer()
+        await interaction.response.edit_message(content="Finishing that action...", view=self)
         try:
             result = await self.action()
+        except discord.Forbidden:
+            result = "Discord blocked that moderation action."
+        except discord.HTTPException:
+            result = "I couldn't complete that moderation action right now."
         except Exception:
             result = "Something went wrong while completing that action."
         await interaction.edit_original_response(content=result, view=None)
@@ -44,6 +48,11 @@ class ModerationConfirmView(discord.ui.View):
 class ServerDefense(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    @staticmethod
+    def _moderation_embed(title: str, description: str, *, color: discord.Color) -> discord.Embed:
+        embed = discord.Embed(title=title, description=description, color=color)
+        return embed
 
     linkblock = app_commands.Group(
         name="linkblock",
@@ -277,6 +286,25 @@ class ServerDefense(commands.Cog):
             return False
 
         return True
+
+    async def _send_warning_dm(
+        self,
+        member: discord.Member,
+        guild_name: str,
+        reason: str,
+    ) -> bool:
+        embed = self._moderation_embed(
+            "You received a warning",
+            f"You were warned in **{guild_name}**.",
+            color=discord.Color.orange(),
+        )
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.set_footer(text="Only you can see this message.")
+        try:
+            await member.send(embed=embed)
+            return True
+        except Exception:
+            return False
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -561,15 +589,13 @@ class ServerDefense(commands.Cog):
                 reason=warning_reason,
             )
             warning_count = self.bot.warning_store.warning_count(interaction.guild.id, member.id)
-            try:
-                await member.send(f"You were warned in {interaction.guild.name}: {warning_reason}")
-            except Exception:
-                pass
-            return f"{member.mention} has been warned. Total warnings: {warning_count}."
+            dm_sent = await self._send_warning_dm(member, interaction.guild.name, warning_reason)
+            status_line = "They received a private copy of the warning." if dm_sent else "I couldn't deliver the private warning message, but the warning was still saved."
+            return f"{member.mention} has been warned.\nReason: {warning_reason}\nTotal warnings: {warning_count}\n{status_line}"
 
         await self._confirm_or_run(
             interaction,
-            f"Warn {member.mention}?\nReason: {warning_reason}",
+            f"Send a warning to {member.mention}?\nReason: {warning_reason}",
             action,
         )
 

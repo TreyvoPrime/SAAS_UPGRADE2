@@ -100,12 +100,12 @@
                 <section class="surface command-settings-panel defense-settings-panel">
                     <div>
                         <div class="eyebrow">ServerGuard</div>
-                        <h3>Purge limit</h3>
-                        <p>Choose how many recent messages `/purge` can remove at once for this server. Owners and dashboard editors can change it here. Free tier supports up to {{ purge_settings.max_limit }} right now, with room to expand to {{ purge_settings.premium_limit }} later.</p>
+                        <h3>How much cleanup staff can do at once</h3>
+                        <p>Set the biggest cleanup pass moderators can run in one go. Keep it tighter for careful cleanup, or raise it when your team needs to clear larger waves quickly.</p>
                     </div>
                     <div class="command-settings-actions">
                         <label class="search-shell compact-setting-shell">
-                            <span>Messages per purge</span>
+                            <span>Maximum messages per cleanup</span>
                             <input
                                 id="purge-limit-input"
                                 class="search-input"
@@ -116,16 +116,16 @@
                                 value="{{ purge_settings.limit }}"
                             >
                         </label>
-                        <div class="dashboard-access-summary" id="purge-limit-summary">Current limit: {{ purge_settings.limit }} messages</div>
-                        <button type="button" class="primary-button" id="save-purge-limit">Save purge limit</button>
+                        <div class="dashboard-access-summary" id="purge-limit-summary">Staff can currently clear up to {{ purge_settings.limit }} messages at once.</div>
+                        <button type="button" class="primary-button" id="save-purge-limit">Save cleanup limit</button>
                     </div>
                 </section>
 
                 <section class="surface command-settings-panel defense-settings-panel">
                     <div>
                         <div class="eyebrow">Moderation</div>
-                        <h3>Action confirmations</h3>
-                        <p>Choose whether `/warn`, `/timeout`, `/kick`, and `/ban` ask for confirmation first, and set the default timeout length staff should use when they do not enter one manually.</p>
+                        <h3>How moderation actions should behave</h3>
+                        <p>Decide whether staff should get a final safety check before major actions go through, and choose the timeout length the team falls back to when they want the quick default.</p>
                     </div>
                     <div class="command-settings-actions">
                         <label class="toggle moderation-toggle">
@@ -134,10 +134,10 @@
                                 type="checkbox"
                                 {% if moderation_settings.confirmation_enabled %}checked{% endif %}
                             >
-                            <span>Require confirmation</span>
+                            <span>Ask for a final check before warnings, timeouts, kicks, and bans</span>
                         </label>
                         <label class="search-shell compact-setting-shell">
-                            <span>Default timeout length (minutes)</span>
+                            <span>Default timeout length in minutes</span>
                             <input
                                 id="moderation-timeout-input"
                                 class="search-input"
@@ -149,9 +149,9 @@
                             >
                         </label>
                         <div class="dashboard-access-summary" id="moderation-settings-summary">
-                            {% if moderation_settings.confirmation_enabled %}Confirmation is on{% else %}Confirmation is off{% endif %}. Default timeout: {{ moderation_settings.default_timeout_minutes }} minutes
+                            {% if moderation_settings.confirmation_enabled %}Staff will see a final check before actions go through.{% else %}Actions will go through right away without the extra check.{% endif %} Default timeout: {{ moderation_settings.default_timeout_minutes }} minutes.
                         </div>
-                        <button type="button" class="primary-button" id="save-moderation-settings">Save moderation settings</button>
+                        <button type="button" class="primary-button" id="save-moderation-settings">Save moderation flow</button>
                     </div>
                 </section>
 
@@ -1200,9 +1200,9 @@
                     purgeLimitInput.value = String(result.limit);
                 }
                 if (purgeLimitSummary) {
-                    purgeLimitSummary.textContent = `Current limit: ${result.limit} messages`;
+                    purgeLimitSummary.textContent = `Staff can currently clear up to ${result.limit} messages at once.`;
                 }
-                showToast(`Purge limit set to ${result.limit} messages.`);
+                showToast(`Cleanup limit saved at ${result.limit} messages.`);
             } catch {}
         });
 
@@ -1225,9 +1225,9 @@
                     moderationTimeoutInput.value = String(result.default_timeout_minutes);
                 }
                 if (moderationSettingsSummary) {
-                    moderationSettingsSummary.textContent = `${result.confirmation_enabled ? "Confirmation is on" : "Confirmation is off"}. Default timeout: ${result.default_timeout_minutes} minutes`;
+                    moderationSettingsSummary.textContent = `${result.confirmation_enabled ? "Staff will see a final check before actions go through." : "Actions will go through right away without the extra check."} Default timeout: ${result.default_timeout_minutes} minutes.`;
                 }
-                showToast("Moderation settings updated.");
+                showToast("Moderation flow updated.");
             } catch {}
         });
 
