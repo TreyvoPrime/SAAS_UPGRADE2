@@ -592,6 +592,30 @@ def create_dashboard_app(bot) -> FastAPI:
             "lockdown_role_count": 0,
         }
 
+    def case_dashboard_summary(guild_id: int) -> dict:
+        case_store = getattr(bot, "case_store", None)
+        if case_store is None:
+            return {"cases": [], "open_count": 0}
+
+        cases = case_store.list_cases(guild_id, 30)
+        serialized = []
+        for case in cases:
+            notes = case.get("notes", [])
+            serialized.append(
+                {
+                    "case_id": case["case_id"],
+                    "action": case["action"],
+                    "target_user_name": case["target_user_name"],
+                    "moderator_name": case["moderator_name"],
+                    "reason": case["reason"],
+                    "created_at": case["created_at"],
+                    "duration_minutes": case.get("duration_minutes"),
+                    "note_count": len(notes),
+                    "notes": notes[-5:],
+                }
+            )
+        return {"cases": serialized, "open_count": len(serialized)}
+
     def _slugify(value: str) -> str:
         return "".join(character.lower() if character.isalnum() else "-" for character in value).strip("-")
 
@@ -649,6 +673,7 @@ def create_dashboard_app(bot) -> FastAPI:
         defense_summary = defense_dashboard_summary(guild_id)
         greetings_summary = greetings_dashboard_summary(guild_id)
         support_summary = support_dashboard_summary(guild_id)
+        case_summary = case_dashboard_summary(guild_id)
         purge_settings = purge_settings_summary(guild_id)
         moderation_settings = moderation_settings_summary(guild_id)
 
@@ -684,6 +709,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
                 "greetings_summary": greetings_summary,
                 "support_summary": support_summary,
+                "case_summary": case_summary,
                 "purge_settings": purge_settings,
                 "moderation_settings": moderation_settings,
                 "current_view": current_view,

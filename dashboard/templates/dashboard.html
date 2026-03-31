@@ -228,6 +228,50 @@
                     </article>
                     {% endfor %}
                 </div>
+
+                <section class="surface command-settings-panel defense-settings-panel case-viewer-panel">
+                    <div>
+                        <div class="eyebrow">Moderation Cases</div>
+                        <h3>Recent case history</h3>
+                        <p>Every warn, timeout, kick, and ban now creates a case ID. Review the latest actions, reasons, and notes here without leaving ServerGuard.</p>
+                    </div>
+                    <div class="dashboard-access-summary">Showing {{ case_summary.open_count }} recent cases for this server.</div>
+                </section>
+
+                <div class="case-grid">
+                    {% for case in case_summary.cases %}
+                    <article class="command-card case-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Case #{{ case.case_id }}</span>
+                            <span class="module-chip">{{ case.action|title }}</span>
+                        </div>
+                        <div class="command-card-top">
+                            <h4>{{ case.target_user_name }}</h4>
+                            <span class="module-chip">{{ case.created_at }}</span>
+                        </div>
+                        <p><strong>Moderator:</strong> {{ case.moderator_name }}</p>
+                        <p><strong>Reason:</strong> {{ case.reason }}</p>
+                        {% if case.duration_minutes %}
+                        <p><strong>Duration:</strong> {{ case.duration_minutes }} minutes</p>
+                        {% endif %}
+                        <div class="role-summary">
+                            {% if case.notes %}
+                                {% for note in case.notes %}
+                                <div class="case-note-line">[{{ note.type }}] {{ note.actor_name }}: {{ note.body }}</div>
+                                {% endfor %}
+                            {% else %}
+                                No notes on this case yet.
+                            {% endif %}
+                        </div>
+                    </article>
+                    {% endfor %}
+                    {% if not case_summary.cases %}
+                    <div class="notice-card compact">
+                        <strong>No moderation cases yet</strong>
+                        <p>Warns, timeouts, kicks, and bans will start creating case IDs here once staff use them.</p>
+                    </div>
+                    {% endif %}
+                </div>
             </section>
             {% endif %}
 

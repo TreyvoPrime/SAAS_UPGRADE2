@@ -557,6 +557,27 @@ button {
     gap: 16px;
 }
 
+.case-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.case-viewer-panel {
+    margin-top: 6px;
+}
+
+.case-card {
+    display: grid;
+    gap: 12px;
+}
+
+.case-note-line {
+    margin-top: 6px;
+    color: var(--muted-strong);
+    overflow-wrap: anywhere;
+}
+
 .defense-card,
 .greeting-card {
     display: grid;

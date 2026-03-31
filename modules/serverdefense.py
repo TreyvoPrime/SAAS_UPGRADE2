@@ -258,6 +258,29 @@ class ServerDefense(commands.Cog):
     def _moderation_settings(self, guild_id: int) -> dict:
         return self.bot.command_controls.get_moderation_settings(guild_id)
 
+    def _create_case(
+        self,
+        guild_id: int,
+        *,
+        action: str,
+        target: discord.Member,
+        moderator: discord.Member,
+        reason: str,
+        duration_minutes: int | None = None,
+        metadata: dict | None = None,
+    ) -> dict:
+        return self.bot.case_store.create_case(
+            guild_id,
+            action=action,
+            target_user_id=target.id,
+            target_user_name=str(target),
+            moderator_id=moderator.id,
+            moderator_name=str(moderator),
+            reason=reason,
+            duration_minutes=duration_minutes,
+            metadata=metadata,
+        )
+
     async def _confirm_or_run(
         self,
         interaction: discord.Interaction,
@@ -346,6 +369,11 @@ class ServerDefense(commands.Cog):
             return True
         except Exception:
             return False
+
+    case = app_commands.Group(
+        name="case",
+        description="View moderation cases and add internal notes",
+    )
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -623,6 +651,13 @@ class ServerDefense(commands.Cog):
         warning_reason = (reason or "No reason provided.").strip()
 
         async def action() -> str:
+            case = self._create_case(
+                interaction.guild.id,
+                action="warn",
+                target=member,
+                moderator=moderator,
+                reason=warning_reason,
+            )
             self.bot.warning_store.add_warning(
                 interaction.guild.id,
                 member.id,
@@ -638,13 +673,14 @@ class ServerDefense(commands.Cog):
                 user_name=str(interaction.user),
                 channel_name=getattr(interaction.channel, "name", None),
                 fields=[
+                    ("Case ID", f"#{case['case_id']}", True),
                     ("Reason", warning_reason, False),
                     ("Warning Count", str(warning_count), True),
                     ("DM Sent", "Yes" if dm_sent else "No", True),
                 ],
             )
             status_line = "They received a private copy of the warning." if dm_sent else "I couldn't deliver the private warning message, but the warning was still saved."
-            return f"{member.mention} has been warned.\nReason: {warning_reason}\nTotal warnings: {warning_count}\n{status_line}"
+            return f"{member.mention} has been warned.\nCase ID: #{case['case_id']}\nReason: {warning_reason}\nTotal warnings: {warning_count}\n{status_line}"
 
         await self._confirm_or_run(
             interaction,
@@ -686,6 +722,14 @@ class ServerDefense(commands.Cog):
                 discord.utils.utcnow() + timedelta(minutes=timeout_minutes),
                 reason=f"{interaction.user}: {timeout_reason}",
             )
+            case = self._create_case(
+                interaction.guild.id,
+                action="timeout",
+                target=member,
+                moderator=moderator,
+                reason=timeout_reason,
+                duration_minutes=timeout_minutes,
+            )
             await self._log_moderation_event(
                 interaction.guild,
                 title="Member Timed Out",
@@ -693,11 +737,12 @@ class ServerDefense(commands.Cog):
                 user_name=str(interaction.user),
                 channel_name=getattr(interaction.channel, "name", None),
                 fields=[
+                    ("Case ID", f"#{case['case_id']}", True),
                     ("Duration", f"{timeout_minutes} minutes", True),
                     ("Reason", timeout_reason, False),
                 ],
             )
-            return f"{member.mention} has been timed out for {timeout_minutes} minutes."
+            return f"{member.mention} has been timed out for {timeout_minutes} minutes.\nCase ID: #{case['case_id']}"
 
         await self._confirm_or_run(
             interaction,
@@ -737,15 +782,25 @@ class ServerDefense(commands.Cog):
             except Exception:
                 pass
             await member.kick(reason=f"{interaction.user}: {kick_reason}")
+            case = self._create_case(
+                interaction.guild.id,
+                action="kick",
+                target=member,
+                moderator=moderator,
+                reason=kick_reason,
+            )
             await self._log_moderation_event(
                 interaction.guild,
                 title="Member Kicked",
                 description=f"{member} was kicked from the server.",
                 user_name=str(interaction.user),
                 channel_name=getattr(interaction.channel, "name", None),
-                fields=[("Reason", kick_reason, False)],
+                fields=[
+                    ("Case ID", f"#{case['case_id']}", True),
+                    ("Reason", kick_reason, False),
+                ],
             )
-            return f"{member} has been kicked."
+            return f"{member} has been kicked.\nCase ID: #{case['case_id']}"
 
         await self._confirm_or_run(
             interaction,
@@ -794,6 +849,14 @@ class ServerDefense(commands.Cog):
                 reason=f"{interaction.user}: {ban_reason}",
                 delete_message_days=int(delete_message_days),
             )
+            case = self._create_case(
+                interaction.guild.id,
+                action="ban",
+                target=member,
+                moderator=moderator,
+                reason=ban_reason,
+                metadata={"delete_message_days": int(delete_message_days)},
+            )
             await self._log_moderation_event(
                 interaction.guild,
                 title="Member Banned",
@@ -801,11 +864,12 @@ class ServerDefense(commands.Cog):
                 user_name=str(interaction.user),
                 channel_name=getattr(interaction.channel, "name", None),
                 fields=[
+                    ("Case ID", f"#{case['case_id']}", True),
                     ("Reason", ban_reason, False),
                     ("Delete Message Days", str(int(delete_message_days)), True),
                 ],
             )
-            return f"{member} has been banned."
+            return f"{member} has been banned.\nCase ID: #{case['case_id']}"
 
         await self._confirm_or_run(
             interaction,
@@ -872,6 +936,74 @@ class ServerDefense(commands.Cog):
             inline=False,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @case.command(name="view", description="View a moderation case by its case ID")
+    async def case_view(
+        self,
+        interaction: discord.Interaction,
+        case_id: app_commands.Range[int, 1, 1000000],
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        case = self.bot.case_store.get_case(interaction.guild.id, int(case_id))
+        if case is None:
+            await interaction.response.send_message("I couldn't find that case in this server.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title=f"Case #{case['case_id']}",
+            color=discord.Color.blurple(),
+            description=f"{case['action'].title()} case for `{case['target_user_name']}`",
+        )
+        embed.add_field(name="Moderator", value=case["moderator_name"], inline=True)
+        embed.add_field(name="Target", value=case["target_user_name"], inline=True)
+        embed.add_field(name="Created", value=case["created_at"], inline=False)
+        embed.add_field(name="Reason", value=case["reason"], inline=False)
+        if case.get("duration_minutes"):
+            embed.add_field(name="Duration", value=f"{case['duration_minutes']} minutes", inline=True)
+
+        notes = case.get("notes", [])
+        if notes:
+            preview = []
+            for note in notes[-5:]:
+                preview.append(f"[{note['type']}] {note['actor_name']}: {note['body']}")
+            embed.add_field(name="History", value="\n".join(preview)[:1024], inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @case.command(name="note", description="Add an internal note to a moderation case")
+    async def case_note(
+        self,
+        interaction: discord.Interaction,
+        case_id: app_commands.Range[int, 1, 1000000],
+        note: app_commands.Range[str, 3, 500],
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        updated = self.bot.case_store.add_note(
+            interaction.guild.id,
+            int(case_id),
+            actor_id=interaction.user.id,
+            actor_name=str(interaction.user),
+            note=note,
+        )
+        if updated is None:
+            await interaction.response.send_message("I couldn't find that case in this server.", ephemeral=True)
+            return
+
+        await self._log_moderation_event(
+            interaction.guild,
+            title="Case Note Added",
+            description=f"Added a note to case #{case_id}.",
+            user_name=str(interaction.user),
+            channel_name=getattr(interaction.channel, "name", None),
+            fields=[("Note", note, False)],
+        )
+        await interaction.response.send_message(f"Added a note to case #{case_id}.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
