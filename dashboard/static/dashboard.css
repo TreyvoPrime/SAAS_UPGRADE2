@@ -537,7 +537,8 @@ button {
 .greetings-topline p {
     margin: 10px 0 0;
     color: var(--muted);
-    max-width: 680px;
+    max-width: 56ch;
+    text-wrap: balance;
 }
 
 .greetings-topline {
@@ -576,15 +577,18 @@ button {
 .threat-stage-copy h3,
 .threat-stage-meter h3 {
     margin: 0;
-    font-size: clamp(1.4rem, 2vw, 1.9rem);
+    font-size: clamp(1.28rem, 1rem + 1vw, 1.88rem);
     letter-spacing: -0.04em;
+    line-height: 1.05;
+    text-wrap: balance;
 }
 
 .threat-stage-copy p {
     margin: 0;
     color: var(--muted);
-    line-height: 1.6;
-    max-width: 42ch;
+    line-height: 1.62;
+    max-width: 44ch;
+    text-wrap: pretty;
 }
 
 .threat-scoreline {
@@ -595,8 +599,10 @@ button {
 }
 
 .threat-scoreline strong {
-    font-size: clamp(1.5rem, 2.4vw, 2.35rem);
+    font-size: clamp(1.5rem, 1.05rem + 1.5vw, 2.35rem);
     letter-spacing: -0.05em;
+    line-height: 1;
+    text-wrap: balance;
 }
 
 .threat-scoreline span {
@@ -714,6 +720,7 @@ button {
     margin: 0;
     color: var(--muted);
     line-height: 1.55;
+    overflow-wrap: anywhere;
 }
 
 .threat-empty {

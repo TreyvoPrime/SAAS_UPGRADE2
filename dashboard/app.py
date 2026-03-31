@@ -586,7 +586,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 },
                 {
                     "name": "antiraid",
-                    "title": "Anti-Raid",
+                    "title": "Guardian",
                     "tag": "Threat scoring",
                     "description": "Scores suspicious bursts, fresh-account joins, repeated content, and stacked defenses before a raid fully lands.",
                     "enabled": False,
@@ -610,7 +610,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "level_key": "normal",
                 "level_label": "Offline",
                 "progress_percent": 0,
-                "status_copy": "Turn Anti-Raid on to start watching for coordinated joins, spam bursts, and stacked guard triggers.",
+                "status_copy": "Turn Guardian on to start watching for coordinated joins, spam bursts, and stacked guard triggers.",
                 "recent_signals": [],
                 "recent_actions": [],
                 "raid_mode_active": False,

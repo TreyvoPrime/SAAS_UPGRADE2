@@ -88,8 +88,8 @@
                 <div class="workspace-topline defense-topline">
                     <div>
                         <div class="eyebrow">ServerGuard</div>
-                        <h3>Rapid threat controls</h3>
-                        <p>Watch the live threat score, see which signals are stacking, then arm or tune protections from one tighter response surface.</p>
+                        <h3>Response controls</h3>
+                        <p>Arm protections quickly, tune timers without digging, and decide who can still talk during a lockdown from one cleaner response surface.</p>
                     </div>
                     <div class="section-summary">
                         <span data-defense-summary="active">{{ defense_summary.active_count }} active</span>
@@ -98,60 +98,6 @@
                         <span data-defense-summary="roles">{{ defense_summary.lockdown_role_count }} lockdown roles</span>
                     </div>
                 </div>
-
-                <section class="surface threat-stage">
-                    <div class="threat-stage-copy">
-                        <div class="eyebrow">Threat level</div>
-                        <h3>Live anti-raid pressure</h3>
-                        <p id="threat-status-copy">{{ defense_summary.threat.status_copy }}</p>
-                    </div>
-                    <div class="threat-stage-meter">
-                        <div class="threat-scoreline">
-                            <strong id="threat-level-label">{{ defense_summary.threat.level_label }}</strong>
-                            <span id="threat-score-display">{{ defense_summary.threat.score_display }}</span>
-                        </div>
-                        <div class="threat-bar-shell" aria-label="Threat progression">
-                            <div class="threat-bar-track">
-                                <div class="threat-bar-fill is-{{ defense_summary.threat.level_key }}" id="threat-bar-fill" style="width: {{ defense_summary.threat.progress_percent }}%;"></div>
-                            </div>
-                            <div class="threat-bar-markers">
-                                {% for band in defense_summary.threat.bands %}
-                                <span class="threat-marker {% if band.active %}is-active{% elif band.reached %}is-reached{% endif %}">
-                                    <strong>{{ band.label }}</strong>
-                                    <em>{{ band.range }}</em>
-                                </span>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="threat-stage-side">
-                        <div class="threat-chip-row" id="threat-action-strip">
-                            {% if defense_summary.threat.recent_actions %}
-                                {% for action in defense_summary.threat.recent_actions %}
-                                <span class="module-chip">{{ action }}</span>
-                                {% endfor %}
-                            {% else %}
-                                <span class="module-chip">{{ "Anti-Raid live" if defense_summary.threat.enabled else "Anti-Raid offline" }}</span>
-                            {% endif %}
-                        </div>
-                        <div class="threat-signal-list" id="threat-signal-list">
-                            {% if defense_summary.threat.recent_signals %}
-                                {% for signal in defense_summary.threat.recent_signals %}
-                                <article class="threat-signal-row">
-                                    <strong>{{ signal.title }}</strong>
-                                    <span>+{{ signal.points }}</span>
-                                    <p>{{ signal.detail }}</p>
-                                </article>
-                                {% endfor %}
-                            {% else %}
-                                <div class="notice-card compact threat-empty">
-                                    <strong>No raid pressure yet</strong>
-                                    <p>ServerGuard will start listing the signals that move the score once Anti-Raid is watching the server.</p>
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </section>
 
                 <section class="surface command-settings-panel defense-settings-panel">
                     <div>
@@ -283,6 +229,60 @@
                     </article>
                     {% endfor %}
                 </div>
+
+                <section class="surface threat-stage">
+                    <div class="threat-stage-copy">
+                        <div class="eyebrow">Guardian</div>
+                        <h3>Live threat watch</h3>
+                        <p id="threat-status-copy">{{ defense_summary.threat.status_copy }}</p>
+                    </div>
+                    <div class="threat-stage-meter">
+                        <div class="threat-scoreline">
+                            <strong id="threat-level-label">{{ defense_summary.threat.level_label }}</strong>
+                            <span id="threat-score-display">{{ defense_summary.threat.score_display }}</span>
+                        </div>
+                        <div class="threat-bar-shell" aria-label="Threat progression">
+                            <div class="threat-bar-track">
+                                <div class="threat-bar-fill is-{{ defense_summary.threat.level_key }}" id="threat-bar-fill" style="width: {{ defense_summary.threat.progress_percent }}%;"></div>
+                            </div>
+                            <div class="threat-bar-markers">
+                                {% for band in defense_summary.threat.bands %}
+                                <span class="threat-marker {% if band.active %}is-active{% elif band.reached %}is-reached{% endif %}">
+                                    <strong>{{ band.label }}</strong>
+                                    <em>{{ band.range }}</em>
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="threat-stage-side">
+                        <div class="threat-chip-row" id="threat-action-strip">
+                            {% if defense_summary.threat.recent_actions %}
+                                {% for action in defense_summary.threat.recent_actions %}
+                                <span class="module-chip">{{ action }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="module-chip">{{ "Guardian live" if defense_summary.threat.enabled else "Guardian offline" }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="threat-signal-list" id="threat-signal-list">
+                            {% if defense_summary.threat.recent_signals %}
+                                {% for signal in defense_summary.threat.recent_signals %}
+                                <article class="threat-signal-row">
+                                    <strong>{{ signal.title }}</strong>
+                                    <span>+{{ signal.points }}</span>
+                                    <p>{{ signal.detail }}</p>
+                                </article>
+                                {% endfor %}
+                            {% else %}
+                                <div class="notice-card compact threat-empty">
+                                    <strong>No threat pressure yet</strong>
+                                    <p>ServerGuard will start listing the signals that move the score once Guardian is watching the server.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </section>
 
                 <section class="surface command-settings-panel defense-settings-panel case-viewer-panel">
                     <div>
@@ -1121,7 +1121,7 @@
                 const actions = Array.isArray(threat.recent_actions) ? threat.recent_actions : [];
                 threatActionStrip.innerHTML = actions.length
                     ? actions.map((action) => `<span class="module-chip">${escapeHtml(action)}</span>`).join("")
-                    : `<span class="module-chip">${threat.enabled ? "Anti-Raid live" : "Anti-Raid offline"}</span>`;
+                    : `<span class="module-chip">${threat.enabled ? "Guardian live" : "Guardian offline"}</span>`;
             }
             if (threatSignalList) {
                 const signals = Array.isArray(threat.recent_signals) ? threat.recent_signals : [];
@@ -1135,8 +1135,8 @@
                     `).join("")
                     : `
                         <div class="notice-card compact threat-empty">
-                            <strong>No raid pressure yet</strong>
-                            <p>ServerGuard will start listing the signals that move the score once Anti-Raid is watching the server.</p>
+                            <strong>No threat pressure yet</strong>
+                            <p>ServerGuard will start listing the signals that move the score once Guardian is watching the server.</p>
                         </div>
                     `;
             }

@@ -387,7 +387,7 @@ class ServerDefenseManager:
                     guild_id,
                     feature,
                     duration_minutes=30,
-                    reason="ServerGuard Anti-Raid strict response",
+                    reason="ServerGuard Guardian strict response",
                 ):
                     armed.append(feature.replace("mentionguard", "mention guard"))
             action_notes.appendleft("Strict filtering engaged")
@@ -405,7 +405,7 @@ class ServerDefenseManager:
                 guild_id,
                 "antijoin",
                 duration_minutes=30,
-                reason="ServerGuard Anti-Raid high threat response",
+                    reason="ServerGuard Guardian high threat response",
             )
             action_notes.appendleft("Raid mode response active")
             await self._emit_threat_event(
@@ -482,15 +482,15 @@ class ServerDefenseManager:
             level_key, level_label = ("normal", "Offline")
 
         if level_key == "high":
-            status_copy = "Raid mode is active. Anti-join should be live and staff should be ready to hard-lock channels if pressure continues."
+            status_copy = "Guardian has moved into raid response mode. Anti-join should be live and staff should be ready to hard-lock channels if pressure continues."
         elif level_key == "major":
             status_copy = "Coordinated activity is stacking. Strict filtering should already be tightening links, invites, spam, and mention abuse."
         elif level_key == "moderate":
             status_copy = "ServerGuard is watching a suspicious pattern. Staff should keep an eye on joins, pings, and repeated content."
         elif self._is_active(antiraid_state):
-            status_copy = "Anti-raid is live and watching for bursts, coordination, and weak-account patterns."
+            status_copy = "Guardian is live and watching for bursts, coordination, and weak-account patterns."
         else:
-            status_copy = "Turn Anti-Raid on when you want ServerGuard to watch for coordinated joins, spam waves, and escalating threat signals."
+            status_copy = "Turn Guardian on when you want ServerGuard to watch for coordinated joins, spam waves, and escalating threat signals."
 
         recent_signals = []
         for signal in list(threat_state.get("recent_signals", [])):
@@ -633,7 +633,7 @@ class ServerDefenseManager:
             ),
             make_card(
                 "antiraid",
-                "Anti-Raid",
+                "Guardian",
                 "Threat scoring",
                 "Scores suspicious bursts, fresh-account waves, repeated content, and stacked guard triggers so ServerGuard can escalate earlier.",
                 rate_label="Live score + automatic response ladder",
@@ -1032,14 +1032,14 @@ class ServerDefenseManager:
         if self._is_active(linkblock) and self._contains_link(content) and not self._contains_invite(content):
             await self._delete_message(message, "Link Block prevented that message.")
             if antiraid_active:
-                await self._record_module_trigger(message.guild, "linkblock", "Link Block removed a message while anti-raid was watching the server.")
+                await self._record_module_trigger(message.guild, "linkblock", "Link Block removed a message while Guardian was watching the server.")
             return True
 
         inviteblock = self.store.get_feature(guild_id, "inviteblock")
         if self._is_active(inviteblock) and self._contains_invite(content):
             await self._delete_message(message, "Invite Block prevented that message.")
             if antiraid_active:
-                await self._record_module_trigger(message.guild, "inviteblock", "Invite Block removed a Discord invite while anti-raid was watching the server.")
+                await self._record_module_trigger(message.guild, "inviteblock", "Invite Block removed a Discord invite while Guardian was watching the server.")
             return True
 
         mentionguard = self.store.get_feature(guild_id, "mentionguard")
