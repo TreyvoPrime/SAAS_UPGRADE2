@@ -18,13 +18,18 @@ class ModerationConfirmView(discord.ui.View):
         self.actor_id = actor_id
         self.action = action
 
+    def _disable_buttons(self) -> None:
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.actor_id:
             await interaction.response.send_message("This confirmation is not for you.", ephemeral=True)
             return
 
-        self.disable_all_items()
+        self._disable_buttons()
         try:
             await interaction.response.edit_message(
                 content="Working on that now...",
@@ -51,7 +56,7 @@ class ModerationConfirmView(discord.ui.View):
         if interaction.user.id != self.actor_id:
             await interaction.response.send_message("This confirmation is not for you.", ephemeral=True)
             return
-        self.disable_all_items()
+        self._disable_buttons()
         try:
             await interaction.response.edit_message(content="Action canceled.", view=None)
         except Exception:
