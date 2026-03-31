@@ -72,6 +72,29 @@ class ServerDefense(commands.Cog):
         embed = discord.Embed(title=title, description=description, color=color)
         return embed
 
+    async def _log_moderation_event(
+        self,
+        guild: discord.Guild,
+        *,
+        title: str,
+        description: str,
+        user_name: str | None = None,
+        channel_name: str | None = None,
+        fields: list[tuple[str, str, bool]] | None = None,
+    ) -> None:
+        audit_cog = self.bot.get_cog("AuditLogCog")
+        if audit_cog is not None and hasattr(audit_cog, "emit_external_event"):
+            await audit_cog.emit_external_event(
+                guild.id,
+                title=title,
+                description=description,
+                status="event",
+                color=discord.Color.orange(),
+                user_name=user_name,
+                channel_name=channel_name,
+                fields=fields,
+            )
+
     linkblock = app_commands.Group(
         name="linkblock",
         description="Manage link blocking for this server",
@@ -608,6 +631,18 @@ class ServerDefense(commands.Cog):
             )
             warning_count = self.bot.warning_store.warning_count(interaction.guild.id, member.id)
             dm_sent = await self._send_warning_dm(member, interaction.guild.name, warning_reason)
+            await self._log_moderation_event(
+                interaction.guild,
+                title="Member Warned",
+                description=f"{member.mention} was warned.",
+                user_name=str(interaction.user),
+                channel_name=getattr(interaction.channel, "name", None),
+                fields=[
+                    ("Reason", warning_reason, False),
+                    ("Warning Count", str(warning_count), True),
+                    ("DM Sent", "Yes" if dm_sent else "No", True),
+                ],
+            )
             status_line = "They received a private copy of the warning." if dm_sent else "I couldn't deliver the private warning message, but the warning was still saved."
             return f"{member.mention} has been warned.\nReason: {warning_reason}\nTotal warnings: {warning_count}\n{status_line}"
 
@@ -651,6 +686,17 @@ class ServerDefense(commands.Cog):
                 discord.utils.utcnow() + timedelta(minutes=timeout_minutes),
                 reason=f"{interaction.user}: {timeout_reason}",
             )
+            await self._log_moderation_event(
+                interaction.guild,
+                title="Member Timed Out",
+                description=f"{member.mention} was timed out.",
+                user_name=str(interaction.user),
+                channel_name=getattr(interaction.channel, "name", None),
+                fields=[
+                    ("Duration", f"{timeout_minutes} minutes", True),
+                    ("Reason", timeout_reason, False),
+                ],
+            )
             return f"{member.mention} has been timed out for {timeout_minutes} minutes."
 
         await self._confirm_or_run(
@@ -691,6 +737,14 @@ class ServerDefense(commands.Cog):
             except Exception:
                 pass
             await member.kick(reason=f"{interaction.user}: {kick_reason}")
+            await self._log_moderation_event(
+                interaction.guild,
+                title="Member Kicked",
+                description=f"{member} was kicked from the server.",
+                user_name=str(interaction.user),
+                channel_name=getattr(interaction.channel, "name", None),
+                fields=[("Reason", kick_reason, False)],
+            )
             return f"{member} has been kicked."
 
         await self._confirm_or_run(
@@ -739,6 +793,17 @@ class ServerDefense(commands.Cog):
                 member,
                 reason=f"{interaction.user}: {ban_reason}",
                 delete_message_days=int(delete_message_days),
+            )
+            await self._log_moderation_event(
+                interaction.guild,
+                title="Member Banned",
+                description=f"{member} was banned from the server.",
+                user_name=str(interaction.user),
+                channel_name=getattr(interaction.channel, "name", None),
+                fields=[
+                    ("Reason", ban_reason, False),
+                    ("Delete Message Days", str(int(delete_message_days)), True),
+                ],
             )
             return f"{member} has been banned."
 

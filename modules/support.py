@@ -68,6 +68,15 @@ class SupportTicketView(discord.ui.View):
             category = interaction.channel.category
             await interaction.channel.delete(reason=f"Support ticket closed by {interaction.user}")
             support_cog = self.bot.get_cog("Support")
+            if support_cog is not None:
+                await support_cog._log_support_event(
+                    interaction.guild,
+                    title="Support Ticket Closed",
+                    description=f"{interaction.channel.name} was closed.",
+                    user_name=str(interaction.user),
+                    channel_name=interaction.channel.name,
+                    fields=[("Closed By", str(interaction.user), False)],
+                )
             if support_cog is not None and category is not None:
                 await support_cog._delete_empty_ticket_category(interaction.guild)
         except Exception:
@@ -77,6 +86,29 @@ class SupportTicketView(discord.ui.View):
 class Support(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    async def _log_support_event(
+        self,
+        guild: discord.Guild,
+        *,
+        title: str,
+        description: str,
+        user_name: str | None = None,
+        channel_name: str | None = None,
+        fields: list[tuple[str, str, bool]] | None = None,
+    ) -> None:
+        audit_cog = self.bot.get_cog("AuditLogCog")
+        if audit_cog is not None and hasattr(audit_cog, "emit_external_event"):
+            await audit_cog.emit_external_event(
+                guild.id,
+                title=title,
+                description=description,
+                status="event",
+                color=discord.Color.blurple(),
+                user_name=user_name,
+                channel_name=channel_name,
+                fields=fields,
+            )
 
     async def _require_support_editor(self, interaction: discord.Interaction) -> discord.Member | None:
         if interaction.guild is None:
@@ -327,6 +359,18 @@ class Support(commands.Cog):
         except Exception:
             pass
 
+        await self._log_support_event(
+            interaction.guild,
+            title="Support Ticket Opened",
+            description=f"{interaction.user.mention} opened a support ticket.",
+            user_name=str(interaction.user),
+            channel_name=ticket_channel.name,
+            fields=[
+                ("Category", selected_issue_type, True),
+                ("Ticket", ticket_channel.mention, True),
+            ],
+        )
+
         await interaction.followup.send(
             f"Your support ticket is ready: {ticket_channel.mention}",
             ephemeral=True,
@@ -361,6 +405,13 @@ class Support(commands.Cog):
         ticket_store = getattr(self.bot, "ticket_store", None)
         assert ticket_store is not None
         updated = ticket_store.add_issue_type(interaction.guild.id, name)
+        await self._log_support_event(
+            interaction.guild,
+            title="Support Issue Added",
+            description=f"`{name.strip()}` was added to the ticket issue list.",
+            user_name=str(interaction.user),
+            channel_name="Support Settings",
+        )
         await interaction.response.send_message(
             f"Added `{name.strip()}` to the support issue list.\nAvailable issues: {', '.join(updated)}",
             ephemeral=True,
@@ -389,6 +440,13 @@ class Support(commands.Cog):
             return
 
         updated = ticket_store.remove_issue_type(interaction.guild.id, matched)
+        await self._log_support_event(
+            interaction.guild,
+            title="Support Issue Removed",
+            description=f"`{matched}` was removed from the ticket issue list.",
+            user_name=str(interaction.user),
+            channel_name="Support Settings",
+        )
         await interaction.response.send_message(
             f"Removed `{matched}` from the support issue list.\nAvailable issues: {', '.join(updated)}",
             ephemeral=True,

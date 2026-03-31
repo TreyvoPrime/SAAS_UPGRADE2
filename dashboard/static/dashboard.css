@@ -887,6 +887,10 @@ button {
     background: var(--danger);
 }
 
+.status-event::before {
+    background: var(--blurple);
+}
+
 .status-blocked_roles::before,
 .status-blocked_disabled::before {
     background: var(--warning);

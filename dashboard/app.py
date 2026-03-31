@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 
 import httpx
 import uvicorn
+import discord
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -195,6 +196,44 @@ def create_dashboard_app(bot) -> FastAPI:
 
         future = asyncio.run_coroutine_threadsafe(coro, bot_loop)
         return await asyncio.wrap_future(future)
+
+    async def log_dashboard_event(
+        request: Request,
+        guild_id: int,
+        *,
+        title: str,
+        description: str,
+        fields: list[tuple[str, str, bool]] | None = None,
+    ) -> None:
+        audit_cog = bot.get_cog("AuditLogCog")
+        user = session_user(request) or {}
+        user_name = user.get("global_name") or user.get("username") or "Dashboard User"
+        if audit_cog is not None and hasattr(audit_cog, "emit_external_event"):
+            await run_on_bot_loop(
+                audit_cog.emit_external_event(
+                    guild_id,
+                    title=title,
+                    description=description,
+                    status="event",
+                    color=discord.Color.blurple(),
+                    user_name=user_name,
+                    channel_name="Dashboard",
+                    fields=fields,
+                )
+            )
+        elif hasattr(bot, "command_logs"):
+            bot.command_logs.append(
+                {
+                    "guild_id": guild_id,
+                    "guild_name": bot.get_guild(guild_id).name if bot.get_guild(guild_id) else "Unknown Guild",
+                    "kind": "event",
+                    "title": title,
+                    "summary": description,
+                    "status": "event",
+                    "user_name": user_name,
+                    "channel_name": "Dashboard",
+                }
+            )
 
     def premium_enabled() -> bool:
         return any(command["tier"] == PREMIUM_TIER for command in build_command_catalog(bot))
@@ -765,6 +804,16 @@ def create_dashboard_app(bot) -> FastAPI:
             policy = bot.access_manager.controls.set_roles(guild_id, payload.command_name, safe_role_ids)
 
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Command Policy Updated",
+            description=f"Updated access for /{payload.command_name} from the dashboard.",
+            fields=[
+                ("Enabled", "Yes" if policy["enabled"] else "No", True),
+                ("Allowed Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in policy["allowed_role_ids"]) or "Discord native checks only", False),
+            ],
+        )
         return JSONResponse(
             {
                 "command_name": payload.command_name,
@@ -799,6 +848,13 @@ def create_dashboard_app(bot) -> FastAPI:
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         state = manager.build_dashboard_state(guild_id, role_lookup)
         card = next((item for item in state["cards"] if item["name"] == payload.defense_name), result)
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard ServerGuard Updated",
+            description=f"{card['title']} was {'enabled' if card['enabled'] else 'disabled'} from the dashboard.",
+            fields=[("Duration", card.get("duration_label") or "Until disabled", False)],
+        )
         return JSONResponse({"card": card, "state": state})
 
     @app.post("/api/guilds/{guild_id}/defense-lockdown-roles")
@@ -817,6 +873,15 @@ def create_dashboard_app(bot) -> FastAPI:
             role_ids = list(updated.get("allowed_role_ids", []))
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         state = manager.build_dashboard_state(guild_id, role_lookup)
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Lockdown Roles Updated",
+            description="Updated which roles can keep talking during lockdown.",
+            fields=[
+                ("Allowed Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in role_ids) or "Only server staff", False),
+            ],
+        )
         return JSONResponse(
             {
                 "lockdown_role_ids": role_ids,
@@ -837,6 +902,15 @@ def create_dashboard_app(bot) -> FastAPI:
         safe_role_ids = [role_id for role_id in payload.editor_role_ids if role_id in valid_role_ids]
         editor_role_ids = bot.access_manager.controls.set_dashboard_editor_roles(guild_id, safe_role_ids)
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Editor Roles Updated",
+            description="Updated who can manage this dashboard.",
+            fields=[
+                ("Editor Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in editor_role_ids) or "Owner and Manage Server only", False),
+            ],
+        )
         return JSONResponse(
             {
                 "editor_role_ids": editor_role_ids,
@@ -874,6 +948,16 @@ def create_dashboard_app(bot) -> FastAPI:
         else:
             manager.set_leave(guild_id, channel_id=channel_id, message=message)
 
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Greeting Updated",
+            description=f"Updated the {flow} flow from the dashboard.",
+            fields=[
+                ("Channel", next((channel["label"] for channel in guild_text_channels(guild_id) if channel["id"] == channel_id), "Disabled"), False),
+                ("Message", (message or "Default message")[:240], False),
+            ],
+        )
         return JSONResponse(greetings_dashboard_summary(guild_id))
 
     @app.get("/api/guilds/{guild_id}/support-settings")
@@ -894,7 +978,14 @@ def create_dashboard_app(bot) -> FastAPI:
             for issue_type in payload.issue_types
             if str(issue_type).strip()
         ]
-        ticket_store.set_issue_types(guild_id, cleaned_issue_types)
+        updated_issue_types = ticket_store.set_issue_types(guild_id, cleaned_issue_types)
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Support Intake Updated",
+            description="Updated the support issue list used by /ticket.",
+            fields=[("Issue Types", ", ".join(updated_issue_types), False)],
+        )
         return JSONResponse(support_dashboard_summary(guild_id))
 
     @app.get("/api/guilds/{guild_id}/purge-settings")
@@ -908,6 +999,13 @@ def create_dashboard_app(bot) -> FastAPI:
         controls = bot.access_manager.controls
         allowed_limit = min(int(payload.limit), controls.FREE_PURGE_LIMIT_CAP)
         updated_limit = controls.set_purge_limit(guild_id, allowed_limit)
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Purge Limit Updated",
+            description="Updated the maximum cleanup size from the dashboard.",
+            fields=[("Purge Limit", str(min(updated_limit, controls.FREE_PURGE_LIMIT_CAP)), False)],
+        )
         return JSONResponse(purge_settings_summary(guild_id) | {"limit": min(updated_limit, controls.FREE_PURGE_LIMIT_CAP)})
 
     @app.get("/api/guilds/{guild_id}/moderation-settings")
@@ -922,6 +1020,16 @@ def create_dashboard_app(bot) -> FastAPI:
             guild_id,
             confirmation_enabled=payload.confirmation_enabled,
             default_timeout_minutes=payload.default_timeout_minutes,
+        )
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Moderation Flow Updated",
+            description="Updated moderation confirmations and default timeout length.",
+            fields=[
+                ("Confirmations", "On" if updated["confirmation_enabled"] else "Off", True),
+                ("Default Timeout", f"{updated['default_timeout_minutes']} minutes", True),
+            ],
         )
         return JSONResponse(updated)
 

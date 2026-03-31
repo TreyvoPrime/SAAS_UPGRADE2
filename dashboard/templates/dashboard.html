@@ -507,24 +507,24 @@
                 <div class="section-head tight">
                     <div>
                         <div class="eyebrow">Live activity</div>
-                        <h3>Usage log</h3>
+                        <h3>Server log</h3>
                     </div>
                 </div>
                 <div class="log-list" id="log-list">
                     {% for entry in logs %}
                     <article class="log-row status-{{ entry.status }}">
                         <div class="log-top">
-                            <strong>/{{ entry.command }}</strong>
-                            <span>{{ entry.status.replace("_", " ") }}</span>
+                            <strong>{% if entry.kind == 'event' %}{{ entry.title }}{% else %}/{{ entry.command }}{% endif %}</strong>
+                            <span>{% if entry.kind == 'event' %}event{% else %}{{ entry.status.replace("_", " ") }}{% endif %}</span>
                         </div>
-                        <p>{{ entry.user_name }}{% if entry.channel_name %} in {{ entry.channel_name }}{% endif %}</p>
+                        <p>{% if entry.kind == 'event' %}{{ entry.summary }}{% else %}{{ entry.user_name }}{% if entry.channel_name %} in {{ entry.channel_name }}{% endif %}{% endif %}</p>
                         <time datetime="{{ entry.timestamp }}">{{ entry.timestamp }}</time>
                     </article>
                     {% endfor %}
                     {% if not logs %}
                     <div class="notice-card compact">
-                        <strong>No usage yet</strong>
-                        <p>Command activity will start appearing here once your members use the bot.</p>
+                        <strong>No activity yet</strong>
+                        <p>Server activity, command usage, tickets, and dashboard changes will start appearing here once the bot is active.</p>
                     </div>
                     {% endif %}
                 </div>
@@ -1399,18 +1399,34 @@
             if (!response.ok) return;
             const data = await response.json();
             const container = document.getElementById("log-list");
-            if (!container || !Array.isArray(data.entries) || !data.entries.length) return;
-
-            container.innerHTML = data.entries.map((entry) => `
-                <article class="log-row status-${entry.status}">
-                    <div class="log-top">
-                        <strong>/${entry.command}</strong>
-                        <span>${entry.status.replaceAll("_", " ")}</span>
+            if (!container || !Array.isArray(data.entries)) return;
+            if (!data.entries.length) {
+                container.innerHTML = `
+                    <div class="notice-card compact">
+                        <strong>No activity yet</strong>
+                        <p>Server activity, command usage, tickets, and dashboard changes will start appearing here once the bot is active.</p>
                     </div>
-                    <p>${entry.user_name}${entry.channel_name ? ` in ${entry.channel_name}` : ""}</p>
-                    <time datetime="${entry.timestamp}">${entry.timestamp}</time>
-                </article>
-            `).join("");
+                `;
+                return;
+            }
+
+            container.innerHTML = data.entries.map((entry) => {
+                const title = entry.kind === "event" ? (entry.title || "Server Event") : `/${entry.command}`;
+                const badge = entry.kind === "event" ? "event" : String(entry.status || "").replaceAll("_", " ");
+                const summary = entry.kind === "event"
+                    ? (entry.summary || "Server activity recorded.")
+                    : `${entry.user_name || "Unknown user"}${entry.channel_name ? ` in ${entry.channel_name}` : ""}`;
+                return `
+                    <article class="log-row status-${entry.status}">
+                        <div class="log-top">
+                            <strong>${title}</strong>
+                            <span>${badge}</span>
+                        </div>
+                        <p>${summary}</p>
+                        <time datetime="${entry.timestamp}">${entry.timestamp}</time>
+                    </article>
+                `;
+            }).join("");
         }
 
         updateStats();
