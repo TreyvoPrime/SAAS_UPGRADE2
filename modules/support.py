@@ -65,7 +65,11 @@ class SupportTicketView(discord.ui.View):
         except Exception:
             pass
         try:
+            category = interaction.channel.category
             await interaction.channel.delete(reason=f"Support ticket closed by {interaction.user}")
+            support_cog = self.bot.get_cog("Support")
+            if support_cog is not None and category is not None:
+                await support_cog._delete_empty_ticket_category(interaction.guild)
         except Exception:
             await interaction.followup.send("I couldn't delete the ticket channel. Check my channel permissions.", ephemeral=True)
 
@@ -131,6 +135,28 @@ class Support(commands.Cog):
         )
         self.bot.ticket_store.set_support_category_id(guild.id, category.id)
         return category
+
+    async def _delete_empty_ticket_category(self, guild: discord.Guild) -> None:
+        assert getattr(self.bot, "ticket_store", None) is not None
+
+        category_id = self.bot.ticket_store.get_support_category_id(guild.id)
+        if not category_id:
+            return
+
+        category = guild.get_channel(category_id)
+        if not isinstance(category, discord.CategoryChannel):
+            self.bot.ticket_store.set_support_category_id(guild.id, None)
+            return
+
+        if category.channels:
+            return
+
+        try:
+            await category.delete(reason="ServerCore support category cleanup")
+        except Exception:
+            return
+
+        self.bot.ticket_store.set_support_category_id(guild.id, None)
 
     @staticmethod
     def _staff_roles(guild: discord.Guild) -> list[discord.Role]:
@@ -377,7 +403,7 @@ class Support(commands.Cog):
         issue_types = self._issue_types(interaction.guild.id)
         embed = discord.Embed(
             title="Support Issue Types",
-            description="\n".join(f"• {issue_type}" for issue_type in issue_types),
+            description="\n".join(f"- {issue_type}" for issue_type in issue_types),
             color=discord.Color.blurple(),
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)

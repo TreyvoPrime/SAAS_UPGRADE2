@@ -14,6 +14,7 @@ DEFAULT_ISSUE_TYPES = [
     "Role or Channel Issue",
     "Report a Member",
     "Appeal or Review",
+    "Other",
 ]
 
 
