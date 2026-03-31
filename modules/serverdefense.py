@@ -115,6 +115,10 @@ class ServerDefense(commands.Cog):
         name="mentionguard",
         description="Block mention spam bursts in this server",
     )
+    antiraid = app_commands.Group(
+        name="antiraid",
+        description="Watch for raid patterns and raise the threat level automatically",
+    )
     lockdown = app_commands.Group(
         name="lockdown",
         description="Lock or unlock the server's text channels",
@@ -252,7 +256,12 @@ class ServerDefense(commands.Cog):
 
     def _all_features_summary(self, guild_id: int) -> str:
         state = self.bot.server_defense.get_dashboard_state(guild_id)
-        armed = [feature.replace("mentionguard", "mention guard") for feature in state if feature in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown"} and state[feature].get("enabled")]
+        armed = [
+            feature.replace("mentionguard", "mention guard").replace("antiraid", "anti-raid")
+            for feature in state
+            if feature in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown", "antiraid"}
+            and state[feature].get("enabled")
+        ]
         return ", ".join(armed) if armed else "none"
 
     def _moderation_settings(self, guild_id: int) -> dict:
@@ -392,6 +401,14 @@ class ServerDefense(commands.Cog):
                     )
                 except Exception:
                     pass
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        await self.bot.server_defense.handle_member_remove(member)
+
+    @commands.Cog.listener()
+    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.abc.User | discord.Member):
+        await self.bot.server_defense.handle_reaction_add(reaction, user)
 
     @linkblock.command(name="enable", description="Block external links in this server")
     async def linkblock_enable(
@@ -547,6 +564,54 @@ class ServerDefense(commands.Cog):
                 "Mention limit: 5 mentions in 10 seconds.",
                 "Action: Clears the burst and attempts a short timeout.",
             ],
+        )
+
+    @antiraid.command(name="enable", description="Start smart anti-raid scoring and automatic escalation")
+    async def antiraid_enable(
+        self,
+        interaction: discord.Interaction,
+        duration_minutes: app_commands.Range[int, 1, MAX_DURATION_MINUTES] | None = None,
+    ):
+        await self._enable_feature(
+            interaction,
+            "antiraid",
+            "Anti-Raid",
+            duration_minutes=duration_minutes,
+        )
+
+    @antiraid.command(name="disable", description="Stop anti-raid scoring and clear the live threat state")
+    async def antiraid_disable(self, interaction: discord.Interaction):
+        await self._disable_feature(interaction, "antiraid", "Anti-Raid")
+
+    @antiraid.command(name="status", description="View the live anti-raid score and response tier")
+    async def antiraid_status(self, interaction: discord.Interaction):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        threat = self.bot.server_defense.get_threat_summary(interaction.guild.id)
+        extra_lines = [
+            f"Threat level: {threat['level_label']}",
+            f"Score: {threat['score_display']}",
+            f"Response: {threat['status_copy']}",
+        ]
+        if threat["recent_actions"]:
+            extra_lines.append(f"Automatic actions: {', '.join(threat['recent_actions'])}")
+        await self._send_status(
+            interaction,
+            "antiraid",
+            "Anti-Raid",
+            extra_lines,
+        )
+
+    @antiraid.command(name="reset", description="Clear the live anti-raid score and recent signals")
+    async def antiraid_reset(self, interaction: discord.Interaction):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        threat = self.bot.server_defense.reset_threat_state(interaction.guild.id)
+        await interaction.response.send_message(
+            f"Anti-Raid score reset. Current level: {threat['level_label']} ({threat['score_display']}).",
+            ephemeral=True,
         )
 
     @lockdown.command(name="enable", description="Lock the server's text channels")
@@ -930,9 +995,20 @@ class ServerDefense(commands.Cog):
             return
 
         embed = discord.Embed(title="ServerGuard", color=discord.Color.blurple())
+        threat = self.bot.server_defense.get_threat_summary(interaction.guild.id)
         embed.add_field(
             name="Armed protections",
             value=self._all_features_summary(interaction.guild.id),
+            inline=False,
+        )
+        embed.add_field(
+            name="Threat level",
+            value=f"{threat['level_label']} ({threat['score_display']})",
+            inline=False,
+        )
+        embed.add_field(
+            name="Anti-Raid",
+            value=threat["status_copy"],
             inline=False,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)

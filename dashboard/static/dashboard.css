@@ -551,6 +551,175 @@ button {
     gap: 10px;
 }
 
+.threat-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    padding: 22px;
+    border-radius: 26px;
+    border: 1px solid rgba(255, 119, 200, 0.14);
+    background:
+        radial-gradient(circle at 0% 0%, rgba(255, 119, 200, 0.12), transparent 20rem),
+        radial-gradient(circle at 100% 100%, rgba(111, 124, 255, 0.12), transparent 20rem),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+        rgba(255, 255, 255, 0.03);
+}
+
+.threat-stage-copy,
+.threat-stage-meter,
+.threat-stage-side {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+}
+
+.threat-stage-copy h3,
+.threat-stage-meter h3 {
+    margin: 0;
+    font-size: clamp(1.4rem, 2vw, 1.9rem);
+    letter-spacing: -0.04em;
+}
+
+.threat-stage-copy p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+    max-width: 42ch;
+}
+
+.threat-scoreline {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.threat-scoreline strong {
+    font-size: clamp(1.5rem, 2.4vw, 2.35rem);
+    letter-spacing: -0.05em;
+}
+
+.threat-scoreline span {
+    color: var(--muted-strong);
+    font-size: 0.96rem;
+}
+
+.threat-bar-shell {
+    display: grid;
+    gap: 12px;
+}
+
+.threat-bar-track {
+    position: relative;
+    overflow: hidden;
+    min-height: 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+        linear-gradient(90deg, rgba(89, 236, 176, 0.12), rgba(255, 191, 107, 0.12) 55%, rgba(255, 123, 149, 0.12));
+}
+
+.threat-bar-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--success), var(--warning) 58%, var(--danger));
+    box-shadow: 0 0 28px rgba(255, 119, 200, 0.24);
+    transition: width 240ms ease;
+}
+
+.threat-bar-fill.is-normal {
+    background: linear-gradient(90deg, rgba(89, 236, 176, 0.92), rgba(126, 232, 184, 0.76));
+}
+
+.threat-bar-fill.is-moderate {
+    background: linear-gradient(90deg, #7ee8b8, #ffbf6b);
+}
+
+.threat-bar-fill.is-major {
+    background: linear-gradient(90deg, #ffbf6b, #ff8b7a);
+}
+
+.threat-bar-fill.is-high {
+    background: linear-gradient(90deg, #ff8b7a, #ff5f87);
+}
+
+.threat-bar-markers {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.threat-marker {
+    display: grid;
+    gap: 4px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--muted);
+}
+
+.threat-marker strong {
+    font-size: 0.86rem;
+}
+
+.threat-marker em {
+    font-style: normal;
+    font-size: 0.76rem;
+    color: var(--muted);
+}
+
+.threat-marker.is-reached,
+.threat-marker.is-active {
+    color: var(--text);
+    border-top-color: rgba(255, 119, 200, 0.3);
+}
+
+.threat-marker.is-active em {
+    color: #f8d7ef;
+}
+
+.threat-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.threat-signal-list {
+    display: grid;
+    gap: 10px;
+}
+
+.threat-signal-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    padding: 14px 15px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.threat-signal-row strong {
+    min-width: 0;
+}
+
+.threat-signal-row span {
+    color: #ffd5eb;
+    font-weight: 700;
+}
+
+.threat-signal-row p {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.threat-empty {
+    box-shadow: none;
+}
+
 .defense-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1321,7 +1490,8 @@ time {
     .auth-feature-grid,
     .role-checklist,
     .servers-metric-grid,
-    .defense-grid {
+    .defense-grid,
+    .threat-stage {
         grid-template-columns: 1fr;
     }
 
@@ -1436,6 +1606,10 @@ time {
     .defense-card-head,
     .greeting-card-head {
         flex-direction: column;
+    }
+
+    .threat-bar-markers {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .defense-actions {

@@ -89,14 +89,69 @@
                     <div>
                         <div class="eyebrow">ServerGuard</div>
                         <h3>Rapid threat controls</h3>
-                        <p>Turn protections on fast, give them an optional timer, and control who can speak during lockdown without leaving the dashboard.</p>
+                        <p>Watch the live threat score, see which signals are stacking, then arm or tune protections from one tighter response surface.</p>
                     </div>
                     <div class="section-summary">
                         <span data-defense-summary="active">{{ defense_summary.active_count }} active</span>
                         <span data-defense-summary="timed">{{ defense_summary.timed_count }} timed</span>
+                        <span data-defense-summary="threat">{{ defense_summary.threat.level_label }}</span>
                         <span data-defense-summary="roles">{{ defense_summary.lockdown_role_count }} lockdown roles</span>
                     </div>
                 </div>
+
+                <section class="surface threat-stage">
+                    <div class="threat-stage-copy">
+                        <div class="eyebrow">Threat level</div>
+                        <h3>Live anti-raid pressure</h3>
+                        <p id="threat-status-copy">{{ defense_summary.threat.status_copy }}</p>
+                    </div>
+                    <div class="threat-stage-meter">
+                        <div class="threat-scoreline">
+                            <strong id="threat-level-label">{{ defense_summary.threat.level_label }}</strong>
+                            <span id="threat-score-display">{{ defense_summary.threat.score_display }}</span>
+                        </div>
+                        <div class="threat-bar-shell" aria-label="Threat progression">
+                            <div class="threat-bar-track">
+                                <div class="threat-bar-fill is-{{ defense_summary.threat.level_key }}" id="threat-bar-fill" style="width: {{ defense_summary.threat.progress_percent }}%;"></div>
+                            </div>
+                            <div class="threat-bar-markers">
+                                {% for band in defense_summary.threat.bands %}
+                                <span class="threat-marker {% if band.active %}is-active{% elif band.reached %}is-reached{% endif %}">
+                                    <strong>{{ band.label }}</strong>
+                                    <em>{{ band.range }}</em>
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="threat-stage-side">
+                        <div class="threat-chip-row" id="threat-action-strip">
+                            {% if defense_summary.threat.recent_actions %}
+                                {% for action in defense_summary.threat.recent_actions %}
+                                <span class="module-chip">{{ action }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="module-chip">{{ "Anti-Raid live" if defense_summary.threat.enabled else "Anti-Raid offline" }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="threat-signal-list" id="threat-signal-list">
+                            {% if defense_summary.threat.recent_signals %}
+                                {% for signal in defense_summary.threat.recent_signals %}
+                                <article class="threat-signal-row">
+                                    <strong>{{ signal.title }}</strong>
+                                    <span>+{{ signal.points }}</span>
+                                    <p>{{ signal.detail }}</p>
+                                </article>
+                                {% endfor %}
+                            {% else %}
+                                <div class="notice-card compact threat-empty">
+                                    <strong>No raid pressure yet</strong>
+                                    <p>ServerGuard will start listing the signals that move the score once Anti-Raid is watching the server.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </section>
 
                 <section class="surface command-settings-panel defense-settings-panel">
                     <div>
@@ -697,8 +752,15 @@
         const defenseSummaryItems = {
             active: document.querySelector('[data-defense-summary="active"]'),
             timed: document.querySelector('[data-defense-summary="timed"]'),
+            threat: document.querySelector('[data-defense-summary="threat"]'),
             roles: document.querySelector('[data-defense-summary="roles"]'),
         };
+        const threatLevelLabel = document.getElementById("threat-level-label");
+        const threatScoreDisplay = document.getElementById("threat-score-display");
+        const threatStatusCopy = document.getElementById("threat-status-copy");
+        const threatBarFill = document.getElementById("threat-bar-fill");
+        const threatSignalList = document.getElementById("threat-signal-list");
+        const threatActionStrip = document.getElementById("threat-action-strip");
         const greetingCards = Array.from(document.querySelectorAll("[data-greeting-card]"));
         const supportIssueList = document.getElementById("support-issue-list");
         const supportIssueInput = document.getElementById("support-issue-input");
@@ -1031,8 +1093,52 @@
             if (defenseSummaryItems.timed) {
                 defenseSummaryItems.timed.textContent = `${state.timed_count ?? 0} timed`;
             }
+            if (defenseSummaryItems.threat) {
+                defenseSummaryItems.threat.textContent = state.threat?.level_label || "Threat offline";
+            }
             if (defenseSummaryItems.roles) {
                 defenseSummaryItems.roles.textContent = `${state.lockdown_role_count ?? 0} lockdown roles`;
+            }
+            syncThreatSummary(state.threat);
+        }
+
+        function syncThreatSummary(threat) {
+            if (!threat) return;
+            if (threatLevelLabel) {
+                threatLevelLabel.textContent = threat.level_label || "Offline";
+            }
+            if (threatScoreDisplay) {
+                threatScoreDisplay.textContent = threat.score_display || "0/100";
+            }
+            if (threatStatusCopy) {
+                threatStatusCopy.textContent = threat.status_copy || "";
+            }
+            if (threatBarFill) {
+                threatBarFill.style.width = `${threat.progress_percent ?? 0}%`;
+                threatBarFill.className = `threat-bar-fill is-${threat.level_key || "normal"}`;
+            }
+            if (threatActionStrip) {
+                const actions = Array.isArray(threat.recent_actions) ? threat.recent_actions : [];
+                threatActionStrip.innerHTML = actions.length
+                    ? actions.map((action) => `<span class="module-chip">${escapeHtml(action)}</span>`).join("")
+                    : `<span class="module-chip">${threat.enabled ? "Anti-Raid live" : "Anti-Raid offline"}</span>`;
+            }
+            if (threatSignalList) {
+                const signals = Array.isArray(threat.recent_signals) ? threat.recent_signals : [];
+                threatSignalList.innerHTML = signals.length
+                    ? signals.map((signal) => `
+                        <article class="threat-signal-row">
+                            <strong>${escapeHtml(signal.title)}</strong>
+                            <span>+${escapeHtml(signal.points)}</span>
+                            <p>${escapeHtml(signal.detail)}</p>
+                        </article>
+                    `).join("")
+                    : `
+                        <div class="notice-card compact threat-empty">
+                            <strong>No raid pressure yet</strong>
+                            <p>ServerGuard will start listing the signals that move the score once Anti-Raid is watching the server.</p>
+                        </div>
+                    `;
             }
         }
 
@@ -1473,9 +1579,26 @@
             }).join("");
         }
 
+        async function refreshDefenseSnapshot() {
+            if (!document.body.classList.contains("dashboard-view-defense")) return;
+            const response = await fetch(`/api/guilds/${guildId}/defense-state`);
+            if (!response.ok) return;
+            const state = await response.json();
+            syncDefenseSummary(state);
+            defenseCards.forEach((card) => {
+                const updatedDefense = (state.cards || []).find((item) => item.name === card.dataset.defenseName);
+                if (updatedDefense) {
+                    syncDefenseCard(card, updatedDefense);
+                }
+            });
+        }
+
         updateStats();
         updateSectionVisibility();
+        refreshLogs();
+        refreshDefenseSnapshot();
         setInterval(refreshLogs, 15000);
+        setInterval(refreshDefenseSnapshot, 15000);
     </script>
 </body>
 </html>

@@ -584,12 +584,39 @@ def create_dashboard_app(bot) -> FastAPI:
                     "allowed_role_names": [],
                     "allowed_role_summary": "Only server staff can talk",
                 },
+                {
+                    "name": "antiraid",
+                    "title": "Anti-Raid",
+                    "tag": "Threat scoring",
+                    "description": "Scores suspicious bursts, fresh-account joins, repeated content, and stacked defenses before a raid fully lands.",
+                    "enabled": False,
+                    "duration_minutes": None,
+                    "duration_label": "Until disabled",
+                    "status_label": "Offline",
+                    "remaining_label": "No timer",
+                    "tone": "muted",
+                    "rate_label": "Live score + automatic response ladder",
+                },
             ],
             "active_count": 0,
             "timed_count": 0,
             "lockdown_role_ids": [],
             "lockdown_role_names": [],
             "lockdown_role_count": 0,
+            "threat": {
+                "enabled": False,
+                "score": 0,
+                "score_display": "0/100",
+                "level_key": "normal",
+                "level_label": "Offline",
+                "progress_percent": 0,
+                "status_copy": "Turn Anti-Raid on to start watching for coordinated joins, spam bursts, and stacked guard triggers.",
+                "recent_signals": [],
+                "recent_actions": [],
+                "raid_mode_active": False,
+                "next_threshold": 25,
+                "bands": [],
+            },
         }
 
     def case_dashboard_summary(guild_id: int) -> dict:
@@ -860,7 +887,7 @@ def create_dashboard_app(bot) -> FastAPI:
         if manager is None or not hasattr(manager, "set_defense"):
             raise HTTPException(status_code=503, detail="ServerDefense is not available")
 
-        if payload.defense_name not in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown"}:
+        if payload.defense_name not in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown", "antiraid"}:
             raise HTTPException(status_code=404, detail="Unknown defense")
 
         result = await run_on_bot_loop(
