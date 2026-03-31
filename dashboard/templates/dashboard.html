@@ -31,6 +31,7 @@
                 <a class="nav-link {% if current_view == 'defense' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense">ServerGuard</a>
                 <a class="nav-link {% if current_view == 'greetings' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/greetings">Welcome / Leave</a>
                 <a class="nav-link {% if current_view == 'support' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/support">Support</a>
+                <a class="nav-link {% if current_view == 'giveaways' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/giveaways">Giveaways</a>
                 <a class="nav-link" href="/servers">All Servers</a>
                 <a class="nav-link" href="/logout">Log Out</a>
             </nav>
@@ -39,7 +40,7 @@
                 <div class="eyebrow">Servers</div>
                 <div class="server-list">
                     {% for item in guilds %}
-                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}{% if current_view == 'defense' %}/dashboard/{{ item.id }}/defense{% elif current_view == 'greetings' %}/dashboard/{{ item.id }}/greetings{% elif current_view == 'support' %}/dashboard/{{ item.id }}/support{% else %}/dashboard/{{ item.id }}{% endif %}{% else %}{{ item.install_url }}{% endif %}">
+                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}{% if current_view == 'defense' %}/dashboard/{{ item.id }}/defense{% elif current_view == 'greetings' %}/dashboard/{{ item.id }}/greetings{% elif current_view == 'support' %}/dashboard/{{ item.id }}/support{% elif current_view == 'giveaways' %}/dashboard/{{ item.id }}/giveaways{% else %}/dashboard/{{ item.id }}{% endif %}{% else %}{{ item.install_url }}{% endif %}">
                         <img src="{{ item.icon_url }}" alt="{{ item.name }}">
                         <span>{{ item.name }}{% if not item.bot_installed %} - Add app{% endif %}</span>
                     </a>
@@ -52,9 +53,9 @@
         <section class="main-column">
             <header class="page-head">
                 <div>
-                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% elif current_view == 'support' %}Support{% else %}Guild Operations{% endif %}</div>
-                    <h2>{% if current_view == 'defense' %}Server defense controls{% elif current_view == 'greetings' %}Greeting flows and channel setup{% elif current_view == 'support' %}Support ticket intake{% else %}Commands and access{% endif %}</h2>
-                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% elif current_view == 'greetings' %}Set the welcome and leave channels, write custom messages, and use placeholders that feel personal instead of generic.{% elif current_view == 'support' %}Decide what kinds of help members can request, keep ticket intake clean, and shape the support flow around your server instead of a generic bot preset.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
+                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% elif current_view == 'support' %}Support{% elif current_view == 'giveaways' %}Giveaways{% else %}Guild Operations{% endif %}</div>
+                    <h2>{% if current_view == 'defense' %}Server defense controls{% elif current_view == 'greetings' %}Greeting flows and channel setup{% elif current_view == 'support' %}Support ticket intake{% elif current_view == 'giveaways' %}Community giveaways and winners{% else %}Commands and access{% endif %}</h2>
+                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% elif current_view == 'greetings' %}Set the welcome and leave channels, write custom messages, and use placeholders that feel personal instead of generic.{% elif current_view == 'support' %}Decide what kinds of help members can request, keep ticket intake clean, and shape the support flow around your server instead of a generic bot preset.{% elif current_view == 'giveaways' %}Keep a clean view of live giveaways, recent winners, and the commands staff should use when it is time to launch, end, or reroll one.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
                 </div>
                 <div class="page-actions">
                     <a class="ghost-button" href="/servers">View all servers</a>
@@ -475,6 +476,87 @@
                         </div>
                         <div class="role-summary">Use `/ticketissue add`, `/ticketissue remove`, and `/ticketissue list` to manage these options from inside the server.</div>
                         <div class="dashboard-access-summary">Open tickets will keep using the same private support-channel flow. New issue choices update `/ticket` autocomplete automatically after the save.</div>
+                    </article>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if current_view == 'giveaways' %}
+            <section class="surface greetings-workspace support-workspace">
+                <div class="workspace-topline greetings-topline">
+                    <div>
+                        <div class="eyebrow">Giveaways</div>
+                        <h3>Live giveaways and recent winners</h3>
+                        <p>Run giveaways from Discord, then use this page to keep an eye on active drops, entry counts, and the last rounds that wrapped up.</p>
+                    </div>
+                    <div class="placeholder-strip">
+                        <span class="module-chip">{{ giveaways_summary.active_count }} active</span>
+                        <span class="module-chip">{{ giveaways_summary.recent_count }} recent</span>
+                    </div>
+                </div>
+
+                <div class="greetings-grid support-grid">
+                    <article class="greeting-card support-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Giveaways</span>
+                            <span class="module-chip">Live queue</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Active giveaways</h4>
+                                <p>These are the giveaways members can still enter right now.</p>
+                            </div>
+                            <span class="defense-status-pill">{{ giveaways_summary.active_count }} live</span>
+                        </div>
+                        <div class="support-issue-list">
+                            {% for giveaway in giveaways_summary.active %}
+                            <div class="support-issue-item giveaway-item">
+                                <div class="giveaway-item-copy">
+                                    <strong>#{{ giveaway.id }} · {{ giveaway.prize }}</strong>
+                                    <span>{{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner{% if giveaway.winner_count != 1 %}s{% endif %}</span>
+                                    <p>{{ giveaway.description }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% if not giveaways_summary.active %}
+                            <div class="notice-card compact">
+                                <strong>No active giveaways</strong>
+                                <p>Use `/giveaway create` in Discord to launch one with days, hours, or minutes.</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </article>
+
+                    <article class="greeting-card support-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Giveaways</span>
+                            <span class="module-chip">Staff flow</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Run giveaways from Discord</h4>
+                                <p>Staff can create, end, review, and reroll giveaways without leaving the server.</p>
+                            </div>
+                            <span class="defense-status-pill is-muted">In Discord</span>
+                        </div>
+                        <div class="role-summary">Use `/giveaway create`, `/giveaway end`, `/giveaway list`, and `/giveaway reroll`. Members enter through the giveaway button on the posted message.</div>
+                        <div class="support-issue-list">
+                            {% for giveaway in giveaways_summary.recent %}
+                            <div class="support-issue-item giveaway-item">
+                                <div class="giveaway-item-copy">
+                                    <strong>#{{ giveaway.id }} · {{ giveaway.prize }}</strong>
+                                    <span>{{ giveaway.entry_count }} entries</span>
+                                    <p>Winner{% if giveaway.winner_names|length != 1 %}s{% endif %}: {{ giveaway.winner_names|join(", ") if giveaway.winner_names else "No valid entries" }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% if not giveaways_summary.recent %}
+                            <div class="notice-card compact">
+                                <strong>No recent giveaways yet</strong>
+                                <p>Ended giveaways and rerolls will start showing here once your server runs a few rounds.</p>
+                            </div>
+                            {% endif %}
+                        </div>
                     </article>
                 </div>
             </section>

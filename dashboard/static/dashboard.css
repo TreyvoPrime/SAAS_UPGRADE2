@@ -871,6 +871,29 @@ button {
     accent-color: var(--pink);
 }
 
+.giveaway-item {
+    align-items: flex-start;
+}
+
+.giveaway-item-copy {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.giveaway-item-copy strong,
+.giveaway-item-copy span,
+.giveaway-item-copy p {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.giveaway-item-copy p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
 .defense-note {
     color: var(--muted);
     font-size: 0.9rem;

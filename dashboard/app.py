@@ -482,6 +482,34 @@ def create_dashboard_app(bot) -> FastAPI:
             "support_category_name": category_name,
         }
 
+    def giveaways_dashboard_summary(guild_id: int) -> dict:
+        store = getattr(bot, "giveaway_store", None)
+        if store is None:
+            return {"active": [], "recent": [], "active_count": 0, "recent_count": 0}
+
+        def serialize(item: dict) -> dict:
+            return {
+                "id": item["id"],
+                "prize": item.get("prize", "Giveaway"),
+                "winner_count": int(item.get("winner_count", 1)),
+                "entry_count": len(item.get("entrants", [])),
+                "status": item.get("status", "active"),
+                "host_name": item.get("host_name", "Unknown"),
+                "ends_at": item.get("ends_at"),
+                "ended_at": item.get("ended_at"),
+                "winner_names": item.get("winner_names", []),
+                "description": item.get("description") or "No extra details set.",
+            }
+
+        active = [serialize(item) for item in store.list_giveaways(guild_id, status="active", limit=12)]
+        recent = [serialize(item) for item in store.list_giveaways(guild_id, status="ended", limit=8)]
+        return {
+            "active": active,
+            "recent": recent,
+            "active_count": len(active),
+            "recent_count": len(recent),
+        }
+
     def server_defense_summary(guild_id: int) -> dict:
         defense = bot.server_defense.get_dashboard_state(guild_id)
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
@@ -700,6 +728,7 @@ def create_dashboard_app(bot) -> FastAPI:
         defense_summary = defense_dashboard_summary(guild_id)
         greetings_summary = greetings_dashboard_summary(guild_id)
         support_summary = support_dashboard_summary(guild_id)
+        giveaways_summary = giveaways_dashboard_summary(guild_id)
         case_summary = case_dashboard_summary(guild_id)
         purge_settings = purge_settings_summary(guild_id)
         moderation_settings = moderation_settings_summary(guild_id)
@@ -736,6 +765,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
                 "greetings_summary": greetings_summary,
                 "support_summary": support_summary,
+                "giveaways_summary": giveaways_summary,
                 "case_summary": case_summary,
                 "purge_settings": purge_settings,
                 "moderation_settings": moderation_settings,
@@ -831,6 +861,10 @@ def create_dashboard_app(bot) -> FastAPI:
     @app.get("/dashboard/{guild_id}/support", response_class=HTMLResponse)
     async def support_dashboard(request: Request, guild_id: int):
         return await render_dashboard_view(request, guild_id, "support")
+
+    @app.get("/dashboard/{guild_id}/giveaways", response_class=HTMLResponse)
+    async def giveaways_dashboard(request: Request, guild_id: int):
+        return await render_dashboard_view(request, guild_id, "giveaways")
 
     @app.get("/api/guilds/{guild_id}/logs")
     async def guild_logs(request: Request, guild_id: int, limit: int = 80):

@@ -12,6 +12,7 @@ from core.cases import ModerationCaseStore
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
 from core.greetings import GreetingsManager, GreetingsStore
+from core.giveaways import GiveawayStore
 from core.server_defense import ServerDefenseManager, ServerDefenseStore
 from core.tickets import TicketStore
 from core.warnings import WarningStore
@@ -52,6 +53,7 @@ class ServerCoreBot(commands.Bot):
         self.access_manager = CommandAccessManager(self.command_controls, self.command_logs)
         self.greetings_store = GreetingsStore()
         self.greetings = GreetingsManager(self, self.greetings_store)
+        self.giveaway_store = GiveawayStore()
         self.server_defense_store = ServerDefenseStore()
         self.server_defense = ServerDefenseManager(self, self.server_defense_store)
         self.ticket_store = TicketStore()
