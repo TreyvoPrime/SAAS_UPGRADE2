@@ -55,6 +55,7 @@ def build_command_catalog(bot: discord.Client) -> list[dict]:
         "modules.reminders": "Reminders",
         "modules.serverdefense": "ServerGuard",
         "modules.serverstats": "Server Stats",
+        "modules.support": "Support",
         "modules.userinfo": "User Info",
         "modules.welcome": "Welcome / Leave",
         "modules.premium.customcomands": "Custom Commands",
