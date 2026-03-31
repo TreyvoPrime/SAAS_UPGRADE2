@@ -50,6 +50,10 @@ class GreetingConfigPayload(BaseModel):
     message: str | None = Field(default=None, max_length=1500)
 
 
+class SupportSettingsPayload(BaseModel):
+    issue_types: list[str] = Field(default_factory=list, max_length=20)
+
+
 class PurgeSettingsPayload(BaseModel):
     limit: int = Field(ge=1, le=2000)
 
@@ -415,6 +419,30 @@ def create_dashboard_app(bot) -> FastAPI:
             ],
         }
 
+    def support_dashboard_summary(guild_id: int) -> dict:
+        ticket_store = getattr(bot, "ticket_store", None)
+        if ticket_store is None:
+            return {
+                "issue_types": [],
+                "issue_count": 0,
+                "support_category_id": None,
+                "support_category_name": "Not configured yet",
+            }
+
+        category_id = ticket_store.get_support_category_id(guild_id)
+        guild = bot.get_guild(guild_id)
+        category_name = "Not configured yet"
+        if guild is not None and category_id:
+            category = guild.get_channel(category_id)
+            if category is not None:
+                category_name = getattr(category, "name", "Configured")
+        return {
+            "issue_types": ticket_store.get_issue_types(guild_id),
+            "issue_count": len(ticket_store.get_issue_types(guild_id)),
+            "support_category_id": category_id,
+            "support_category_name": category_name,
+        }
+
     def server_defense_summary(guild_id: int) -> dict:
         defense = bot.server_defense.get_dashboard_state(guild_id)
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
@@ -581,6 +609,7 @@ def create_dashboard_app(bot) -> FastAPI:
         access_summary = dashboard_access_summary(guild_id)
         defense_summary = defense_dashboard_summary(guild_id)
         greetings_summary = greetings_dashboard_summary(guild_id)
+        support_summary = support_dashboard_summary(guild_id)
         purge_settings = purge_settings_summary(guild_id)
         moderation_settings = moderation_settings_summary(guild_id)
 
@@ -615,6 +644,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "defense_summary": defense_summary,
                 "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
                 "greetings_summary": greetings_summary,
+                "support_summary": support_summary,
                 "purge_settings": purge_settings,
                 "moderation_settings": moderation_settings,
                 "current_view": current_view,
@@ -705,6 +735,10 @@ def create_dashboard_app(bot) -> FastAPI:
     @app.get("/dashboard/{guild_id}/greetings", response_class=HTMLResponse)
     async def greetings_dashboard(request: Request, guild_id: int):
         return await render_dashboard_view(request, guild_id, "greetings")
+
+    @app.get("/dashboard/{guild_id}/support", response_class=HTMLResponse)
+    async def support_dashboard(request: Request, guild_id: int):
+        return await render_dashboard_view(request, guild_id, "support")
 
     @app.get("/api/guilds/{guild_id}/logs")
     async def guild_logs(request: Request, guild_id: int, limit: int = 80):
@@ -841,6 +875,27 @@ def create_dashboard_app(bot) -> FastAPI:
             manager.set_leave(guild_id, channel_id=channel_id, message=message)
 
         return JSONResponse(greetings_dashboard_summary(guild_id))
+
+    @app.get("/api/guilds/{guild_id}/support-settings")
+    async def get_support_settings(request: Request, guild_id: int):
+        await require_guild_access(request, guild_id)
+        return JSONResponse(support_dashboard_summary(guild_id))
+
+    @app.post("/api/guilds/{guild_id}/support-settings")
+    async def update_support_settings(request: Request, guild_id: int, payload: SupportSettingsPayload):
+        await require_guild_access(request, guild_id)
+
+        ticket_store = getattr(bot, "ticket_store", None)
+        if ticket_store is None:
+            raise HTTPException(status_code=503, detail="Support settings are not available")
+
+        cleaned_issue_types = [
+            str(issue_type).strip()
+            for issue_type in payload.issue_types
+            if str(issue_type).strip()
+        ]
+        ticket_store.set_issue_types(guild_id, cleaned_issue_types)
+        return JSONResponse(support_dashboard_summary(guild_id))
 
     @app.get("/api/guilds/{guild_id}/purge-settings")
     async def get_purge_settings(request: Request, guild_id: int):

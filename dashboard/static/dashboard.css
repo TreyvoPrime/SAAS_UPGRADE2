@@ -524,6 +524,11 @@ button {
     backdrop-filter: blur(20px);
 }
 
+.support-workspace {
+    display: grid;
+    gap: 18px;
+}
+
 .defense-topline {
     align-items: flex-start;
 }
@@ -568,6 +573,10 @@ button {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
+}
+
+.support-grid {
+    align-items: start;
 }
 
 .defense-flags {
@@ -643,6 +652,26 @@ button {
     min-height: 140px;
     padding: 14px;
     resize: vertical;
+}
+
+.support-issue-list {
+    display: grid;
+    gap: 10px;
+}
+
+.support-issue-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted-strong);
+}
+
+.support-issue-item input {
+    accent-color: var(--pink);
 }
 
 .defense-note {

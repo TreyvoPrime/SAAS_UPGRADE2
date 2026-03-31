@@ -8,6 +8,13 @@ from core.storage import read_json, write_json
 
 
 TICKET_DATA_PATH = Path("tickets.json")
+DEFAULT_ISSUE_TYPES = [
+    "Moderation Help",
+    "Server Setup Help",
+    "Role or Channel Issue",
+    "Report a Member",
+    "Appeal or Review",
+]
 
 
 class TicketStore:
@@ -27,9 +34,14 @@ class TicketStore:
             self._data[key] = {
                 "counter": 0,
                 "support_category_id": None,
+                "issue_types": list(DEFAULT_ISSUE_TYPES),
                 "open_by_user": {},
                 "tickets": {},
             }
+        else:
+            guild_state = self._data[key]
+            if not isinstance(guild_state.get("issue_types"), list) or not guild_state.get("issue_types"):
+                guild_state["issue_types"] = list(DEFAULT_ISSUE_TYPES)
         return self._data[key]
 
     @staticmethod
@@ -46,6 +58,47 @@ class TicketStore:
         guild_state["counter"] = int(guild_state.get("counter", 0)) + 1
         self._save()
         return guild_state["counter"]
+
+    def get_issue_types(self, guild_id: int) -> list[str]:
+        guild_state = self._ensure_guild(guild_id)
+        raw_items = guild_state.get("issue_types", DEFAULT_ISSUE_TYPES)
+        cleaned = [
+            str(item).strip()
+            for item in raw_items
+            if str(item).strip()
+        ]
+        if not cleaned:
+            cleaned = list(DEFAULT_ISSUE_TYPES)
+            guild_state["issue_types"] = cleaned
+            self._save()
+        return cleaned
+
+    def set_issue_types(self, guild_id: int, issue_types: list[str]) -> list[str]:
+        guild_state = self._ensure_guild(guild_id)
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in issue_types:
+            label = str(item).strip()
+            if not label:
+                continue
+            key = label.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(label[:80])
+        guild_state["issue_types"] = normalized[:20] or list(DEFAULT_ISSUE_TYPES)
+        self._save()
+        return self.get_issue_types(guild_id)
+
+    def add_issue_type(self, guild_id: int, issue_type: str) -> list[str]:
+        current = self.get_issue_types(guild_id)
+        current.append(issue_type)
+        return self.set_issue_types(guild_id, current)
+
+    def remove_issue_type(self, guild_id: int, issue_type: str) -> list[str]:
+        target = str(issue_type).strip().casefold()
+        remaining = [item for item in self.get_issue_types(guild_id) if item.casefold() != target]
+        return self.set_issue_types(guild_id, remaining)
 
     def get_support_category_id(self, guild_id: int) -> int | None:
         guild_state = self._ensure_guild(guild_id)

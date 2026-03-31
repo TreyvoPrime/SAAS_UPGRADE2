@@ -30,6 +30,7 @@
                 <a class="nav-link {% if current_view == 'commands' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}">Command Control</a>
                 <a class="nav-link {% if current_view == 'defense' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense">ServerGuard</a>
                 <a class="nav-link {% if current_view == 'greetings' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/greetings">Welcome / Leave</a>
+                <a class="nav-link {% if current_view == 'support' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/support">Support</a>
                 <a class="nav-link" href="/servers">All Servers</a>
                 <a class="nav-link" href="/logout">Log Out</a>
             </nav>
@@ -38,7 +39,7 @@
                 <div class="eyebrow">Servers</div>
                 <div class="server-list">
                     {% for item in guilds %}
-                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}{% if current_view == 'defense' %}/dashboard/{{ item.id }}/defense{% elif current_view == 'greetings' %}/dashboard/{{ item.id }}/greetings{% else %}/dashboard/{{ item.id }}{% endif %}{% else %}{{ item.install_url }}{% endif %}">
+                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}{% if current_view == 'defense' %}/dashboard/{{ item.id }}/defense{% elif current_view == 'greetings' %}/dashboard/{{ item.id }}/greetings{% elif current_view == 'support' %}/dashboard/{{ item.id }}/support{% else %}/dashboard/{{ item.id }}{% endif %}{% else %}{{ item.install_url }}{% endif %}">
                         <img src="{{ item.icon_url }}" alt="{{ item.name }}">
                         <span>{{ item.name }}{% if not item.bot_installed %} - Add app{% endif %}</span>
                     </a>
@@ -51,9 +52,9 @@
         <section class="main-column">
             <header class="page-head">
                 <div>
-                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% else %}Guild Operations{% endif %}</div>
-                    <h2>{% if current_view == 'defense' %}Server defense controls{% elif current_view == 'greetings' %}Greeting flows and channel setup{% else %}Commands and access{% endif %}</h2>
-                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% elif current_view == 'greetings' %}Set the welcome and leave channels, write custom messages, and use placeholders that feel personal instead of generic.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
+                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% elif current_view == 'support' %}Support{% else %}Guild Operations{% endif %}</div>
+                    <h2>{% if current_view == 'defense' %}Server defense controls{% elif current_view == 'greetings' %}Greeting flows and channel setup{% elif current_view == 'support' %}Support ticket intake{% else %}Commands and access{% endif %}</h2>
+                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% elif current_view == 'greetings' %}Set the welcome and leave channels, write custom messages, and use placeholders that feel personal instead of generic.{% elif current_view == 'support' %}Decide what kinds of help members can request, keep ticket intake clean, and shape the support flow around your server instead of a generic bot preset.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
                 </div>
                 <div class="page-actions">
                     <a class="ghost-button" href="/servers">View all servers</a>
@@ -310,6 +311,71 @@
                         <div class="defense-actions">
                             <button type="button" class="primary-button compact-button" data-greeting-save="leave">Save leave flow</button>
                         </div>
+                    </article>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if current_view == 'support' %}
+            <section class="surface greetings-workspace support-workspace">
+                <div class="workspace-topline greetings-topline">
+                    <div>
+                        <div class="eyebrow">Support</div>
+                        <h3>Ticket categories members can choose</h3>
+                        <p>Start with the common server-help reasons, then add or trim categories so `/ticket` feels natural for your community and support team.</p>
+                    </div>
+                    <div class="placeholder-strip">
+                        <span class="module-chip">{{ support_summary.issue_count }} issue types</span>
+                        <span class="module-chip">{{ support_summary.support_category_name }}</span>
+                    </div>
+                </div>
+
+                <div class="greetings-grid support-grid">
+                    <article class="greeting-card support-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Support</span>
+                            <span class="module-chip">Member intake</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Ticket issue picker</h4>
+                                <p>Members see these options when they use `/ticket`. Keep them clear, short, and focused on normal server help.</p>
+                            </div>
+                            <span class="defense-status-pill" id="support-issue-count">{{ support_summary.issue_count }} live</span>
+                        </div>
+                        <div class="support-issue-list" id="support-issue-list">
+                            {% for issue in support_summary.issue_types %}
+                            <label class="support-issue-item">
+                                <input type="checkbox" value="{{ issue }}" data-support-issue-checkbox>
+                                <span>{{ issue }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <label class="search-shell">
+                            <span>Add a new support issue</span>
+                            <input class="search-input" id="support-issue-input" type="text" maxlength="80" placeholder="Example: Staff application question">
+                        </label>
+                        <div class="dashboard-access-summary" id="support-issue-summary">Members can currently pick {{ support_summary.issue_count }} ticket issues in this server.</div>
+                        <div class="defense-actions">
+                            <button type="button" class="ghost-button compact-button" id="remove-support-issues">Remove selected</button>
+                            <button type="button" class="primary-button compact-button" id="add-support-issue">Add issue</button>
+                        </div>
+                    </article>
+
+                    <article class="greeting-card support-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Support</span>
+                            <span class="module-chip">Staff tools</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Quick staff setup</h4>
+                                <p>Staff can also manage the issue list directly in Discord when they need fast changes without opening the dashboard.</p>
+                            </div>
+                            <span class="defense-status-pill is-muted">In Discord</span>
+                        </div>
+                        <div class="role-summary">Use `/ticketissue add`, `/ticketissue remove`, and `/ticketissue list` to manage these options from inside the server.</div>
+                        <div class="dashboard-access-summary">Open tickets will keep using the same private support-channel flow. New issue choices update `/ticket` autocomplete automatically after the save.</div>
                     </article>
                 </div>
             </section>
@@ -590,6 +656,12 @@
             roles: document.querySelector('[data-defense-summary="roles"]'),
         };
         const greetingCards = Array.from(document.querySelectorAll("[data-greeting-card]"));
+        const supportIssueList = document.getElementById("support-issue-list");
+        const supportIssueInput = document.getElementById("support-issue-input");
+        const supportIssueSummary = document.getElementById("support-issue-summary");
+        const supportIssueCount = document.getElementById("support-issue-count");
+        const addSupportIssueButton = document.getElementById("add-support-issue");
+        const removeSupportIssuesButton = document.getElementById("remove-support-issues");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
             disabled: document.querySelector('[data-stat="disabled"]'),
@@ -621,6 +693,15 @@
 
         function parseRoleIds(card) {
             return (card.dataset.roleIds || "").split(",").filter(Boolean);
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
         }
 
         function updateStats() {
@@ -763,6 +844,26 @@
 
             if (!response.ok) {
                 let message = "Greeting update failed";
+                try {
+                    const data = await response.json();
+                    message = data.detail || message;
+                } catch {}
+                showToast(message, "error");
+                throw new Error(message);
+            }
+
+            return response.json();
+        }
+
+        async function updateSupportSettings(issueTypes) {
+            const response = await fetch(`/api/guilds/${guildId}/support-settings`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ issue_types: issueTypes })
+            });
+
+            if (!response.ok) {
+                let message = "Support settings update failed";
                 try {
                     const data = await response.json();
                     message = data.detail || message;
@@ -945,6 +1046,28 @@
             }
             if (channelName) {
                 channelName.textContent = state.channel_name || "Not configured";
+            }
+        }
+
+        function supportIssueValues() {
+            return Array.from(supportIssueList?.querySelectorAll("[data-support-issue-checkbox]") || [])
+                .map((checkbox) => checkbox.value)
+                .filter(Boolean);
+        }
+
+        function renderSupportIssues(issueTypes) {
+            if (!supportIssueList) return;
+            supportIssueList.innerHTML = issueTypes.map((issue) => `
+                <label class="support-issue-item">
+                    <input type="checkbox" value="${escapeHtml(issue)}" data-support-issue-checkbox>
+                    <span>${escapeHtml(issue)}</span>
+                </label>
+            `).join("");
+            if (supportIssueSummary) {
+                supportIssueSummary.textContent = `Members can currently pick ${issueTypes.length} ticket issues in this server.`;
+            }
+            if (supportIssueCount) {
+                supportIssueCount.textContent = `${issueTypes.length} live`;
             }
         }
 
@@ -1184,6 +1307,46 @@
                     showToast(`${flow === "welcome" ? "Welcome" : "Leave"} flow updated.`);
                 } catch {}
             });
+        });
+
+        addSupportIssueButton?.addEventListener("click", async () => {
+            const nextIssue = (supportIssueInput?.value || "").trim();
+            if (nextIssue.length < 3) {
+                showToast("Write an issue label with at least 3 characters.", "error");
+                return;
+            }
+
+            const currentIssues = supportIssueValues();
+            if (currentIssues.some((issue) => issue.toLowerCase() === nextIssue.toLowerCase())) {
+                showToast("That support issue already exists.", "error");
+                return;
+            }
+
+            try {
+                const result = await updateSupportSettings([...currentIssues, nextIssue]);
+                renderSupportIssues(result.issue_types || []);
+                if (supportIssueInput) {
+                    supportIssueInput.value = "";
+                }
+                showToast("Added a new support issue.");
+            } catch {}
+        });
+
+        removeSupportIssuesButton?.addEventListener("click", async () => {
+            const selected = Array.from(supportIssueList?.querySelectorAll("[data-support-issue-checkbox]:checked") || [])
+                .map((checkbox) => checkbox.value);
+
+            if (!selected.length) {
+                showToast("Choose at least one support issue to remove.", "error");
+                return;
+            }
+
+            const remaining = supportIssueValues().filter((issue) => !selected.includes(issue));
+            try {
+                const result = await updateSupportSettings(remaining);
+                renderSupportIssues(result.issue_types || []);
+                showToast("Support issue list updated.");
+            } catch {}
         });
 
         savePurgeLimitButton?.addEventListener("click", async () => {
