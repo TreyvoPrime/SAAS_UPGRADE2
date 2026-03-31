@@ -534,12 +534,15 @@
                         </div>
                         <div class="greeting-card-head">
                             <div>
-                                <h4>Run giveaways from Discord</h4>
-                                <p>Staff can create, end, review, and reroll giveaways without leaving the server.</p>
+                                <h4>Staff Commands</h4>
+                                <p>Quick giveaway controls your team can run directly from Discord.</p>
                             </div>
                             <span class="defense-status-pill is-muted">In Discord</span>
                         </div>
-                        <div class="role-summary">Use `/giveaway create`, `/giveaway end`, `/giveaway list`, and `/giveaway reroll`. Members enter through the giveaway button on the posted message.</div>
+                        <div class="role-summary">/giveaway create - Start a new giveaway in seconds</div>
+                        <div class="role-summary">/giveaway end - End a giveaway whenever you want</div>
+                        <div class="role-summary">/giveaway list - View all active and past giveaways</div>
+                        <div class="role-summary">/giveaway reroll - Pick a new winner instantly</div>
                         <div class="support-issue-list">
                             {% for giveaway in giveaways_summary.recent %}
                             <div class="support-issue-item giveaway-item">
