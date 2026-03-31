@@ -25,11 +25,13 @@ class ModerationConfirmView(discord.ui.View):
             return
 
         self.disable_all_items()
-        await interaction.response.send_message("Finishing that action...", ephemeral=True)
         try:
-            await interaction.message.edit(view=self)
+            await interaction.response.edit_message(
+                content="Working on that now...",
+                view=self,
+            )
         except Exception:
-            pass
+            await interaction.response.send_message("Working on that now...", ephemeral=True)
         try:
             result = await self.action()
         except discord.Forbidden:
@@ -50,11 +52,10 @@ class ModerationConfirmView(discord.ui.View):
             await interaction.response.send_message("This confirmation is not for you.", ephemeral=True)
             return
         self.disable_all_items()
-        await interaction.response.send_message("Action canceled.", ephemeral=True)
         try:
-            await interaction.message.edit(content="Action canceled.", view=None)
+            await interaction.response.edit_message(content="Action canceled.", view=None)
         except Exception:
-            pass
+            await interaction.response.send_message("Action canceled.", ephemeral=True)
 
 
 class ServerDefense(commands.Cog):
@@ -219,7 +220,7 @@ class ServerDefense(commands.Cog):
         ends_at = state.get("ends_at")
         if ends_at:
             return f" It will end at `{ends_at}`."
-            return ""
+        return ""
 
     def _all_features_summary(self, guild_id: int) -> str:
         state = self.bot.server_defense.get_dashboard_state(guild_id)
