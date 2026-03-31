@@ -25,7 +25,11 @@ class ModerationConfirmView(discord.ui.View):
             return
 
         self.disable_all_items()
-        await interaction.response.edit_message(content="Finishing that action...", view=self)
+        await interaction.response.defer()
+        try:
+            await interaction.message.edit(content="Finishing that action...", view=self)
+        except Exception:
+            pass
         try:
             result = await self.action()
         except discord.Forbidden:
@@ -34,7 +38,10 @@ class ModerationConfirmView(discord.ui.View):
             result = "I couldn't complete that moderation action right now."
         except Exception:
             result = "Something went wrong while completing that action."
-        await interaction.edit_original_response(content=result, view=None)
+        try:
+            await interaction.message.edit(content=result, view=None)
+        except Exception:
+            await interaction.followup.send(result, ephemeral=True)
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -42,7 +49,11 @@ class ModerationConfirmView(discord.ui.View):
             await interaction.response.send_message("This confirmation is not for you.", ephemeral=True)
             return
         self.disable_all_items()
-        await interaction.response.edit_message(content="Action canceled.", view=None)
+        await interaction.response.defer()
+        try:
+            await interaction.message.edit(content="Action canceled.", view=None)
+        except Exception:
+            await interaction.followup.send("Action canceled.", ephemeral=True)
 
 
 class ServerDefense(commands.Cog):
