@@ -1176,7 +1176,7 @@
             saveButton?.addEventListener("click", async () => {
                 try {
                     const result = await updateGreeting(flow, {
-                        channel_id: select?.value ? Number(select.value) : null,
+                        channel_id: select?.value ? String(select.value) : null,
                         message: textarea?.value || ""
                     });
                     syncGreetingCard("welcome", result.welcome);

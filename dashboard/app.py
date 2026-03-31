@@ -46,7 +46,7 @@ class DefenseLockdownRolesPayload(BaseModel):
 
 class GreetingConfigPayload(BaseModel):
     flow: str = Field(min_length=1)
-    channel_id: int | None = None
+    channel_id: int | str | None = None
     message: str | None = Field(default=None, max_length=1500)
 
 
@@ -828,7 +828,11 @@ def create_dashboard_app(bot) -> FastAPI:
             raise HTTPException(status_code=404, detail="Unknown greeting flow")
 
         valid_channel_ids = {channel["id"] for channel in guild_text_channels(guild_id)}
-        channel_id = payload.channel_id if payload.channel_id in valid_channel_ids else None
+        try:
+            requested_channel_id = int(payload.channel_id) if payload.channel_id not in (None, "") else None
+        except (TypeError, ValueError):
+            requested_channel_id = None
+        channel_id = requested_channel_id if requested_channel_id in valid_channel_ids else None
         message = (payload.message or "").strip() or None
 
         if flow == "welcome":
