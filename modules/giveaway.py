@@ -32,6 +32,17 @@ def _format_remaining(ends_at: datetime) -> str:
     return " ".join(parts)
 
 
+def _role_mentions(guild: discord.Guild | None, role_ids: list[int]) -> str:
+    if guild is None:
+        return "Configured role"
+    mentions = [
+        guild.get_role(int(role_id)).mention
+        for role_id in role_ids
+        if guild.get_role(int(role_id)) is not None
+    ]
+    return ", ".join(mentions) if mentions else "None"
+
+
 class GiveawayEnterView(discord.ui.View):
     def __init__(self, cog: GiveawayCog, giveaway_id: int):
         super().__init__(timeout=None)
@@ -126,6 +137,14 @@ class GiveawayCog(commands.Cog):
         embed.add_field(name="Hosted by", value=record.get("host_name", "Unknown"), inline=True)
         embed.add_field(name="Winners", value=str(record.get("winner_count", 1)), inline=True)
         embed.add_field(name="Entries", value=str(entrant_count), inline=True)
+        if record.get("required_role_ids"):
+            embed.add_field(name="Required role", value=_role_mentions(self.bot.get_guild(int(record["guild_id"])), record.get("required_role_ids", [])), inline=False)
+        if record.get("bonus_role_ids"):
+            embed.add_field(
+                name="Bonus entries",
+                value=f"{record.get('bonus_entries', 0)} extra for {_role_mentions(self.bot.get_guild(int(record['guild_id'])), record.get('bonus_role_ids', []))}",
+                inline=False,
+            )
         if ends_at is not None and not ended:
             embed.add_field(name="Ends", value=f"<t:{int(ends_at.timestamp())}:F>\n({_format_remaining(ends_at)} left)", inline=False)
         if ended:
@@ -218,7 +237,14 @@ class GiveawayCog(commands.Cog):
         if ends_at and ends_at <= _utcnow():
             await interaction.response.send_message("That giveaway is already ending.", ephemeral=True)
             return
-        record, added = self.store.add_entry(interaction.guild.id, giveaway_id, interaction.user.id)
+        required_role_ids = [int(role_id) for role_id in record.get("required_role_ids", [])]
+        if required_role_ids and not any(role.id in required_role_ids for role in interaction.user.roles):
+            await interaction.response.send_message("You need the required giveaway role before you can enter this one.", ephemeral=True)
+            return
+        bonus_role_ids = [int(role_id) for role_id in record.get("bonus_role_ids", [])]
+        has_bonus = bool(bonus_role_ids) and any(role.id in bonus_role_ids for role in interaction.user.roles)
+        entry_count = 1 + (int(record.get("bonus_entries", 0)) if has_bonus else 0)
+        record, added = self.store.add_entries(interaction.guild.id, giveaway_id, interaction.user.id, entry_count=entry_count)
         if not added:
             await interaction.response.send_message("You're already entered in this giveaway.", ephemeral=True)
             return
@@ -228,7 +254,8 @@ class GiveawayCog(commands.Cog):
                 await message.edit(embed=self._build_embed(record, ended=False), view=GiveawayEnterView(self, giveaway_id))
             except Exception:
                 pass
-        await interaction.response.send_message(f"You're in. Good luck in giveaway #{giveaway_id}.", ephemeral=True)
+        bonus_line = f" You received {entry_count} entries." if entry_count > 1 else ""
+        await interaction.response.send_message(f"You're in. Good luck in giveaway #{giveaway_id}.{bonus_line}", ephemeral=True)
 
     @giveaway.command(name="create", description="Create a giveaway in this server")
     @app_commands.describe(
@@ -239,6 +266,9 @@ class GiveawayCog(commands.Cog):
         days="Days until it ends",
         hours="Hours until it ends",
         minutes="Minutes until it ends",
+        required_role="Optional role members must have before they can enter",
+        bonus_role="Optional role that unlocks bonus entries",
+        bonus_entries="How many extra entries the bonus role gets",
     )
     async def giveaway_create(
         self,
@@ -250,6 +280,9 @@ class GiveawayCog(commands.Cog):
         days: app_commands.Range[int, 0, MAX_GIVEAWAY_DAYS] = 0,
         hours: app_commands.Range[int, 0, 23] = 0,
         minutes: app_commands.Range[int, 0, 59] = 0,
+        required_role: discord.Role | None = None,
+        bonus_role: discord.Role | None = None,
+        bonus_entries: app_commands.Range[int, 0, 20] = 0,
     ):
         staff = await self._require_giveaway_staff(interaction)
         if staff is None or interaction.guild is None:
@@ -276,6 +309,9 @@ class GiveawayCog(commands.Cog):
             description=description,
             winner_count=int(winners),
             ends_at=ends_at,
+            required_role_ids=[required_role.id] if required_role else [],
+            bonus_role_ids=[bonus_role.id] if bonus_role else [],
+            bonus_entries=int(bonus_entries),
         )
         view = GiveawayEnterView(self, int(record["id"]))
         embed = self._build_embed(record, ended=False)
@@ -295,6 +331,8 @@ class GiveawayCog(commands.Cog):
             fields=[
                 ("Ends", ends_at.strftime("%Y-%m-%d %H:%M UTC"), True),
                 ("Winners", str(record["winner_count"]), True),
+                ("Required Role", required_role.name if required_role else "None", True),
+                ("Bonus Entries", f"{bonus_entries} for {bonus_role.name}" if bonus_role and bonus_entries else "None", False),
             ],
         )
 

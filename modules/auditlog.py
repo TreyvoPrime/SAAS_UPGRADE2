@@ -13,6 +13,20 @@ from discord.ext import commands
 DATA_FILE = Path("auditlog_config.json")
 AUDIT_ROLE_NAME = "AuditLog"
 MAX_FIELD = 1000
+LOG_CATEGORIES = [
+    "members",
+    "messages",
+    "channels",
+    "roles",
+    "voice",
+    "invites",
+    "tickets",
+    "moderation",
+    "dashboard",
+    "server",
+    "threads",
+    "community",
+]
 
 
 def load_config() -> dict[str, dict[str, Any]]:
@@ -83,10 +97,15 @@ class AuditLogCog(commands.Cog):
         self.config = load_config()
 
     def get_guild_config(self, guild_id: int) -> dict[str, Any]:
-        return self.config.get(str(guild_id), {})
+        current = self.config.get(str(guild_id), {})
+        if "disabled_categories" not in current:
+            current["disabled_categories"] = []
+        return current
 
     def set_log_channel(self, guild_id: int, channel_id: int) -> None:
-        self.config[str(guild_id)] = {"channel_id": int(channel_id)}
+        current = self.get_guild_config(guild_id)
+        current["channel_id"] = int(channel_id)
+        self.config[str(guild_id)] = current
         save_config(self.config)
 
     def remove_log_channel(self, guild_id: int) -> bool:
@@ -111,6 +130,29 @@ class AuditLogCog(commands.Cog):
         channel = guild.get_channel(channel_id)
         return channel if isinstance(channel, discord.TextChannel) else None
 
+    def get_disabled_categories(self, guild_id: int) -> list[str]:
+        return [
+            str(item).strip().lower()
+            for item in self.get_guild_config(guild_id).get("disabled_categories", [])
+            if str(item).strip()
+        ]
+
+    def is_category_enabled(self, guild_id: int, category: str) -> bool:
+        return str(category).strip().lower() not in self.get_disabled_categories(guild_id)
+
+    def set_category_enabled(self, guild_id: int, category: str, enabled: bool) -> list[str]:
+        category_key = str(category).strip().lower()
+        current = set(self.get_disabled_categories(guild_id))
+        if enabled:
+            current.discard(category_key)
+        else:
+            current.add(category_key)
+        guild_config = self.get_guild_config(guild_id)
+        guild_config["disabled_categories"] = sorted(current)
+        self.config[str(guild_id)] = guild_config
+        save_config(self.config)
+        return guild_config["disabled_categories"]
+
     def user_has_audit_role(self, member: discord.Member) -> bool:
         return any(role.name == AUDIT_ROLE_NAME for role in member.roles)
 
@@ -119,6 +161,34 @@ class AuditLogCog(commands.Cog):
         if description:
             embed.description = description
         return embed
+
+    def infer_category(self, title: str) -> str:
+        lowered = str(title).lower()
+        if "ticket" in lowered:
+            return "tickets"
+        if "case" in lowered or "warn" in lowered or "kick" in lowered or "ban" in lowered or "timeout" in lowered:
+            return "moderation"
+        if "message" in lowered:
+            return "messages"
+        if "channel" in lowered:
+            return "channels"
+        if "thread" in lowered:
+            return "threads"
+        if "role" in lowered:
+            return "roles"
+        if "voice" in lowered:
+            return "voice"
+        if "invite" in lowered:
+            return "invites"
+        if "dashboard" in lowered:
+            return "dashboard"
+        if "member" in lowered or "nickname" in lowered:
+            return "members"
+        if "server" in lowered or "emoji" in lowered:
+            return "server"
+        if "giveaway" in lowered or "poll" in lowered or "autofeed" in lowered:
+            return "community"
+        return "server"
 
     def _append_dashboard_entry(
         self,
@@ -154,12 +224,16 @@ class AuditLogCog(commands.Cog):
         title: str,
         description: str,
         color: discord.Color,
+        category: str | None = None,
         status: str = "event",
         user_name: str | None = None,
         channel_name: str | None = None,
         fields: list[tuple[str, str, bool]] | None = None,
         thumbnail_url: str | None = None,
     ) -> None:
+        resolved_category = category or self.infer_category(title)
+        if not self.is_category_enabled(guild.id, resolved_category):
+            return
         embed = self.make_embed(title, color, description)
         for name, value, inline in fields or []:
             embed.add_field(name=name, value=truncate(value, 1024), inline=inline)
@@ -186,6 +260,7 @@ class AuditLogCog(commands.Cog):
             status=status,
             user_name=user_name,
             channel_name=channel_name,
+            extra={"category": resolved_category},
         )
 
     async def emit_external_event(
@@ -194,6 +269,7 @@ class AuditLogCog(commands.Cog):
         *,
         title: str,
         description: str,
+        category: str | None = None,
         status: str = "event",
         color: discord.Color | None = None,
         user_name: str | None = None,
@@ -208,11 +284,50 @@ class AuditLogCog(commands.Cog):
             title=title,
             description=description,
             color=color or discord.Color.blurple(),
+            category=category,
             status=status,
             user_name=user_name,
             channel_name=channel_name,
             fields=fields,
         )
+
+    logsettings = app_commands.Group(name="logsettings", description="Choose which kinds of events get logged")
+
+    @logsettings.command(name="view", description="View the current logging categories")
+    async def logsettings_view(self, interaction: discord.Interaction):
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
+        if not (interaction.user.guild_permissions.administrator or self.user_has_audit_role(interaction.user)):
+            await interaction.response.send_message(f"You need the {AUDIT_ROLE_NAME} role or Administrator to use this.", ephemeral=True)
+            return
+        disabled = set(self.get_disabled_categories(interaction.guild.id))
+        lines = [f"- {category}: {'On' if category not in disabled else 'Off'}" for category in LOG_CATEGORIES]
+        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+    @logsettings.command(name="enable", description="Turn a logging category back on")
+    @app_commands.choices(category=[app_commands.Choice(name=item, value=item) for item in LOG_CATEGORIES])
+    async def logsettings_enable(self, interaction: discord.Interaction, category: app_commands.Choice[str]):
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
+        if not (interaction.user.guild_permissions.administrator or self.user_has_audit_role(interaction.user)):
+            await interaction.response.send_message(f"You need the {AUDIT_ROLE_NAME} role or Administrator to use this.", ephemeral=True)
+            return
+        self.set_category_enabled(interaction.guild.id, category.value, True)
+        await interaction.response.send_message(f"Logging for `{category.value}` is back on.", ephemeral=True)
+
+    @logsettings.command(name="disable", description="Turn a logging category off")
+    @app_commands.choices(category=[app_commands.Choice(name=item, value=item) for item in LOG_CATEGORIES])
+    async def logsettings_disable(self, interaction: discord.Interaction, category: app_commands.Choice[str]):
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
+        if not (interaction.user.guild_permissions.administrator or self.user_has_audit_role(interaction.user)):
+            await interaction.response.send_message(f"You need the {AUDIT_ROLE_NAME} role or Administrator to use this.", ephemeral=True)
+            return
+        self.set_category_enabled(interaction.guild.id, category.value, False)
+        await interaction.response.send_message(f"Logging for `{category.value}` is now off.", ephemeral=True)
 
     @app_commands.command(name="setauditlog", description="Choose the channel where server events should be logged")
     async def setauditlog(self, interaction: discord.Interaction, channel: discord.TextChannel):

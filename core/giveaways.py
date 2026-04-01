@@ -55,6 +55,9 @@ class GiveawayStore:
         description: str | None,
         winner_count: int,
         ends_at: datetime,
+        required_role_ids: list[int] | None = None,
+        bonus_role_ids: list[int] | None = None,
+        bonus_entries: int = 0,
     ) -> dict[str, Any]:
         guild_state = self._ensure_guild(guild_id)
         guild_state["counter"] = int(guild_state.get("counter", 0)) + 1
@@ -70,6 +73,10 @@ class GiveawayStore:
             "description": (description or "").strip()[:600],
             "winner_count": int(winner_count),
             "entrants": [],
+            "entry_counts": {},
+            "required_role_ids": [int(role_id) for role_id in (required_role_ids or [])],
+            "bonus_role_ids": [int(role_id) for role_id in (bonus_role_ids or [])],
+            "bonus_entries": max(0, int(bonus_entries)),
             "status": "active",
             "created_at": utcnow_iso(),
             "ends_at": ends_at.astimezone(timezone.utc).isoformat(),
@@ -119,6 +126,16 @@ class GiveawayStore:
         return active
 
     def add_entry(self, guild_id: int, giveaway_id: int, user_id: int) -> tuple[dict[str, Any] | None, bool]:
+        return self.add_entries(guild_id, giveaway_id, user_id, entry_count=1)
+
+    def add_entries(
+        self,
+        guild_id: int,
+        giveaway_id: int,
+        user_id: int,
+        *,
+        entry_count: int = 1,
+    ) -> tuple[dict[str, Any] | None, bool]:
         record = self._ensure_guild(guild_id)["items"].get(str(giveaway_id))
         if not isinstance(record, dict):
             return None, False
@@ -127,6 +144,13 @@ class GiveawayStore:
             return dict(record), False
         entrants.append(int(user_id))
         record["entrants"] = entrants
+        entry_counts = {
+            str(key): int(value)
+            for key, value in (record.get("entry_counts") or {}).items()
+            if str(key).isdigit()
+        }
+        entry_counts[str(int(user_id))] = max(1, int(entry_count))
+        record["entry_counts"] = entry_counts
         self._save()
         return dict(record), True
 
@@ -136,6 +160,9 @@ class GiveawayStore:
             return None
         entrants = [int(item) for item in record.get("entrants", []) if int(item) != int(user_id)]
         record["entrants"] = entrants
+        entry_counts = record.get("entry_counts") or {}
+        entry_counts.pop(str(int(user_id)), None)
+        record["entry_counts"] = entry_counts
         self._save()
         return dict(record)
 
@@ -185,6 +212,22 @@ class GiveawayStore:
         if not entrants:
             return [], []
         winner_count = max(1, min(int(record.get("winner_count", 1)), len(entrants)))
-        picked = random.sample(entrants, winner_count)
+        entry_counts = {
+            int(user_id): max(1, int(count))
+            for user_id, count in (record.get("entry_counts") or {}).items()
+            if str(user_id).isdigit()
+        }
+        picked = self._weighted_unique_sample(entrants, winner_count, entry_counts)
         names = [name_lookup.get(item, f"User {item}") for item in picked]
         return picked, names
+
+    @staticmethod
+    def _weighted_unique_sample(entrants: list[int], winner_count: int, entry_counts: dict[int, int]) -> list[int]:
+        pool = list(dict.fromkeys(int(item) for item in entrants))
+        winners: list[int] = []
+        while pool and len(winners) < winner_count:
+            weights = [max(1, int(entry_counts.get(user_id, 1))) for user_id in pool]
+            picked = random.choices(pool, weights=weights, k=1)[0]
+            winners.append(picked)
+            pool = [user_id for user_id in pool if user_id != picked]
+        return winners

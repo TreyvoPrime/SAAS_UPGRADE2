@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import re
 
 import discord
@@ -133,6 +134,23 @@ class Support(commands.Cog):
             return None
         return interaction.user
 
+    async def _require_ticket_staff(self, interaction: discord.Interaction) -> discord.Member | None:
+        return await self._require_support_editor(interaction)
+
+    async def _require_ticket_channel(self, interaction: discord.Interaction) -> tuple[discord.TextChannel, dict] | tuple[None, None]:
+        if interaction.guild is None or not isinstance(interaction.channel, discord.TextChannel):
+            await interaction.response.send_message("Use this inside a support ticket channel.", ephemeral=True)
+            return None, None
+        ticket_store = getattr(self.bot, "ticket_store", None)
+        if ticket_store is None:
+            await interaction.response.send_message("Ticket support is unavailable right now.", ephemeral=True)
+            return None, None
+        ticket = ticket_store.get_ticket(interaction.guild.id, interaction.channel.id)
+        if ticket is None:
+            await interaction.response.send_message("This channel is not tracked as a ServerCore ticket.", ephemeral=True)
+            return None, None
+        return interaction.channel, ticket
+
     def _issue_types(self, guild_id: int) -> list[str]:
         ticket_store = getattr(self.bot, "ticket_store", None)
         if ticket_store is None:
@@ -190,6 +208,19 @@ class Support(commands.Cog):
 
         self.bot.ticket_store.set_support_category_id(guild.id, None)
 
+    async def _build_transcript(self, channel: discord.TextChannel) -> tuple[str, discord.File]:
+        lines: list[str] = [f"Transcript for #{channel.name}", ""]
+        async for message in channel.history(limit=200, oldest_first=True):
+            created = message.created_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+            content = message.content or ""
+            attachments = ", ".join(attachment.url for attachment in message.attachments)
+            if attachments:
+                content = f"{content}\nAttachments: {attachments}".strip()
+            lines.append(f"[{created}] {message.author}: {content}")
+        transcript = "\n".join(lines)[:180000]
+        filename = f"{channel.name}-transcript.txt"
+        return transcript, discord.File(io.BytesIO(transcript.encode("utf-8")), filename=filename)
+
     @staticmethod
     def _staff_roles(guild: discord.Guild) -> list[discord.Role]:
         staff_roles: list[discord.Role] = []
@@ -231,6 +262,114 @@ class Support(commands.Cog):
         name="ticketissue",
         description="Manage which support issue types members can choose",
     )
+
+    @app_commands.command(name="ticketclaim", description="Claim the current support ticket")
+    async def ticketclaim(self, interaction: discord.Interaction) -> None:
+        staff = await self._require_ticket_staff(interaction)
+        channel, ticket = await self._require_ticket_channel(interaction)
+        if staff is None or channel is None or ticket is None or interaction.guild is None:
+            return
+        updated = self.bot.ticket_store.claim_ticket(
+            interaction.guild.id,
+            channel.id,
+            staff_id=interaction.user.id,
+            staff_name=str(interaction.user),
+        )
+        await interaction.response.send_message(f"You claimed this ticket as {interaction.user.mention}.", ephemeral=True)
+        try:
+            await channel.send(f"{interaction.user.mention} is now handling this ticket.")
+        except Exception:
+            pass
+        await self._log_support_event(
+            interaction.guild,
+            title="Support Ticket Claimed",
+            description=f"{channel.mention} was claimed by {interaction.user.mention}.",
+            user_name=str(interaction.user),
+            channel_name=channel.name,
+            fields=[("Priority", updated.get("priority", "normal").title(), True)],
+        )
+
+    @app_commands.command(name="ticketpriority", description="Set the priority for the current support ticket")
+    @app_commands.choices(priority=[
+        app_commands.Choice(name="low", value="low"),
+        app_commands.Choice(name="normal", value="normal"),
+        app_commands.Choice(name="high", value="high"),
+        app_commands.Choice(name="urgent", value="urgent"),
+    ])
+    async def ticketpriority(self, interaction: discord.Interaction, priority: app_commands.Choice[str]) -> None:
+        staff = await self._require_ticket_staff(interaction)
+        channel, ticket = await self._require_ticket_channel(interaction)
+        if staff is None or channel is None or ticket is None or interaction.guild is None:
+            return
+        updated = self.bot.ticket_store.set_priority(interaction.guild.id, channel.id, priority.value)
+        await interaction.response.send_message(f"Ticket priority set to `{priority.value}`.", ephemeral=True)
+        try:
+            await channel.send(f"Ticket priority updated to **{priority.value.title()}**.")
+        except Exception:
+            pass
+        await self._log_support_event(
+            interaction.guild,
+            title="Support Ticket Priority Updated",
+            description=f"{channel.mention} is now marked `{priority.value}`.",
+            user_name=str(interaction.user),
+            channel_name=channel.name,
+        )
+
+    @app_commands.command(name="tickettranscript", description="Generate a transcript for the current support ticket")
+    async def tickettranscript(self, interaction: discord.Interaction) -> None:
+        staff = await self._require_ticket_staff(interaction)
+        channel, ticket = await self._require_ticket_channel(interaction)
+        if staff is None or channel is None or ticket is None or interaction.guild is None:
+            return
+        _, transcript_file = await self._build_transcript(channel)
+        await interaction.response.send_message("Transcript generated for this ticket.", ephemeral=True, file=transcript_file)
+
+    @app_commands.command(name="closeticket", description="Close the current support ticket with an optional reason")
+    async def closeticket(self, interaction: discord.Interaction, reason: app_commands.Range[str, 3, 300] | None = None) -> None:
+        channel, ticket = await self._require_ticket_channel(interaction)
+        if channel is None or ticket is None or interaction.guild is None:
+            return
+
+        requester_id = int(ticket.get("requester_id", 0))
+        is_requester = interaction.user.id == requester_id
+        staff = await self._require_support_editor(interaction)
+        if not is_requester and staff is None:
+            return
+
+        _, transcript_file = await self._build_transcript(channel)
+        updated = self.bot.ticket_store.close_ticket_with_reason(interaction.guild.id, channel.id, reason=reason)
+        await interaction.response.send_message("Closing this ticket in 5 seconds...", ephemeral=True)
+        audit_cog = self.bot.get_cog("AuditLogCog")
+        if audit_cog is not None and hasattr(audit_cog, "get_log_channel"):
+            log_channel = audit_cog.get_log_channel(interaction.guild)
+            if log_channel is not None:
+                try:
+                    await log_channel.send(
+                        content=f"Ticket transcript for #{channel.name}\nClose reason: {reason or 'No reason provided.'}",
+                        file=transcript_file,
+                    )
+                except Exception:
+                    pass
+        try:
+            await channel.send(f"This support ticket has been closed. Reason: {reason or 'No reason provided.'}")
+        except Exception:
+            pass
+        await self._log_support_event(
+            interaction.guild,
+            title="Support Ticket Closed",
+            description=f"{channel.name} was closed.",
+            user_name=str(interaction.user),
+            channel_name=channel.name,
+            fields=[
+                ("Priority", str((updated or ticket).get("priority", "normal")).title(), True),
+                ("Reason", reason or "No reason provided.", False),
+            ],
+        )
+        try:
+            await channel.delete(reason=f"Support ticket closed by {interaction.user}")
+            await self._delete_empty_ticket_category(interaction.guild)
+        except Exception:
+            await interaction.followup.send("I couldn't delete the ticket channel. Check my channel permissions.", ephemeral=True)
 
     @app_commands.command(name="ticket", description="Open a private support ticket for your issue")
     @app_commands.describe(

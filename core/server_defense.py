@@ -55,6 +55,9 @@ DEFAULT_GUILD_DEFENSES = {
     "antiraid": {
         "enabled": False,
         "ends_at": None,
+        "blocked_phrases": [],
+        "allowed_domains": [],
+        "preset": "balanced",
     },
 }
 
@@ -112,6 +115,18 @@ def _is_discord_invite_text(text: str) -> bool:
     return "discord.gg/" in lowered or "discord.com/invite/" in lowered or "discordapp.com/invite/" in lowered
 
 
+def _extract_domains(text: str) -> list[str]:
+    matches = URL_PATTERN.findall(text or "")
+    domains: list[str] = []
+    for match in matches:
+        value = match.lower()
+        value = value.replace("https://", "").replace("http://", "").replace("www.", "")
+        domain = value.split("/")[0].split("?")[0].strip(".")
+        if domain:
+            domains.append(domain)
+    return domains
+
+
 class ServerDefenseStore:
     def __init__(self, path: str | Path = "dashboard_data/server_defense.json"):
         self.path = Path(path)
@@ -138,6 +153,10 @@ class ServerDefenseStore:
         if feature == "lockdown":
             bucket["allowed_role_ids"] = _normalize_role_ids(bucket.get("allowed_role_ids", []))
             bucket["snapshot"] = bucket.get("snapshot", {}) or {}
+        if feature == "antiraid":
+            bucket["blocked_phrases"] = [str(item).strip() for item in bucket.get("blocked_phrases", []) if str(item).strip()][:50]
+            bucket["allowed_domains"] = [str(item).strip().lower() for item in bucket.get("allowed_domains", []) if str(item).strip()][:50]
+            bucket["preset"] = str(bucket.get("preset") or "balanced")
         return bucket
 
     def get_all(self, guild_id: int) -> dict[str, dict[str, Any]]:
@@ -525,6 +544,9 @@ class ServerDefenseManager:
             "level_label": level_label,
             "progress_percent": max(0, min(int(round(score)), 100)),
             "status_copy": status_copy,
+            "preset": antiraid_state.get("preset", "balanced"),
+            "blocked_phrases": antiraid_state.get("blocked_phrases", []),
+            "allowed_domains": antiraid_state.get("allowed_domains", []),
             "recent_signals": recent_signals,
             "recent_actions": list(threat_state.get("recent_actions", [])),
             "raid_mode_active": threat_state.get("raid_mode_active", False),
@@ -652,6 +674,53 @@ class ServerDefenseManager:
             "lockdown_role_count": len(lockdown_roles),
             "threat": threat_summary,
         }
+
+    def update_guardian_lists(
+        self,
+        guild_id: int,
+        *,
+        blocked_phrases: list[str] | None = None,
+        allowed_domains: list[str] | None = None,
+    ) -> dict[str, Any]:
+        current = self.store.get_feature(guild_id, "antiraid")
+        next_phrases = [
+            str(item).strip().lower()
+            for item in (blocked_phrases if blocked_phrases is not None else current.get("blocked_phrases", []))
+            if str(item).strip()
+        ][:50]
+        next_domains = [
+            str(item).strip().lower()
+            for item in (allowed_domains if allowed_domains is not None else current.get("allowed_domains", []))
+            if str(item).strip()
+        ][:50]
+        return self.store.patch_feature(
+            guild_id,
+            "antiraid",
+            blocked_phrases=next_phrases,
+            allowed_domains=next_domains,
+        )
+
+    def apply_guardian_preset(self, guild_id: int, preset: str) -> dict[str, Any]:
+        preset_name = str(preset).strip().lower()
+        presets = {
+            "balanced": {
+                "antispam": {"message_limit": 5, "window_seconds": 6, "timeout_seconds": 90},
+                "mentionguard": {"mention_limit": 5, "window_seconds": 10, "timeout_seconds": 90},
+            },
+            "strict": {
+                "antispam": {"message_limit": 4, "window_seconds": 5, "timeout_seconds": 180},
+                "mentionguard": {"mention_limit": 4, "window_seconds": 8, "timeout_seconds": 180},
+            },
+            "emergency": {
+                "antispam": {"message_limit": 3, "window_seconds": 4, "timeout_seconds": 300},
+                "mentionguard": {"mention_limit": 3, "window_seconds": 6, "timeout_seconds": 300},
+            },
+        }
+        selected = presets.get(preset_name, presets["balanced"])
+        self.store.patch_feature(guild_id, "antiraid", preset=preset_name if preset_name in presets else "balanced")
+        self.store.patch_feature(guild_id, "antispam", **selected["antispam"])
+        self.store.patch_feature(guild_id, "mentionguard", **selected["mentionguard"])
+        return self.store.get_feature(guild_id, "antiraid")
 
     def _cancel_expiry(self, guild_id: int, feature: str) -> None:
         task = self._expiry_tasks.pop((guild_id, feature), None)
@@ -1024,19 +1093,28 @@ class ServerDefenseManager:
         content = message.content or ""
         antiraid = self.store.get_feature(guild_id, "antiraid")
         antiraid_active = self._is_active(antiraid)
+        allowed_domains = set(antiraid.get("allowed_domains", []))
+        blocked_phrases = [phrase for phrase in antiraid.get("blocked_phrases", []) if phrase]
 
         if antiraid_active:
             await self._record_message_risk(message)
+            lowered = content.lower()
+            if blocked_phrases and any(phrase in lowered for phrase in blocked_phrases):
+                await self._delete_message(message, "Guardian removed a blocked phrase.")
+                await self._record_module_trigger(message.guild, "guardian blacklist", "Guardian removed a blocked phrase during active monitoring.")
+                return True
 
         linkblock = self.store.get_feature(guild_id, "linkblock")
-        if self._is_active(linkblock) and self._contains_link(content) and not self._contains_invite(content):
+        domains = set(_extract_domains(content))
+        whitelisted = bool(domains and any(domain in allowed_domains or any(domain.endswith(f".{allowed}") for allowed in allowed_domains) for domain in domains))
+        if self._is_active(linkblock) and self._contains_link(content) and not self._contains_invite(content) and not whitelisted:
             await self._delete_message(message, "Link Block prevented that message.")
             if antiraid_active:
                 await self._record_module_trigger(message.guild, "linkblock", "Link Block removed a message while Guardian was watching the server.")
             return True
 
         inviteblock = self.store.get_feature(guild_id, "inviteblock")
-        if self._is_active(inviteblock) and self._contains_invite(content):
+        if self._is_active(inviteblock) and self._contains_invite(content) and not whitelisted:
             await self._delete_message(message, "Invite Block prevented that message.")
             if antiraid_active:
                 await self._record_module_trigger(message.guild, "inviteblock", "Invite Block removed a Discord invite while Guardian was watching the server.")

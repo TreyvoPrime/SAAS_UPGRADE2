@@ -55,7 +55,7 @@ def build_command_catalog(bot: discord.Client) -> list[dict]:
         "modules.purge": "ServerGuard",
         "modules.reactionroles": "Reaction Roles",
         "modules.reminders": "Reminders",
-        "modules.rolemanager": "ServerGuard",
+        "modules.rolemanager": "Role Tools",
         "modules.serverdefense": "ServerGuard",
         "modules.serverstats": "Server Stats",
         "modules.support": "Support",

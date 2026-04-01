@@ -184,6 +184,77 @@ class AutoFeedCog(commands.Cog):
             return
         await interaction.response.send_message(f"Autofeed #{autofeed_id} has been deleted.", ephemeral=True)
 
+    @autofeed.command(name="pause", description="Pause a running autofeed without deleting it")
+    async def autofeed_pause(self, interaction: discord.Interaction, autofeed_id: app_commands.Range[int, 1, 1000000]):
+        staff = await self._require_staff(interaction)
+        if staff is None or interaction.guild is None:
+            return
+        updated = self.store.set_enabled(interaction.guild.id, int(autofeed_id), False)
+        if updated is None:
+            await interaction.response.send_message("I couldn't find that autofeed in this server.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"Autofeed #{autofeed_id} is now paused.", ephemeral=True)
+
+    @autofeed.command(name="resume", description="Resume a paused autofeed")
+    async def autofeed_resume(self, interaction: discord.Interaction, autofeed_id: app_commands.Range[int, 1, 1000000]):
+        staff = await self._require_staff(interaction)
+        if staff is None or interaction.guild is None:
+            return
+        updated = self.store.set_enabled(interaction.guild.id, int(autofeed_id), True)
+        if updated is None:
+            await interaction.response.send_message("I couldn't find that autofeed in this server.", ephemeral=True)
+            return
+        next_post_at = from_iso(updated.get("next_post_at"))
+        next_line = f" Next post: <t:{int(next_post_at.timestamp())}:F>." if next_post_at else ""
+        await interaction.response.send_message(f"Autofeed #{autofeed_id} is live again.{next_line}", ephemeral=True)
+
+    @autofeed.command(name="edit", description="Edit an autofeed's channel, message, or interval")
+    @app_commands.describe(
+        autofeed_id="Which autofeed you want to update",
+        channel="Optional new channel",
+        message="Optional new repeating message",
+        days="Optional new day interval",
+        hours="Optional new hour interval",
+        minutes="Optional new minute interval",
+    )
+    async def autofeed_edit(
+        self,
+        interaction: discord.Interaction,
+        autofeed_id: app_commands.Range[int, 1, 1000000],
+        channel: discord.TextChannel | None = None,
+        message: app_commands.Range[str, 1, 1800] | None = None,
+        days: app_commands.Range[int, 0, 30] | None = None,
+        hours: app_commands.Range[int, 0, 23] | None = None,
+        minutes: app_commands.Range[int, 0, 59] | None = None,
+    ):
+        staff = await self._require_staff(interaction)
+        if staff is None or interaction.guild is None:
+            return
+        current = self.store.get_feed(interaction.guild.id, int(autofeed_id))
+        if current is None:
+            await interaction.response.send_message("I couldn't find that autofeed in this server.", ephemeral=True)
+            return
+        interval_minutes = None
+        if days is not None or hours is not None or minutes is not None:
+            interval_minutes = (days or 0) * 1440 + (hours or 0) * 60 + (minutes or 0)
+            if interval_minutes <= 0:
+                await interaction.response.send_message("If you change the interval, make it at least 1 minute total.", ephemeral=True)
+                return
+        updated = self.store.update_feed(
+            interaction.guild.id,
+            int(autofeed_id),
+            channel_id=channel.id if channel else ...,
+            message=message if message is not None else ...,
+            interval_minutes=interval_minutes if interval_minutes is not None else ...,
+        )
+        if updated is None:
+            await interaction.response.send_message("I couldn't update that autofeed right now.", ephemeral=True)
+            return
+        await interaction.response.send_message(
+            f"Updated autofeed #{autofeed_id}. It now posts in <#{updated['channel_id']}> every {_format_minutes(updated['interval_minutes'])}.",
+            ephemeral=True,
+        )
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(AutoFeedCog(bot))

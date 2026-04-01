@@ -75,6 +75,28 @@ class AutoFeedStore:
         self._save()
         return dict(record)
 
+    def update_feed(
+        self,
+        guild_id: int,
+        feed_id: int,
+        *,
+        channel_id: int | None | object = ...,
+        message: str | None | object = ...,
+        interval_minutes: int | None | object = ...,
+    ) -> dict[str, Any] | None:
+        feed = self._ensure_guild(guild_id)["feeds"].get(str(feed_id))
+        if not isinstance(feed, dict):
+            return None
+        if channel_id is not ...:
+            feed["channel_id"] = int(channel_id)
+        if message is not ...:
+            feed["message"] = str(message or "").strip()[:1800]
+        if interval_minutes is not ...:
+            feed["interval_minutes"] = int(interval_minutes)
+            feed["next_post_at"] = to_iso(utcnow() + timedelta(minutes=int(interval_minutes)))
+        self._save()
+        return dict(feed)
+
     def list_feeds(self, guild_id: int, *, enabled_only: bool = False) -> list[dict[str, Any]]:
         feeds = [
             dict(item)
@@ -95,6 +117,16 @@ class AutoFeedStore:
         item = self._ensure_guild(guild_id)["feeds"].get(str(feed_id))
         return dict(item) if isinstance(item, dict) else None
 
+    def set_enabled(self, guild_id: int, feed_id: int, enabled: bool) -> dict[str, Any] | None:
+        feed = self._ensure_guild(guild_id)["feeds"].get(str(feed_id))
+        if not isinstance(feed, dict):
+            return None
+        feed["enabled"] = bool(enabled)
+        if enabled and not feed.get("next_post_at"):
+            feed["next_post_at"] = to_iso(utcnow() + timedelta(minutes=int(feed.get("interval_minutes", 60))))
+        self._save()
+        return dict(feed)
+
     def delete_feed(self, guild_id: int, feed_id: int) -> bool:
         removed = self._ensure_guild(guild_id)["feeds"].pop(str(feed_id), None)
         self._save()
@@ -109,4 +141,3 @@ class AutoFeedStore:
         feed["next_post_at"] = to_iso(now + timedelta(minutes=int(feed.get("interval_minutes", 60))))
         self._save()
         return dict(feed)
-

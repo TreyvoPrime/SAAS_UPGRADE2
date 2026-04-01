@@ -10,6 +10,7 @@ from core.storage import read_json, write_json
 
 DEFAULT_WELCOME_MESSAGE = "Hello {user}, welcome to {server}."
 DEFAULT_LEAVE_MESSAGE = "{user_name} left {server}."
+DEFAULT_JOIN_DM_MESSAGE = "Welcome to {server}, {display_name}. Read the server guide and check the rules channel to get started."
 GREETING_DATA_PATH = Path("greetings.json")
 LEGACY_WELCOME_PATH = Path("welcome_channels.json")
 
@@ -48,6 +49,8 @@ class GreetingsStore:
                 "welcome_message": DEFAULT_WELCOME_MESSAGE,
                 "leave_channel_id": None,
                 "leave_message": DEFAULT_LEAVE_MESSAGE,
+                "join_dm_enabled": False,
+                "join_dm_message": DEFAULT_JOIN_DM_MESSAGE,
             }
 
         if migrated:
@@ -65,6 +68,8 @@ class GreetingsStore:
             "welcome_message": str(state.get("welcome_message") or DEFAULT_WELCOME_MESSAGE),
             "leave_channel_id": self._coerce_int(state.get("leave_channel_id")),
             "leave_message": str(state.get("leave_message") or DEFAULT_LEAVE_MESSAGE),
+            "join_dm_enabled": bool(state.get("join_dm_enabled", False)),
+            "join_dm_message": str(state.get("join_dm_message") or DEFAULT_JOIN_DM_MESSAGE),
         }
 
     def update_guild(
@@ -75,6 +80,8 @@ class GreetingsStore:
         welcome_message: str | None | object = ...,
         leave_channel_id: int | None | object = ...,
         leave_message: str | None | object = ...,
+        join_dm_enabled: bool | object = ...,
+        join_dm_message: str | None | object = ...,
     ) -> dict[str, Any]:
         current = self.get_guild(guild_id)
 
@@ -86,6 +93,10 @@ class GreetingsStore:
             current["leave_channel_id"] = self._coerce_int(leave_channel_id)
         if leave_message is not ...:
             current["leave_message"] = self._normalize_message(leave_message, DEFAULT_LEAVE_MESSAGE)
+        if join_dm_enabled is not ...:
+            current["join_dm_enabled"] = bool(join_dm_enabled)
+        if join_dm_message is not ...:
+            current["join_dm_message"] = self._normalize_message(join_dm_message, DEFAULT_JOIN_DM_MESSAGE)
 
         self._data[self._guild_key(guild_id)] = current
         self._save()
@@ -131,6 +142,10 @@ class GreetingsManager:
                 "message": state["leave_message"],
                 "enabled": bool(state["leave_channel_id"]),
             },
+            "join_dm": {
+                "enabled": bool(state["join_dm_enabled"]),
+                "message": state["join_dm_message"],
+            },
             "placeholders": [
                 {"token": "{user}", "label": "Mentions the member"},
                 {"token": "{user_name}", "label": "Uses the member name"},
@@ -154,18 +169,26 @@ class GreetingsManager:
             leave_message=message,
         )
 
+    def set_join_dm(self, guild_id: int, *, enabled: bool | object = ..., message: str | None | object = ...) -> dict[str, Any]:
+        return self.store.update_guild(
+            guild_id,
+            join_dm_enabled=enabled,
+            join_dm_message=message,
+        )
+
     async def send_welcome(self, member: discord.Member) -> bool:
         state = self.store.get_guild(member.guild.id)
         channel = self._resolve_channel(member.guild, state["welcome_channel_id"])
-        if channel is None:
-            return False
-
-        content = self.format_message(state["welcome_message"], member)
-        try:
-            await channel.send(content)
-            return True
-        except (discord.Forbidden, discord.HTTPException):
-            return False
+        sent = False
+        if channel is not None:
+            content = self.format_message(state["welcome_message"], member)
+            try:
+                await channel.send(content)
+                sent = True
+            except (discord.Forbidden, discord.HTTPException):
+                sent = False
+        await self.send_join_dm(member)
+        return sent
 
     async def send_leave(self, member: discord.Member) -> bool:
         state = self.store.get_guild(member.guild.id)
@@ -176,6 +199,17 @@ class GreetingsManager:
         content = self.format_message(state["leave_message"], member)
         try:
             await channel.send(content)
+            return True
+        except (discord.Forbidden, discord.HTTPException):
+            return False
+
+    async def send_join_dm(self, member: discord.Member) -> bool:
+        state = self.store.get_guild(member.guild.id)
+        if not state.get("join_dm_enabled"):
+            return False
+        content = self.format_message(state["join_dm_message"], member)
+        try:
+            await member.send(content)
             return True
         except (discord.Forbidden, discord.HTTPException):
             return False

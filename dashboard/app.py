@@ -449,6 +449,10 @@ def create_dashboard_app(bot) -> FastAPI:
                 "message": "{user_name} left {server}.",
                 "enabled": False,
             },
+            "join_dm": {
+                "enabled": False,
+                "message": "Welcome to {server}, {display_name}. Read the server guide and check the rules channel to get started.",
+            },
             "placeholders": [
                 {"token": "{user}", "label": "Mentions the member"},
                 {"token": "{user_name}", "label": "Uses the member name"},
@@ -480,6 +484,7 @@ def create_dashboard_app(bot) -> FastAPI:
             "issue_count": len(ticket_store.get_issue_types(guild_id)),
             "support_category_id": category_id,
             "support_category_name": category_name,
+            "active_tickets": ticket_store.list_tickets(guild_id, status="open", limit=10),
         }
 
     def giveaways_dashboard_summary(guild_id: int) -> dict:
@@ -499,6 +504,9 @@ def create_dashboard_app(bot) -> FastAPI:
                 "ended_at": item.get("ended_at"),
                 "winner_names": item.get("winner_names", []),
                 "description": item.get("description") or "No extra details set.",
+                "required_role_ids": item.get("required_role_ids", []),
+                "bonus_role_ids": item.get("bonus_role_ids", []),
+                "bonus_entries": int(item.get("bonus_entries", 0)),
             }
 
         active = [serialize(item) for item in store.list_giveaways(guild_id, status="active", limit=12)]
@@ -525,6 +533,7 @@ def create_dashboard_app(bot) -> FastAPI:
                     "interval_minutes": item["interval_minutes"],
                     "next_post_at": item.get("next_post_at"),
                     "created_by_name": item.get("created_by_name", "Unknown"),
+                    "enabled": bool(item.get("enabled", True)),
                 }
             )
         return {"feeds": feeds, "count": len(feeds)}
@@ -668,8 +677,9 @@ def create_dashboard_app(bot) -> FastAPI:
 
     def case_dashboard_summary(guild_id: int) -> dict:
         case_store = getattr(bot, "case_store", None)
+        note_store = getattr(bot, "staff_note_store", None)
         if case_store is None:
-            return {"cases": [], "open_count": 0}
+            return {"cases": [], "open_count": 0, "recent_staff_notes": []}
 
         cases = case_store.list_cases(guild_id, 30)
         serialized = []
@@ -688,7 +698,22 @@ def create_dashboard_app(bot) -> FastAPI:
                     "notes": notes[-5:],
                 }
             )
-        return {"cases": serialized, "open_count": len(serialized)}
+        recent_staff_notes: list[dict] = []
+        if note_store is not None:
+            raw = note_store.data.get("guilds", {}).get(str(guild_id), {}).get("users", {})
+            for user_id, notes in raw.items():
+                for note in notes[-3:]:
+                    recent_staff_notes.append(
+                        {
+                            "user_id": user_id,
+                            "note_id": note.get("note_id"),
+                            "moderator_name": note.get("moderator_name", "Unknown"),
+                            "note": note.get("note", ""),
+                            "timestamp": note.get("timestamp", ""),
+                        }
+                    )
+            recent_staff_notes.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
+        return {"cases": serialized, "open_count": len(serialized), "recent_staff_notes": recent_staff_notes[:8]}
 
     def _slugify(value: str) -> str:
         return "".join(character.lower() if character.isalnum() else "-" for character in value).strip("-")

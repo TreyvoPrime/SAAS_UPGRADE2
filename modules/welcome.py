@@ -105,6 +105,26 @@ class WelcomeLeave(commands.Cog):
             ephemeral=True,
         )
 
+    @app_commands.command(
+        name="setjoindm",
+        description="Turn the join guide DM on or off for new members",
+    )
+    @app_commands.describe(enabled="Whether new members should get the join guide DM")
+    async def setjoindm(
+        self,
+        interaction: discord.Interaction,
+        enabled: bool,
+    ) -> None:
+        if not await self._require_manager(interaction):
+            return
+
+        assert interaction.guild is not None
+        self.bot.greetings.set_join_dm(interaction.guild.id, enabled=enabled)
+        await interaction.response.send_message(
+            "Join guide DMs are now on." if enabled else "Join guide DMs are now off.",
+            ephemeral=True,
+        )
+
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member) -> None:
         await self.bot.greetings.send_welcome(member)

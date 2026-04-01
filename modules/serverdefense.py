@@ -629,6 +629,65 @@ class ServerDefense(commands.Cog):
             ephemeral=True,
         )
 
+    @antiraid.command(name="blacklistadd", description="Add a phrase Guardian should block immediately")
+    async def antiraid_blacklist_add(self, interaction: discord.Interaction, phrase: app_commands.Range[str, 3, 80]):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        threat = self.bot.server_defense.get_threat_summary(interaction.guild.id)
+        phrases = list(threat.get("blocked_phrases", []))
+        if phrase.lower() not in phrases:
+            phrases.append(phrase.lower())
+        updated = self.bot.server_defense.update_guardian_lists(interaction.guild.id, blocked_phrases=phrases)
+        await interaction.response.send_message(f"Guardian blacklist updated. Now blocking {len(updated.get('blocked_phrases', []))} phrase(s).", ephemeral=True)
+
+    @antiraid.command(name="blacklistremove", description="Remove a blocked Guardian phrase")
+    async def antiraid_blacklist_remove(self, interaction: discord.Interaction, phrase: app_commands.Range[str, 3, 80]):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        threat = self.bot.server_defense.get_threat_summary(interaction.guild.id)
+        phrases = [item for item in threat.get("blocked_phrases", []) if item != phrase.lower()]
+        updated = self.bot.server_defense.update_guardian_lists(interaction.guild.id, blocked_phrases=phrases)
+        await interaction.response.send_message(f"Guardian blacklist updated. Now blocking {len(updated.get('blocked_phrases', []))} phrase(s).", ephemeral=True)
+
+    @antiraid.command(name="whitelistadd", description="Allow a domain through Link Block and Invite Block")
+    async def antiraid_whitelist_add(self, interaction: discord.Interaction, domain: app_commands.Range[str, 3, 120]):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        cleaned = domain.strip().lower().replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0]
+        threat = self.bot.server_defense.get_threat_summary(interaction.guild.id)
+        domains = list(threat.get("allowed_domains", []))
+        if cleaned not in domains:
+            domains.append(cleaned)
+        updated = self.bot.server_defense.update_guardian_lists(interaction.guild.id, allowed_domains=domains)
+        await interaction.response.send_message(f"Guardian whitelist updated. Allowed domains: {', '.join(updated.get('allowed_domains', [])) or 'None'}", ephemeral=True)
+
+    @antiraid.command(name="whitelistremove", description="Remove a domain from the Guardian allow list")
+    async def antiraid_whitelist_remove(self, interaction: discord.Interaction, domain: app_commands.Range[str, 3, 120]):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        cleaned = domain.strip().lower().replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0]
+        threat = self.bot.server_defense.get_threat_summary(interaction.guild.id)
+        domains = [item for item in threat.get("allowed_domains", []) if item != cleaned]
+        updated = self.bot.server_defense.update_guardian_lists(interaction.guild.id, allowed_domains=domains)
+        await interaction.response.send_message(f"Guardian whitelist updated. Allowed domains: {', '.join(updated.get('allowed_domains', [])) or 'None'}", ephemeral=True)
+
+    @antiraid.command(name="preset", description="Apply a Guardian tuning preset")
+    @app_commands.choices(preset=[
+        app_commands.Choice(name="balanced", value="balanced"),
+        app_commands.Choice(name="strict", value="strict"),
+        app_commands.Choice(name="emergency", value="emergency"),
+    ])
+    async def antiraid_preset(self, interaction: discord.Interaction, preset: app_commands.Choice[str]):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        updated = self.bot.server_defense.apply_guardian_preset(interaction.guild.id, preset.value)
+        await interaction.response.send_message(f"Guardian preset set to `{updated.get('preset', preset.value)}`.", ephemeral=True)
+
     @lockdown.command(name="enable", description="Lock the server's text channels")
     async def lockdown_enable(
         self,

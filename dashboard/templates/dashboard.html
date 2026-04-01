@@ -328,6 +328,24 @@
                         <p>Warns, timeouts, kicks, and bans will start creating case IDs here once staff use them.</p>
                     </div>
                     {% endif %}
+
+                    {% if case_summary.recent_staff_notes %}
+                    <article class="command-card case-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Staff Notes</span>
+                            <span class="module-chip">Private context</span>
+                        </div>
+                        <div class="command-card-top">
+                            <h4>Recent staff notes</h4>
+                            <span class="module-chip">{{ case_summary.recent_staff_notes|length }} recent</span>
+                        </div>
+                        <div class="role-summary">
+                            {% for note in case_summary.recent_staff_notes %}
+                            <div class="case-note-line">Note #{{ note.note_id }} · {{ note.moderator_name }} · {{ note.note }}</div>
+                            {% endfor %}
+                        </div>
+                    </article>
+                    {% endif %}
                 </div>
             </section>
             {% endif %}
@@ -413,6 +431,24 @@
                             <button type="button" class="primary-button compact-button" data-greeting-save="leave">Save leave flow</button>
                         </div>
                     </article>
+
+                    <article class="greeting-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Greeting</span>
+                            <span class="module-chip">Join guide DM</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Join guide direct message</h4>
+                                <p>New members can also receive a welcome guide in DMs with the same placeholder system.</p>
+                            </div>
+                            <span class="defense-status-pill {% if not greetings_summary.join_dm.enabled %}is-muted{% endif %}">
+                                {% if greetings_summary.join_dm.enabled %}Active{% else %}Off{% endif %}
+                            </span>
+                        </div>
+                        <div class="role-summary">{{ greetings_summary.join_dm.message }}</div>
+                        <div class="dashboard-access-summary">Use `/setjoindm true` to turn this on, then edit the guide text in the dashboard later if you want to personalize it even more.</div>
+                    </article>
                 </div>
             </section>
             {% endif %}
@@ -476,7 +512,21 @@
                             <span class="defense-status-pill is-muted">In Discord</span>
                         </div>
                         <div class="role-summary">Use `/ticketissue add`, `/ticketissue remove`, and `/ticketissue list` to manage these options from inside the server.</div>
-                        <div class="dashboard-access-summary">Open tickets will keep using the same private support-channel flow. New issue choices update `/ticket` autocomplete automatically after the save.</div>
+                        <div class="role-summary">Use `/ticketclaim`, `/ticketpriority`, `/tickettranscript`, and `/closeticket` to manage live tickets without leaving Discord.</div>
+                        <div class="dashboard-access-summary">Open tickets keep the same private channel flow, but staff can now claim them, raise priority, export transcripts, and close with a reason.</div>
+                        {% if support_summary.active_tickets %}
+                        <div class="support-issue-list">
+                            {% for ticket in support_summary.active_tickets %}
+                            <div class="support-issue-item giveaway-item">
+                                <div class="giveaway-item-copy">
+                                    <strong>Ticket #{{ ticket.ticket_number }} · {{ ticket.issue_type }}</strong>
+                                    <span>{{ ticket.priority|title }} priority{% if ticket.claimed_by_name %} · Claimed by {{ ticket.claimed_by_name }}{% endif %}</span>
+                                    <p>{{ ticket.description }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </article>
                 </div>
             </section>
@@ -516,6 +566,12 @@
                                     <strong>#{{ giveaway.id }} · {{ giveaway.prize }}</strong>
                                     <span>{{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner{% if giveaway.winner_count != 1 %}s{% endif %}</span>
                                     <p>{{ giveaway.description }}</p>
+                                    {% if giveaway.required_role_ids %}
+                                    <p>Role requirement is enabled for this giveaway.</p>
+                                    {% endif %}
+                                    {% if giveaway.bonus_entries %}
+                                    <p>Bonus entries: {{ giveaway.bonus_entries }} extra for the selected bonus role.</p>
+                                    {% endif %}
                                 </div>
                             </div>
                             {% endfor %}
@@ -544,6 +600,7 @@
                         <div class="role-summary">/giveaway end - End a giveaway whenever you want</div>
                         <div class="role-summary">/giveaway list - View all active and past giveaways</div>
                         <div class="role-summary">/giveaway reroll - Pick a new winner instantly</div>
+                        <div class="dashboard-access-summary">Giveaways can now require a role before entry and award bonus entries to special roles, so promo drops and perk-based events feel much more intentional.</div>
                         <div class="support-issue-list">
                             {% for giveaway in giveaways_summary.recent %}
                             <div class="support-issue-item giveaway-item">
@@ -597,7 +654,7 @@
                             <div class="support-issue-item giveaway-item">
                                 <div class="giveaway-item-copy">
                                     <strong>#{{ feed.id }} · <#{{ feed.channel_id }}></strong>
-                                    <span>Every {{ feed.interval_minutes }} minutes</span>
+                                    <span>Every {{ feed.interval_minutes }} minutes · {% if feed.enabled %}Running{% else %}Paused{% endif %}</span>
                                     <p>{{ feed.message }}</p>
                                 </div>
                             </div>
@@ -626,6 +683,9 @@
                         <div class="role-summary">/autofeed create - Choose a channel, write the feed message, and set how often it should repeat</div>
                         <div class="role-summary">/autofeed list - Review every active autofeed in the server</div>
                         <div class="role-summary">/autofeed delete - Stop a feed loop by its autofeed ID</div>
+                        <div class="role-summary">/autofeed edit - Change the channel, copy, or timing later</div>
+                        <div class="role-summary">/autofeed pause - Freeze a loop without deleting it</div>
+                        <div class="role-summary">/autofeed resume - Start a paused loop again</div>
                     </article>
                 </div>
             </section>

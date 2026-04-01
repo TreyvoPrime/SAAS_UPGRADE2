@@ -59,6 +59,23 @@ def parse_duration_input(value: str) -> int:
     return total_seconds
 
 
+def format_duration(seconds: int) -> str:
+    seconds = max(int(seconds), 0)
+    days, remainder = divmod(seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    parts: list[str] = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if seconds and not parts:
+        parts.append(f"{seconds}s")
+    return " ".join(parts) or "0s"
+
+
 class ReminderCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -95,6 +112,12 @@ class ReminderCog(commands.Cog):
                         description=reminder["message"],
                         color=discord.Color.blurple(),
                     )
+                    if reminder.get("repeat_seconds"):
+                        embed.add_field(
+                            name="Repeats",
+                            value=f"Every {format_duration(int(reminder['repeat_seconds']))}",
+                            inline=False,
+                        )
 
                     if reminder.get("channel_id"):
                         embed.add_field(
@@ -108,8 +131,12 @@ class ReminderCog(commands.Cog):
                     except discord.HTTPException:
                         pass
 
-                to_remove.append(reminder)
-                changed = True
+                if reminder.get("repeat_seconds"):
+                    reminder["due_at"] = now + int(reminder["repeat_seconds"])
+                    changed = True
+                else:
+                    to_remove.append(reminder)
+                    changed = True
 
         if to_remove:
             for reminder in to_remove:
@@ -127,12 +154,14 @@ class ReminderCog(commands.Cog):
     @app_commands.describe(
         time_input="When the reminder should happen, like 10m, 2h, or 1d 4h",
         message="What you want to be reminded about",
+        repeat="Optional repeat time, like 1d or 2h 30m",
     )
     async def remind(
         self,
         interaction: discord.Interaction,
         time_input: app_commands.Range[str, 1, 40],
         message: app_commands.Range[str, 1, 500],
+        repeat: app_commands.Range[str, 1, 40] | None = None,
     ):
         seconds = parse_duration_input(time_input)
 
@@ -145,6 +174,13 @@ class ReminderCog(commands.Cog):
 
         due_at = int(time.time()) + seconds
         reminder_id = self.get_next_id()
+        repeat_seconds = parse_duration_input(repeat) if repeat else 0
+        if repeat and repeat_seconds <= 0:
+            await interaction.response.send_message(
+                "Use a repeat time like `1d`, `12h`, or `2h 30m`.",
+                ephemeral=True,
+            )
+            return
 
         reminder = {
             "id": reminder_id,
@@ -154,6 +190,7 @@ class ReminderCog(commands.Cog):
             "message": message,
             "created_at": int(time.time()),
             "due_at": due_at,
+            "repeat_seconds": repeat_seconds or None,
         }
 
         self.reminders.append(reminder)
@@ -167,6 +204,8 @@ class ReminderCog(commands.Cog):
         embed.add_field(name="Message", value=message, inline=False)
         embed.add_field(name="Due In", value=time_input, inline=False)
         embed.add_field(name="Due At", value=f"<t:{due_at}:F>\n<t:{due_at}:R>", inline=False)
+        if repeat_seconds:
+            embed.add_field(name="Repeats", value=f"Every {format_duration(repeat_seconds)}", inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -196,6 +235,7 @@ class ReminderCog(commands.Cog):
             lines.append(
                 f"**ID {reminder['id']}** - {reminder['message']}\n"
                 f"Due: <t:{reminder['due_at']}:F> (<t:{reminder['due_at']}:R>)"
+                + (f"\nRepeats every {format_duration(int(reminder['repeat_seconds']))}" if reminder.get("repeat_seconds") else "")
             )
 
         embed.description = "\n\n".join(lines)

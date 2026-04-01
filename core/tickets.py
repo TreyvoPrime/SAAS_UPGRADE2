@@ -132,12 +132,17 @@ class TicketStore:
         guild_state = self._ensure_guild(guild_id)
         record = {
             "channel_id": int(channel_id),
+            "ticket_number": int(guild_state.get("counter", 0)),
             "requester_id": int(requester_id),
             "issue_type": str(issue_type),
             "description": str(description),
             "status": "open",
             "opened_at": datetime.now(timezone.utc).isoformat(),
             "closed_at": None,
+            "claimed_by_id": None,
+            "claimed_by_name": None,
+            "priority": "normal",
+            "close_reason": None,
         }
         guild_state.setdefault("tickets", {})[str(channel_id)] = record
         guild_state.setdefault("open_by_user", {})[str(requester_id)] = int(channel_id)
@@ -150,6 +155,9 @@ class TicketStore:
         return dict(ticket) if isinstance(ticket, dict) else None
 
     def close_ticket(self, guild_id: int, channel_id: int) -> dict[str, Any] | None:
+        return self.close_ticket_with_reason(guild_id, channel_id, reason=None)
+
+    def close_ticket_with_reason(self, guild_id: int, channel_id: int, *, reason: str | None) -> dict[str, Any] | None:
         guild_state = self._ensure_guild(guild_id)
         ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
         if not isinstance(ticket, dict):
@@ -157,8 +165,38 @@ class TicketStore:
 
         ticket["status"] = "closed"
         ticket["closed_at"] = datetime.now(timezone.utc).isoformat()
+        ticket["close_reason"] = str(reason).strip() if reason else None
         requester_id = self._coerce_int(ticket.get("requester_id"))
         if requester_id is not None:
             guild_state.setdefault("open_by_user", {}).pop(str(requester_id), None)
         self._save()
         return dict(ticket)
+
+    def claim_ticket(self, guild_id: int, channel_id: int, *, staff_id: int, staff_name: str) -> dict[str, Any] | None:
+        guild_state = self._ensure_guild(guild_id)
+        ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
+        if not isinstance(ticket, dict):
+            return None
+        ticket["claimed_by_id"] = int(staff_id)
+        ticket["claimed_by_name"] = str(staff_name)
+        self._save()
+        return dict(ticket)
+
+    def set_priority(self, guild_id: int, channel_id: int, priority: str) -> dict[str, Any] | None:
+        guild_state = self._ensure_guild(guild_id)
+        ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
+        if not isinstance(ticket, dict):
+            return None
+        ticket["priority"] = str(priority).strip().lower()
+        self._save()
+        return dict(ticket)
+
+    def list_tickets(self, guild_id: int, *, status: str | None = None, limit: int = 25) -> list[dict[str, Any]]:
+        guild_state = self._ensure_guild(guild_id)
+        tickets = [
+            dict(ticket)
+            for ticket in guild_state.setdefault("tickets", {}).values()
+            if isinstance(ticket, dict) and (status is None or ticket.get("status") == status)
+        ]
+        tickets.sort(key=lambda item: item.get("opened_at", ""), reverse=True)
+        return tickets[:limit]
