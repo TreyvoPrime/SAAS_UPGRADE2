@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import discord
 from discord import app_commands
@@ -71,6 +71,17 @@ class ServerDefense(commands.Cog):
     def _moderation_embed(title: str, description: str, *, color: discord.Color) -> discord.Embed:
         embed = discord.Embed(title=title, description=description, color=color)
         return embed
+
+    @staticmethod
+    def _format_timestamp(timestamp: str | None) -> str:
+        if not timestamp:
+            return "Unknown"
+        try:
+            normalized = timestamp.replace("Z", "+00:00")
+            unix = int(datetime.fromisoformat(normalized).timestamp())
+            return f"<t:{unix}:f> (<t:{unix}:R>)"
+        except Exception:
+            return timestamp
 
     async def _log_moderation_event(
         self,
@@ -382,6 +393,10 @@ class ServerDefense(commands.Cog):
     case = app_commands.Group(
         name="case",
         description="View moderation cases and add internal notes",
+    )
+    staffnotes = app_commands.Group(
+        name="staffnotes",
+        description="Keep internal staff notes on members",
     )
 
     @commands.Cog.listener()
@@ -753,6 +768,66 @@ class ServerDefense(commands.Cog):
             action,
         )
 
+    @app_commands.command(name="history", description="Show a member's moderation history in one staff view")
+    @app_commands.describe(member="Member whose history you want to review")
+    async def history(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        warnings = self.bot.warning_store.list_warnings(interaction.guild.id, member.id)
+        cases = self.bot.case_store.list_user_cases(interaction.guild.id, member.id, limit=10)
+        staff_notes = self.bot.staff_note_store.list_notes(interaction.guild.id, member.id)
+
+        embed = discord.Embed(
+            title=f"History for {member.display_name}",
+            description=f"Staff view for {member.mention}",
+            color=member.color if member.color != discord.Color.default() else discord.Color.blurple(),
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.add_field(name="Warnings", value=str(len(warnings)), inline=True)
+        embed.add_field(name="Cases", value=str(len(cases)), inline=True)
+        embed.add_field(name="Staff Notes", value=str(len(staff_notes)), inline=True)
+
+        timeout_until = getattr(member, "timed_out_until", None)
+        embed.add_field(
+            name="Current timeout",
+            value=self._format_timestamp(timeout_until.isoformat()) if timeout_until else "Not timed out",
+            inline=False,
+        )
+
+        if warnings:
+            warning_lines = []
+            for index, warning in enumerate(warnings[-5:], start=max(len(warnings) - 4, 1)):
+                warning_lines.append(
+                    f"#{index} • {warning.get('reason', 'No reason provided.')}\n{self._format_timestamp(warning.get('timestamp'))}"
+                )
+            embed.add_field(name="Recent warnings", value="\n\n".join(warning_lines)[:1024], inline=False)
+
+        if cases:
+            case_lines = []
+            for case in cases[:5]:
+                reason = case.get("reason") or "No reason provided."
+                case_lines.append(
+                    f"Case #{case['case_id']} • {case['action'].title()}\n{reason}\n{self._format_timestamp(case.get('created_at'))}"
+                )
+            embed.add_field(name="Recent cases", value="\n\n".join(case_lines)[:1024], inline=False)
+
+        if staff_notes:
+            note_lines = []
+            for note in staff_notes[-5:]:
+                note_lines.append(
+                    f"Note #{note['note_id']} • {note.get('moderator_name', 'Unknown')}\n{note.get('note', '')}\n{self._format_timestamp(note.get('timestamp'))}"
+                )
+            embed.add_field(name="Recent staff notes", value="\n\n".join(reversed(note_lines))[:1024], inline=False)
+
+        embed.set_footer(text="Only staff can see this history.")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @app_commands.command(name="timeout", description="Timeout a member for a custom amount of time")
     @app_commands.describe(
         member="Member to timeout",
@@ -1080,6 +1155,103 @@ class ServerDefense(commands.Cog):
             fields=[("Note", note, False)],
         )
         await interaction.response.send_message(f"Added a note to case #{case_id}.", ephemeral=True)
+
+    @staffnotes.command(name="view", description="View the internal staff notes for a member")
+    async def staffnotes_view(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        notes = self.bot.staff_note_store.list_notes(interaction.guild.id, member.id)
+        if not notes:
+            await interaction.response.send_message(
+                f"There are no staff notes saved for {member.mention}.",
+                ephemeral=True,
+            )
+            return
+
+        embed = discord.Embed(
+            title=f"Staff notes for {member.display_name}",
+            description=f"{member.mention} has {len(notes)} internal note(s).",
+            color=discord.Color.blurple(),
+        )
+        lines = []
+        for note in notes[-10:]:
+            lines.append(
+                f"Note #{note['note_id']} • {note.get('moderator_name', 'Unknown')}\n{note.get('note', '')}\n{self._format_timestamp(note.get('timestamp'))}"
+            )
+        embed.add_field(name="Latest notes", value="\n\n".join(reversed(lines))[:1024], inline=False)
+        embed.set_footer(text="Only staff can see these notes.")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @staffnotes.command(name="add", description="Add an internal staff note to a member")
+    async def staffnotes_add(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        note: app_commands.Range[str, 3, 500],
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        saved = self.bot.staff_note_store.add_note(
+            interaction.guild.id,
+            member.id,
+            moderator_id=interaction.user.id,
+            moderator_name=str(interaction.user),
+            note=note,
+        )
+        await self._log_moderation_event(
+            interaction.guild,
+            title="Staff Note Added",
+            description=f"Added an internal note for {member.mention}.",
+            user_name=str(interaction.user),
+            channel_name=getattr(interaction.channel, "name", None),
+            fields=[
+                ("Note ID", f"#{saved['note_id']}", True),
+                ("Note", note, False),
+            ],
+        )
+        await interaction.response.send_message(
+            f"Saved staff note #{saved['note_id']} for {member.mention}.",
+            ephemeral=True,
+        )
+
+    @staffnotes.command(name="remove", description="Remove a saved internal staff note from a member")
+    async def staffnotes_remove(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        note_id: app_commands.Range[int, 1, 1000000],
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        removed = self.bot.staff_note_store.remove_note(interaction.guild.id, member.id, int(note_id))
+        if not removed:
+            await interaction.response.send_message(
+                f"I couldn't find note #{note_id} for {member.mention}.",
+                ephemeral=True,
+            )
+            return
+
+        await self._log_moderation_event(
+            interaction.guild,
+            title="Staff Note Removed",
+            description=f"Removed internal note #{note_id} from {member.mention}.",
+            user_name=str(interaction.user),
+            channel_name=getattr(interaction.channel, "name", None),
+        )
+        await interaction.response.send_message(
+            f"Removed staff note #{note_id} from {member.mention}.",
+            ephemeral=True,
+        )
 
 
 async def setup(bot: commands.Bot):

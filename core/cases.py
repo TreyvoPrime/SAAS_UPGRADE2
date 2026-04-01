@@ -122,3 +122,13 @@ class ModerationCaseStore:
         ]
         cases.sort(key=lambda item: int(item.get("case_id", 0)), reverse=True)
         return cases[:limit]
+
+    def list_user_cases(self, guild_id: int, user_id: int, limit: int = 25) -> list[dict[str, Any]]:
+        bucket = self._guild_bucket(guild_id)
+        cases = [
+            dict(case)
+            for case in bucket.setdefault("cases", {}).values()
+            if isinstance(case, dict) and int(case.get("target_user_id", 0)) == int(user_id)
+        ]
+        cases.sort(key=lambda item: int(item.get("case_id", 0)), reverse=True)
+        return cases[:limit]

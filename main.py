@@ -15,6 +15,7 @@ from core.command_logs import CommandLogStore
 from core.greetings import GreetingsManager, GreetingsStore
 from core.giveaways import GiveawayStore
 from core.server_defense import ServerDefenseManager, ServerDefenseStore
+from core.staffnotes import StaffNoteStore
 from core.tickets import TicketStore
 from core.warnings import WarningStore
 from dashboard.app import DashboardServer, resolve_dashboard_base_url, resolve_dashboard_host, resolve_dashboard_port
@@ -58,6 +59,7 @@ class ServerCoreBot(commands.Bot):
         self.giveaway_store = GiveawayStore()
         self.server_defense_store = ServerDefenseStore()
         self.server_defense = ServerDefenseManager(self, self.server_defense_store)
+        self.staff_note_store = StaffNoteStore()
         self.ticket_store = TicketStore()
         self.warning_store = WarningStore()
         self._server_defense_initialized = False
