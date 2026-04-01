@@ -43,7 +43,26 @@ class CommandAccessManager:
             return True
 
         allowed_role_ids = set(policy["allowed_role_ids"])
-        if allowed_role_ids and allowed_role_ids.isdisjoint({role.id for role in interaction.user.roles}):
+        if policy.get("restrict_to_roles"):
+            member_role_ids = {role.id for role in interaction.user.roles}
+            if not allowed_role_ids or allowed_role_ids.isdisjoint(member_role_ids):
+                self.logs.append(
+                    {
+                        "guild_id": interaction.guild.id,
+                        "guild_name": interaction.guild.name,
+                        "command": command_name,
+                        "status": "blocked_roles",
+                        "user_id": interaction.user.id,
+                        "user_name": str(interaction.user),
+                    }
+                )
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "Your roles are not allowed to use this command.",
+                        ephemeral=True,
+                    )
+                return False
+        elif allowed_role_ids and allowed_role_ids.isdisjoint({role.id for role in interaction.user.roles}):
             self.logs.append(
                 {
                     "guild_id": interaction.guild.id,

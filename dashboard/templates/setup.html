@@ -111,7 +111,7 @@
                             </div>
                             <div class="setup-summary-card">
                                 <strong>Current moderation access</strong>
-                                <span id="setup-moderation-summary">{{ "Allowed for everyone" if setup_summary.moderation.allow_all else (setup_summary.moderation.role_names|join(", ") if setup_summary.moderation.role_names else "Allowed for everyone") }}</span>
+                                <span id="setup-moderation-summary">{{ "Allowed for everyone" if setup_summary.moderation.allow_all else (setup_summary.moderation.role_names|join(", ") if setup_summary.moderation.role_names else "No roles selected") }}</span>
                             </div>
                         </div>
 
@@ -131,7 +131,7 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can use moderation commands</h4>
-                                    <p>These roles can use warn, timeout, ban, purge, role tools, history, and staff notes. Leave every role unchecked if you want those tools open to everyone.</p>
+                                    <p>These roles can use warn, timeout, ban, purge, role tools, history, and staff notes. If you want everyone to use them, turn on the toggle.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
                                     <input id="wizard-moderation-allow-all" type="checkbox">
@@ -249,7 +249,7 @@
                             </div>
                             <div class="setup-summary-card">
                                 <strong>Support access</strong>
-                                <span id="setup-support-summary">{{ "Allowed for everyone" if setup_summary.support.allow_all else (setup_summary.support.role_names|join(", ") if setup_summary.support.role_names else "Allowed for everyone") }}</span>
+                                <span id="setup-support-summary">{{ "Allowed for everyone" if setup_summary.support.allow_all else (setup_summary.support.role_names|join(", ") if setup_summary.support.role_names else "No roles selected") }}</span>
                             </div>
                         </div>
 
@@ -257,7 +257,7 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can manage support commands</h4>
-                                    <p>These roles can manage ticket issues, claims, priority, and close actions. Leave every role unchecked if you want those tools open to everyone.</p>
+                                    <p>These roles can manage ticket issues, claims, priority, and close actions. If you want everyone to use them, turn on the toggle.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
                                     <input id="wizard-support-allow-all" type="checkbox">
@@ -290,7 +290,7 @@
                             </div>
                             <div class="setup-summary-card">
                                 <strong>Community tool access</strong>
-                                <span id="setup-community-summary">{{ "Allowed for everyone" if setup_summary.community.allow_all else (setup_summary.community.role_names|join(", ") if setup_summary.community.role_names else "Allowed for everyone") }}</span>
+                                <span id="setup-community-summary">{{ "Allowed for everyone" if setup_summary.community.allow_all else (setup_summary.community.role_names|join(", ") if setup_summary.community.role_names else "No roles selected") }}</span>
                             </div>
                         </div>
 
@@ -298,7 +298,7 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can use community management commands</h4>
-                                    <p>This covers polls, giveaways, autofeed, and reminders. Leave every role unchecked if you want those tools open to everyone.</p>
+                                    <p>This covers polls, giveaways, autofeed, and reminders. If you want everyone to use them, turn on the toggle.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
                                     <input id="wizard-community-allow-all" type="checkbox">
@@ -409,8 +409,11 @@
             return {
                 moderation_confirmation_enabled: Boolean(document.getElementById("wizard-moderation-confirmation")?.checked),
                 default_timeout_minutes: Number(document.getElementById("wizard-timeout-minutes")?.value || "10"),
+                moderation_allow_everyone: Boolean(document.getElementById("wizard-moderation-allow-all")?.checked),
                 moderation_role_ids: checkedRoleIds("moderation", "wizard-moderation-allow-all"),
+                support_allow_everyone: Boolean(document.getElementById("wizard-support-allow-all")?.checked),
                 support_role_ids: checkedRoleIds("support", "wizard-support-allow-all"),
+                community_allow_everyone: Boolean(document.getElementById("wizard-community-allow-all")?.checked),
                 community_role_ids: checkedRoleIds("community", "wizard-community-allow-all"),
                 autorole_role_ids: Array.from(document.querySelectorAll('[data-role-group="autorole"]:checked')).map((input) => Number(input.value)),
                 welcome_channel_id: document.getElementById("wizard-welcome-channel")?.value || null,

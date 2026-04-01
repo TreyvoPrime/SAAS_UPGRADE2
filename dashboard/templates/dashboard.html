@@ -821,11 +821,7 @@
 
                                 <div class="command-card-bottom">
                                     <div class="role-summary" data-role-summary>
-                                        {% if command.allowed_role_names %}
-                                            {{ command.allowed_role_names|join(", ") }}
-                                        {% else %}
-                                            All roles that already pass native Discord checks
-                                        {% endif %}
+                                        {{ command.role_summary }}
                                     </div>
                                     <div class="command-actions">
                                         <button type="button" class="ghost-button compact-button" data-role-editor data-command-name="{{ command.name }}">
@@ -886,7 +882,7 @@
                 </div>
                 <button class="icon-button" type="button" data-close-role-modal>Close</button>
             </div>
-            <p class="modal-copy" id="role-modal-copy">Select the roles that can use this command. Leaving everything unchecked allows all members who already pass the command's native permission checks.</p>
+            <p class="modal-copy" id="role-modal-copy">Select the roles that can use this command. If you want the command open to everyone, use the Allow all button instead.</p>
             <label class="search-shell role-search-shell">
                 <span>Find role</span>
                 <input id="role-search" class="search-input" type="search" placeholder="Search roles">
@@ -1629,11 +1625,11 @@
             try {
                 const result = await updateCommandPolicy(activeRoleCommand.dataset.command, { allowed_role_ids: selectedIds });
                 activeRoleCommand.dataset.roleIds = selectedIds.join(",");
-                activeRoleCommand.querySelector("[data-role-summary]").textContent = result.allowed_role_names.length
-                    ? result.allowed_role_names.join(", ")
+                activeRoleCommand.querySelector("[data-role-summary]").textContent = result.restrict_to_roles
+                    ? (result.allowed_role_names.length ? result.allowed_role_names.join(", ") : "No roles selected")
                     : "All roles that already pass native Discord checks";
                 showToast(
-                    result.allowed_role_names.length
+                    result.restrict_to_roles
                         ? `Updated roles for /${activeRoleCommand.dataset.command}.`
                         : `/${activeRoleCommand.dataset.command} now uses built-in Discord checks.`
                 );

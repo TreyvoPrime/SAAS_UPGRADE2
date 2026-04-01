@@ -37,6 +37,7 @@ class CommandControlStore:
         policy = self._command_bucket(guild_id, command_name)
         return {
             "enabled": bool(policy.get("enabled", True)),
+            "restrict_to_roles": bool(policy.get("restrict_to_roles", False)),
             "allowed_role_ids": sorted(
                 {
                     int(role_id)
@@ -52,9 +53,20 @@ class CommandControlStore:
         self.save()
         return self.get_policy(guild_id, command_name)
 
-    def set_roles(self, guild_id: int, command_name: str, role_ids: list[int]) -> dict[str, Any]:
+    def set_roles(
+        self,
+        guild_id: int,
+        command_name: str,
+        role_ids: list[int],
+        *,
+        restrict_to_roles: bool | None = None,
+    ) -> dict[str, Any]:
         bucket = self._command_bucket(guild_id, command_name)
         bucket["allowed_role_ids"] = sorted({int(role_id) for role_id in role_ids})
+        if restrict_to_roles is None:
+            bucket["restrict_to_roles"] = bool(bucket["allowed_role_ids"])
+        else:
+            bucket["restrict_to_roles"] = bool(restrict_to_roles)
         self.save()
         return self.get_policy(guild_id, command_name)
 

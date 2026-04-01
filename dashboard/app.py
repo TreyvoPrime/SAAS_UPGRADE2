@@ -71,8 +71,11 @@ class ModerationSettingsPayload(BaseModel):
 class SetupWizardPayload(BaseModel):
     moderation_confirmation_enabled: bool
     default_timeout_minutes: int = Field(ge=1, le=40320)
+    moderation_allow_everyone: bool = False
     moderation_role_ids: list[int] = Field(default_factory=list)
+    support_allow_everyone: bool = False
     support_role_ids: list[int] = Field(default_factory=list)
+    community_allow_everyone: bool = False
     community_role_ids: list[int] = Field(default_factory=list)
     autorole_role_ids: list[int] = Field(default_factory=list)
     welcome_channel_id: int | str | None = None
@@ -814,7 +817,7 @@ def create_dashboard_app(bot) -> FastAPI:
             policy = controls.get_policy(guild_id, command_name)
             role_ids = set(policy["allowed_role_ids"])
             group_role_ids.update(role_ids)
-            if role_ids:
+            if policy.get("restrict_to_roles"):
                 allow_all = False
         role_ids_sorted = sorted(group_role_ids)
         return {
@@ -843,15 +846,22 @@ def create_dashboard_app(bot) -> FastAPI:
         for command in build_command_catalog(bot):
             policy = bot.access_manager.controls.get_policy(guild_id, command["name"])
             allowed_role_ids = policy["allowed_role_ids"] or []
+            restrict_to_roles = bool(policy.get("restrict_to_roles"))
             row = {
                 **command,
                 "slug": _slugify(command["name"]),
                 "module_slug": _slugify(command["module"]),
                 "tier_slug": command["tier"].lower(),
                 "enabled": policy["enabled"],
+                "restrict_to_roles": restrict_to_roles,
                 "allowed_role_ids": allowed_role_ids,
                 "allowed_role_names": [role_names.get(role_id, f"Deleted ({role_id})") for role_id in allowed_role_ids],
                 "allowed_role_count": len(allowed_role_ids),
+                "role_summary": (
+                    ", ".join(role_names.get(role_id, f"Deleted ({role_id})") for role_id in allowed_role_ids)
+                    if allowed_role_ids
+                    else "No roles selected"
+                ) if restrict_to_roles else "All roles that already pass native Discord checks",
                 "status_label": "Enabled" if policy["enabled"] else "Disabled",
             }
             rows.append(row)
@@ -865,7 +875,7 @@ def create_dashboard_app(bot) -> FastAPI:
                     "slug": _slugify(module_name),
                     "count": len(commands),
                     "disabled_count": len([command for command in commands if not command["enabled"]]),
-                    "restricted_count": len([command for command in commands if command["allowed_role_ids"]]),
+                    "restricted_count": len([command for command in commands if command["restrict_to_roles"]]),
                     "tier": PREMIUM_TIER if any(command["tier"] == PREMIUM_TIER for command in commands) else FREE_TIER,
                     "commands": sorted(commands, key=lambda item: item["name"]),
                 }
@@ -897,7 +907,7 @@ def create_dashboard_app(bot) -> FastAPI:
         stats = {
             "commands": len(commands),
             "disabled": len([command for command in commands if not command["enabled"]]),
-            "restricted": len([command for command in commands if command["allowed_role_ids"]]),
+            "restricted": len([command for command in commands if command["restrict_to_roles"]]),
             "roles": len(roles),
             "modules": len(module_cards),
         }
@@ -1100,7 +1110,16 @@ def create_dashboard_app(bot) -> FastAPI:
             description=f"Updated access for /{payload.command_name} from the dashboard.",
             fields=[
                 ("Enabled", "Yes" if policy["enabled"] else "No", True),
-                ("Allowed Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in policy["allowed_role_ids"]) or "Discord native checks only", False),
+                (
+                    "Allowed Roles",
+                    (
+                        ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in policy["allowed_role_ids"])
+                        or "No roles selected"
+                    )
+                    if policy.get("restrict_to_roles")
+                    else "Discord native checks only",
+                    False,
+                ),
             ],
         )
         return JSONResponse(
@@ -1108,6 +1127,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "command_name": payload.command_name,
                 "policy": policy,
                 "allowed_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in policy["allowed_role_ids"]],
+                "restrict_to_roles": bool(policy.get("restrict_to_roles")),
             }
         )
 
@@ -1391,11 +1411,26 @@ def create_dashboard_app(bot) -> FastAPI:
         bot.access_manager.controls.set_autorole_role_ids(guild_id, autorole_role_ids)
 
         for command_name in setup_command_groups["moderation"]:
-            bot.access_manager.controls.set_roles(guild_id, command_name, moderation_role_ids)
+            bot.access_manager.controls.set_roles(
+                guild_id,
+                command_name,
+                moderation_role_ids,
+                restrict_to_roles=not payload.moderation_allow_everyone,
+            )
         for command_name in setup_command_groups["support"]:
-            bot.access_manager.controls.set_roles(guild_id, command_name, support_role_ids)
+            bot.access_manager.controls.set_roles(
+                guild_id,
+                command_name,
+                support_role_ids,
+                restrict_to_roles=not payload.support_allow_everyone,
+            )
         for command_name in setup_command_groups["community"]:
-            bot.access_manager.controls.set_roles(guild_id, command_name, community_role_ids)
+            bot.access_manager.controls.set_roles(
+                guild_id,
+                command_name,
+                community_role_ids,
+                restrict_to_roles=not payload.community_allow_everyone,
+            )
 
         manager = getattr(bot, "greetings", None)
         if manager is not None:
@@ -1434,9 +1469,27 @@ def create_dashboard_app(bot) -> FastAPI:
             title="Setup Wizard Completed",
             description="Saved the server's guided setup settings from the dashboard.",
             fields=[
-                ("Moderation Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in moderation_role_ids) or "Allow all", False),
-                ("Support Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in support_role_ids) or "Allow all", False),
-                ("Community Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in community_role_ids) or "Allow all", False),
+                (
+                    "Moderation Roles",
+                    "Allow everyone"
+                    if payload.moderation_allow_everyone
+                    else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in moderation_role_ids) or "No roles selected"),
+                    False,
+                ),
+                (
+                    "Support Roles",
+                    "Allow everyone"
+                    if payload.support_allow_everyone
+                    else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in support_role_ids) or "No roles selected"),
+                    False,
+                ),
+                (
+                    "Community Roles",
+                    "Allow everyone"
+                    if payload.community_allow_everyone
+                    else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in community_role_ids) or "No roles selected"),
+                    False,
+                ),
                 ("Autoroles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in autorole_role_ids) or "None", False),
             ],
         )
