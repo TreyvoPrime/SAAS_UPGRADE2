@@ -497,6 +497,19 @@ button {
     gap: 10px;
 }
 
+.page-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.page-actions .ghost-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
 .view-switcher {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
