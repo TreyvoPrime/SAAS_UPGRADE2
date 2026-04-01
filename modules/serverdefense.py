@@ -1031,6 +1031,56 @@ class ServerDefense(commands.Cog):
             action,
         )
 
+    @app_commands.command(name="removetimeout", description="Remove a timeout from a member")
+    @app_commands.describe(member="Member whose timeout should be removed", reason="Why the timeout is being removed")
+    async def removetimeout(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        reason: str | None = None,
+    ):
+        moderator = await self._require_moderator(interaction)
+        if moderator is None or interaction.guild is None:
+            return
+
+        if not await self._validate_moderation_target(
+            interaction,
+            member,
+            action_name="remove a timeout from",
+            require_bot_permission="moderate_members",
+        ):
+            return
+
+        timeout_reason = (reason or "No reason provided.").strip()
+
+        async def action() -> str:
+            refreshed_member = interaction.guild.get_member(member.id) or member
+            timeout_until = getattr(refreshed_member, "timed_out_until", None)
+            if timeout_until is None:
+                return f"{member.mention} is not currently timed out."
+
+            await refreshed_member.timeout(
+                None,
+                reason=f"{interaction.user}: Removed timeout. {timeout_reason}",
+            )
+            await self._log_moderation_event(
+                interaction.guild,
+                title="Timeout Removed",
+                description=f"{member.mention}'s timeout was removed.",
+                user_name=str(interaction.user),
+                channel_name=getattr(interaction.channel, "name", None),
+                fields=[
+                    ("Reason", timeout_reason, False),
+                ],
+            )
+            return f"Removed the timeout from {member.mention}.\nReason: {timeout_reason}"
+
+        await self._confirm_or_run(
+            interaction,
+            f"Remove the timeout from {member.mention}?\nReason: {timeout_reason}",
+            action,
+        )
+
     @app_commands.command(name="kick", description="Kick a member from the server")
     @app_commands.describe(member="Member to kick", reason="Why they are being kicked")
     async def kick(

@@ -1271,6 +1271,31 @@
             return response.json();
         }
 
+        function collectAutofilterTerms() {
+            return (autofilterTermsInput?.value || "")
+                .split("\n")
+                .map((item) => item.trim())
+                .filter(Boolean);
+        }
+
+        function syncAutofilterTermsResult(result) {
+            if (autofilterTermsInput) {
+                autofilterTermsInput.value = (result.terms || []).join("\n");
+            }
+            if (autofilterSummary) {
+                autofilterSummary.textContent = `AutoFilter is tracking ${(result.terms || []).length} blocked term(s). It warns ${result.warning_limit || 3} times, then times out for ${result.timeout_minutes || 60} minutes.`;
+            }
+            if (result.state) {
+                syncDefenseSummary(result.state);
+                defenseCards.forEach((card) => {
+                    const updatedDefense = (result.state.cards || []).find((item) => item.name === card.dataset.defenseName);
+                    if (updatedDefense) {
+                        syncDefenseCard(card, updatedDefense);
+                    }
+                });
+            }
+        }
+
         document.querySelectorAll("[data-command-toggle]").forEach((toggle) => {
             toggle.addEventListener("change", async () => {
                 const card = toggle.closest("[data-command-card]");
@@ -1651,6 +1676,15 @@
             const durationInput = card.querySelector("[data-defense-duration]");
 
             async function saveDefenseState(nextEnabled = toggle?.checked ?? false) {
+                if (card.dataset.defenseName === "autofilter") {
+                    const terms = collectAutofilterTerms();
+                    if (nextEnabled && !terms.length) {
+                        showToast("Add at least one blocked word or phrase before enabling AutoFilter.", "error");
+                        throw new Error("AutoFilter needs at least one blocked term.");
+                    }
+                    const autofilterResult = await updateAutofilterTerms(terms);
+                    syncAutofilterTermsResult(autofilterResult);
+                }
                 const durationValue = durationInput?.value ? Number(durationInput.value) : null;
                 const result = await updateDefenseState(card.dataset.defenseName, {
                     enabled: nextEnabled,
@@ -1795,21 +1829,10 @@
         });
 
         saveAutofilterTermsButton?.addEventListener("click", async () => {
-            const terms = (autofilterTermsInput?.value || "")
-                .split("\n")
-                .map((item) => item.trim())
-                .filter(Boolean);
+            const terms = collectAutofilterTerms();
             try {
                 const result = await updateAutofilterTerms(terms);
-                if (autofilterTermsInput) {
-                    autofilterTermsInput.value = (result.terms || []).join("\n");
-                }
-                if (autofilterSummary) {
-                    autofilterSummary.textContent = `AutoFilter is tracking ${(result.terms || []).length} blocked term(s). It warns ${result.warning_limit || 3} times, then times out for ${result.timeout_minutes || 60} minutes.`;
-                }
-                if (result.state) {
-                    syncDefenseSummary(result.state);
-                }
+                syncAutofilterTermsResult(result);
                 showToast("AutoFilter terms updated.");
             } catch {}
         });
