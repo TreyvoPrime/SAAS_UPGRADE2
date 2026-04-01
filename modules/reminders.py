@@ -90,6 +90,12 @@ class ReminderCog(commands.Cog):
             return 1
         return max(reminder["id"] for reminder in self.reminders) + 1
 
+    def _premium_enabled(self, guild_id: int | None) -> bool:
+        if guild_id is None:
+            return False
+        controls = getattr(self.bot, "command_controls", None)
+        return bool(controls and hasattr(controls, "is_premium_enabled") and controls.is_premium_enabled(guild_id))
+
     @tasks.loop(seconds=15)
     async def reminder_task(self):
         now = int(time.time())
@@ -178,6 +184,12 @@ class ReminderCog(commands.Cog):
         if repeat and repeat_seconds <= 0:
             await interaction.response.send_message(
                 "Use a repeat time like `1d`, `12h`, or `2h 30m`.",
+                ephemeral=True,
+            )
+            return
+        if repeat_seconds and not self._premium_enabled(interaction.guild.id if interaction.guild else None):
+            await interaction.response.send_message(
+                "Recurring reminders are part of ServerCore Premium right now.",
                 ephemeral=True,
             )
             return

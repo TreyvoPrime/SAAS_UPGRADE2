@@ -157,27 +157,50 @@ class FakeDefenseManager:
         self.store = store
 
     def get_dashboard_state(self, guild_id: int) -> dict:
-        return self.store.get_all(guild_id)
+        state = self.store.get_all(guild_id)
+        if not getattr(self, "controls").is_premium_enabled(guild_id):
+            state["antiraid"]["enabled"] = False
+        return state
 
     def build_dashboard_state(self, guild_id: int, role_lookup: dict[int, str] | None = None) -> dict:
         raw = self.store.get_all(guild_id)
         cards = []
         for name in ("linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "autofilter", "lockdown", "antiraid"):
             state = raw[name]
+            locked = name == "antiraid" and not self.controls.is_premium_enabled(guild_id)
             cards.append(
                 {
                     "name": name,
                     "title": name.title(),
-                    "enabled": bool(state.get("enabled")),
+                    "enabled": bool(state.get("enabled")) and not locked,
+                    "locked": locked,
                     "duration_label": "Until disabled",
-                    "status_label": "Enabled" if state.get("enabled") else "Disabled",
+                    "status_label": "Premium only" if locked else ("Enabled" if state.get("enabled") else "Disabled"),
+                    "remaining_label": "Premium only" if locked else "No timer",
                 }
             )
         return {
             "cards": cards,
             "lockdown_allowed_role_names": [],
             "guardian": {"status_label": "Offline"},
+            "active_count": len([card for card in cards if card["enabled"]]),
+            "timed_count": 0,
+            "lockdown_role_count": 0,
+            "autofilter_terms": [],
+            "autofilter_timeout_minutes": 60,
+            "threat": {"level_label": "Premium required" if not self.controls.is_premium_enabled(guild_id) else "Offline"},
         }
+
+    async def set_defense(self, guild_id: int, defense_name: str, *, enabled: bool, duration_minutes: int | None = None) -> dict:
+        if defense_name == "antiraid" and enabled and not self.controls.is_premium_enabled(guild_id):
+            raise PermissionError("Guardian is part of ServerCore Premium right now.")
+        return self.store.patch_feature(guild_id, defense_name, enabled=enabled)
+
+    async def disable_feature(self, guild_id: int, feature: str, *, reason: str | None = None) -> dict:
+        return self.store.patch_feature(guild_id, feature, enabled=False)
+
+    def reset_threat_state(self, guild_id: int) -> dict:
+        return {"level_label": "Offline", "score_display": "0/100"}
 
 
 class FakeBot:
@@ -236,6 +259,7 @@ class FakeBot:
         self.case_store = ModerationCaseStore(root / "cases.json")
         self.server_defense_store = ServerDefenseStore(root / "server_defense.json")
         self.server_defense = FakeDefenseManager(self.server_defense_store)
+        self.server_defense.controls = self.command_controls
         self.runtime_loop = None
 
     def get_guild(self, guild_id: int) -> FakeGuild | None:
@@ -469,6 +493,105 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertTrue(settings["include_bots_default"])
         self.assertEqual(settings["cooldown_seconds"], 300)
         self.assertEqual(response.json()["cooldown_seconds"], 300)
+
+    def test_subscription_route_switches_between_free_and_premium(self) -> None:
+        self._authenticate()
+        premium = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/subscription",
+            json={"tier": "premium"},
+            headers={"origin": "http://testserver"},
+        )
+        self.assertEqual(premium.status_code, 200)
+        self.assertTrue(self.bot.command_controls.is_premium_enabled(self.bot.guild.id))
+        free = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/subscription",
+            json={"tier": "free"},
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(free.status_code, 200)
+        self.assertFalse(self.bot.command_controls.is_premium_enabled(self.bot.guild.id))
+
+    def test_guardian_requires_premium_from_dashboard(self) -> None:
+        self._authenticate()
+        blocked = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/defense-state",
+            json={"defense_name": "antiraid", "enabled": True},
+            headers={"origin": "http://testserver"},
+        )
+        self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/subscription",
+            json={"tier": "premium"},
+            headers={"origin": "http://testserver"},
+        )
+        allowed = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/defense-state",
+            json={"defense_name": "antiraid", "enabled": True},
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(blocked.status_code, 402)
+        self.assertEqual(allowed.status_code, 200)
+
+    def test_premium_log_search_and_export_require_premium(self) -> None:
+        self._authenticate()
+        self.bot.command_logs.append(
+            {
+                "guild_id": self.bot.guild.id,
+                "guild_name": self.bot.guild.name,
+                "kind": "event",
+                "title": "Dashboard Updated",
+                "summary": "Changed support settings",
+                "status": "event",
+                "user_name": "OwnerUser",
+                "channel_name": "Dashboard",
+                "category": "dashboard",
+            }
+        )
+
+        blocked = self.client.get(f"/api/guilds/{self.bot.guild.id}/logs?query=support")
+        self.assertEqual(blocked.status_code, 402)
+
+        self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/subscription",
+            json={"tier": "premium"},
+            headers={"origin": "http://testserver"},
+        )
+        searched = self.client.get(f"/api/guilds/{self.bot.guild.id}/logs?query=support&category=dashboard")
+        exported = self.client.get(f"/api/guilds/{self.bot.guild.id}/logs/export?category=dashboard")
+
+        self.assertEqual(searched.status_code, 200)
+        self.assertEqual(exported.status_code, 200)
+        self.assertEqual(len(searched.json()["entries"]), 1)
+        self.assertEqual(exported.json()["entries"][0]["category"], "dashboard")
+
+    def test_premium_case_routes_require_premium(self) -> None:
+        self._authenticate()
+        self.bot.case_store.create_case(
+            self.bot.guild.id,
+            action="warn",
+            target_user_id=5002,
+            target_user_name="EditorUser",
+            moderator_id=5001,
+            moderator_name="OwnerUser",
+            reason="Test warning",
+        )
+
+        blocked = self.client.get(f"/api/guilds/{self.bot.guild.id}/cases")
+        self.assertEqual(blocked.status_code, 402)
+
+        self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/subscription",
+            json={"tier": "premium"},
+            headers={"origin": "http://testserver"},
+        )
+        listing = self.client.get(f"/api/guilds/{self.bot.guild.id}/cases?query=EditorUser")
+        exported = self.client.get(f"/api/guilds/{self.bot.guild.id}/cases/export?action=warn")
+
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(exported.status_code, 200)
+        self.assertEqual(listing.json()["entries"][0]["target_user_name"], "EditorUser")
+        self.assertEqual(exported.json()["entries"][0]["action"], "warn")
 
     def test_dashboard_editor_role_can_edit_settings_but_cannot_manage_editor_roles(self) -> None:
         self.bot.command_controls.set_dashboard_editor_roles(self.bot.guild.id, [11])

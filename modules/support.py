@@ -88,6 +88,22 @@ class Support(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    def _premium_enabled(self, guild_id: int) -> bool:
+        controls = getattr(self.bot, "command_controls", None)
+        return bool(controls and hasattr(controls, "is_premium_enabled") and controls.is_premium_enabled(guild_id))
+
+    async def _require_premium_support(self, interaction: discord.Interaction, feature_name: str) -> bool:
+        if interaction.guild is None:
+            await interaction.response.send_message("This command only works inside a server.", ephemeral=True)
+            return False
+        if self._premium_enabled(interaction.guild.id):
+            return True
+        await interaction.response.send_message(
+            f"{feature_name} is part of ServerCore Premium right now.",
+            ephemeral=True,
+        )
+        return False
+
     async def _require_support_command_manager(self, interaction: discord.Interaction) -> discord.Member | None:
         return await self._require_support_editor(interaction)
 
@@ -272,6 +288,8 @@ class Support(commands.Cog):
 
     @app_commands.command(name="ticketclaim", description="Claim the current support ticket")
     async def ticketclaim(self, interaction: discord.Interaction) -> None:
+        if not await self._require_premium_support(interaction, "Ticket claiming"):
+            return
         staff = await self._require_ticket_staff(interaction)
         channel, ticket = await self._require_ticket_channel(interaction)
         if staff is None or channel is None or ticket is None or interaction.guild is None:
@@ -304,6 +322,8 @@ class Support(commands.Cog):
         app_commands.Choice(name="urgent", value="urgent"),
     ])
     async def ticketpriority(self, interaction: discord.Interaction, priority: app_commands.Choice[str]) -> None:
+        if not await self._require_premium_support(interaction, "Ticket priorities"):
+            return
         staff = await self._require_ticket_staff(interaction)
         channel, ticket = await self._require_ticket_channel(interaction)
         if staff is None or channel is None or ticket is None or interaction.guild is None:
@@ -324,6 +344,8 @@ class Support(commands.Cog):
 
     @app_commands.command(name="tickettranscript", description="Generate a transcript for the current support ticket")
     async def tickettranscript(self, interaction: discord.Interaction) -> None:
+        if not await self._require_premium_support(interaction, "Ticket transcripts"):
+            return
         staff = await self._require_ticket_staff(interaction)
         channel, ticket = await self._require_ticket_channel(interaction)
         if staff is None or channel is None or ticket is None or interaction.guild is None:
@@ -333,6 +355,8 @@ class Support(commands.Cog):
 
     @app_commands.command(name="closeticket", description="Close the current support ticket with an optional reason")
     async def closeticket(self, interaction: discord.Interaction, reason: app_commands.Range[str, 3, 300] | None = None) -> None:
+        if reason and not await self._require_premium_support(interaction, "Ticket close reasons"):
+            return
         channel, ticket = await self._require_ticket_channel(interaction)
         if channel is None or ticket is None or interaction.guild is None:
             return
@@ -377,6 +401,51 @@ class Support(commands.Cog):
             await self._delete_empty_ticket_category(interaction.guild)
         except Exception:
             await interaction.followup.send("I couldn't delete the ticket channel. Check my channel permissions.", ephemeral=True)
+
+    ticketnote = app_commands.Group(
+        name="ticketnote",
+        description="Add private staff notes to a support ticket",
+    )
+
+    @ticketnote.command(name="add", description="Add a private internal note to the current ticket")
+    async def ticketnote_add(self, interaction: discord.Interaction, note: app_commands.Range[str, 3, 500]) -> None:
+        if not await self._require_premium_support(interaction, "Ticket staff notes"):
+            return
+        staff = await self._require_ticket_staff(interaction)
+        channel, ticket = await self._require_ticket_channel(interaction)
+        if staff is None or channel is None or ticket is None or interaction.guild is None:
+            return
+        updated = self.bot.ticket_store.add_internal_note(
+            interaction.guild.id,
+            channel.id,
+            staff_id=interaction.user.id,
+            staff_name=str(interaction.user),
+            note=note,
+        )
+        note_count = len(updated.get("internal_notes", [])) if updated else 0
+        await interaction.response.send_message(
+            f"Internal note saved. This ticket now has {note_count} staff note(s).",
+            ephemeral=True,
+        )
+
+    @ticketnote.command(name="view", description="View private staff notes for the current ticket")
+    async def ticketnote_view(self, interaction: discord.Interaction) -> None:
+        if not await self._require_premium_support(interaction, "Ticket staff notes"):
+            return
+        staff = await self._require_ticket_staff(interaction)
+        channel, ticket = await self._require_ticket_channel(interaction)
+        if staff is None or channel is None or ticket is None or interaction.guild is None:
+            return
+        notes = self.bot.ticket_store.list_internal_notes(interaction.guild.id, channel.id)
+        if not notes:
+            await interaction.response.send_message("No internal staff notes have been added to this ticket yet.", ephemeral=True)
+            return
+        embed = discord.Embed(title="Ticket Staff Notes", color=discord.Color.blurple())
+        embed.description = "\n\n".join(
+            f"**#{item['note_id']}** - {item['staff_name']}\n{item['note']}"
+            for item in notes[-8:]
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="ticket", description="Open a private support ticket for your issue")
     @app_commands.describe(

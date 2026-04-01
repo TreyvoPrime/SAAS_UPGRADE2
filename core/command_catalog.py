@@ -8,9 +8,31 @@ from discord import app_commands
 FREE_TIER = "Free"
 PREMIUM_TIER = "Premium"
 
+PREMIUM_COMMANDS = {
+    "guardian enable",
+    "guardian disable",
+    "guardian status",
+    "guardian reset",
+    "guardian blacklistadd",
+    "guardian blacklistremove",
+    "guardian whitelistadd",
+    "guardian whitelistremove",
+    "guardian preset",
+    "ticketclaim",
+    "ticketpriority",
+    "tickettranscript",
+    "ticketnote add",
+    "ticketnote view",
+    "autofeed edit",
+    "autofeed pause",
+    "autofeed resume",
+}
+
 
 def _tier_for_command(command: app_commands.Command | app_commands.Group) -> str:
     module_name = getattr(command, "module", "") or ""
+    if command.qualified_name in PREMIUM_COMMANDS:
+        return PREMIUM_TIER
     return PREMIUM_TIER if module_name.startswith("modules.premium") else FREE_TIER
 
 

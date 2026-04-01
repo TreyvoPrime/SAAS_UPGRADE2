@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.premium import TIER_FREE, TIER_PREMIUM, normalize_tier
 from core.storage import read_json, write_json
 
 
 class CommandControlStore:
+    DEFAULT_SUBSCRIPTION_TIER = TIER_FREE
     DEFAULT_PURGE_LIMIT = 100
     FREE_PURGE_LIMIT_CAP = 500
     PREMIUM_PURGE_LIMIT_CAP = 2000
@@ -94,6 +97,57 @@ class CommandControlStore:
         dashboard_bucket["editor_role_ids"] = sorted({int(role_id) for role_id in role_ids})
         self.save()
         return self.get_dashboard_editor_roles(guild_id)
+
+    def get_subscription_tier(self, guild_id: int) -> str:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        return normalize_tier(dashboard_bucket.get("subscription_tier", self.DEFAULT_SUBSCRIPTION_TIER))
+
+    def set_subscription_tier(self, guild_id: int, tier: str) -> str:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        normalized = normalize_tier(tier)
+        dashboard_bucket["subscription_tier"] = normalized
+        if normalized != TIER_PREMIUM:
+            # Free tier should always fall back to the free purge ceiling.
+            current_limit = self.get_purge_settings(guild_id)["limit"]
+            dashboard_bucket["purge_limit"] = min(current_limit, self.FREE_PURGE_LIMIT_CAP)
+        self.save()
+        return self.get_subscription_tier(guild_id)
+
+    def is_premium_enabled(self, guild_id: int) -> bool:
+        return self.get_subscription_tier(guild_id) == TIER_PREMIUM
+
+    def list_config_templates(self, guild_id: int) -> list[dict[str, Any]]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        templates = dashboard_bucket.get("config_templates", [])
+        if not isinstance(templates, list):
+            return []
+        cleaned: list[dict[str, Any]] = []
+        for item in templates:
+            if not isinstance(item, dict):
+                continue
+            cleaned.append(
+                {
+                    "name": str(item.get("name") or "Untitled")[:60],
+                    "created_at": str(item.get("created_at") or ""),
+                    "snapshot": item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {},
+                }
+            )
+        return cleaned[:8]
+
+    def save_config_template(self, guild_id: int, name: str, snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        templates = [item for item in self.list_config_templates(guild_id) if item["name"].casefold() != str(name).strip().casefold()]
+        templates.insert(
+            0,
+            {
+                "name": str(name).strip()[:60] or "Untitled",
+                "created_at": datetime.now(UTC).isoformat(),
+                "snapshot": snapshot if isinstance(snapshot, dict) else {},
+            },
+        )
+        dashboard_bucket["config_templates"] = templates[:8]
+        self.save()
+        return self.list_config_templates(guild_id)
 
     def get_autorole_role_ids(self, guild_id: int) -> list[int]:
         dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})

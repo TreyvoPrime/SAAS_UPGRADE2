@@ -34,6 +34,22 @@ class AutoFeedCog(commands.Cog):
         self.store: AutoFeedStore = bot.autofeed_store
         self._loop_task: asyncio.Task | None = None
 
+    def _premium_enabled(self, guild_id: int) -> bool:
+        controls = getattr(self.bot, "command_controls", None)
+        return bool(controls and hasattr(controls, "is_premium_enabled") and controls.is_premium_enabled(guild_id))
+
+    async def _require_premium_autofeed(self, interaction: discord.Interaction, feature_name: str) -> bool:
+        if interaction.guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return False
+        if self._premium_enabled(interaction.guild.id):
+            return True
+        await interaction.response.send_message(
+            f"{feature_name} is part of ServerCore Premium right now.",
+            ephemeral=True,
+        )
+        return False
+
     async def cog_load(self) -> None:
         if self._loop_task is None:
             self._loop_task = asyncio.create_task(self._autofeed_loop(), name="autofeed-loop")
@@ -186,6 +202,8 @@ class AutoFeedCog(commands.Cog):
 
     @autofeed.command(name="pause", description="Pause a running autofeed without deleting it")
     async def autofeed_pause(self, interaction: discord.Interaction, autofeed_id: app_commands.Range[int, 1, 1000000]):
+        if not await self._require_premium_autofeed(interaction, "Autofeed pause and resume controls"):
+            return
         staff = await self._require_staff(interaction)
         if staff is None or interaction.guild is None:
             return
@@ -197,6 +215,8 @@ class AutoFeedCog(commands.Cog):
 
     @autofeed.command(name="resume", description="Resume a paused autofeed")
     async def autofeed_resume(self, interaction: discord.Interaction, autofeed_id: app_commands.Range[int, 1, 1000000]):
+        if not await self._require_premium_autofeed(interaction, "Autofeed pause and resume controls"):
+            return
         staff = await self._require_staff(interaction)
         if staff is None or interaction.guild is None:
             return
@@ -227,6 +247,8 @@ class AutoFeedCog(commands.Cog):
         hours: app_commands.Range[int, 0, 23] | None = None,
         minutes: app_commands.Range[int, 0, 59] | None = None,
     ):
+        if not await self._require_premium_autofeed(interaction, "Autofeed editing"):
+            return
         staff = await self._require_staff(interaction)
         if staff is None or interaction.guild is None:
             return

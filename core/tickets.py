@@ -154,6 +154,7 @@ class TicketStore:
             "claimed_by_name": None,
             "priority": "normal",
             "close_reason": None,
+            "internal_notes": [],
         }
         guild_state.setdefault("tickets", {})[str(channel_id)] = record
         guild_state.setdefault("open_by_user", {})[str(requester_id)] = int(channel_id)
@@ -193,6 +194,40 @@ class TicketStore:
         self._save()
         return dict(ticket)
 
+    def add_internal_note(
+        self,
+        guild_id: int,
+        channel_id: int,
+        *,
+        staff_id: int,
+        staff_name: str,
+        note: str,
+    ) -> dict[str, Any] | None:
+        guild_state = self._ensure_guild(guild_id)
+        ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
+        if not isinstance(ticket, dict):
+            return None
+        notes = ticket.setdefault("internal_notes", [])
+        note_id = len(notes) + 1
+        notes.append(
+            {
+                "note_id": note_id,
+                "staff_id": int(staff_id),
+                "staff_name": str(staff_name),
+                "note": str(note).strip()[:500],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        self._save()
+        return dict(ticket)
+
+    def list_internal_notes(self, guild_id: int, channel_id: int) -> list[dict[str, Any]]:
+        ticket = self.get_ticket(guild_id, channel_id)
+        if ticket is None:
+            return []
+        notes = ticket.get("internal_notes", [])
+        return [dict(item) for item in notes if isinstance(item, dict)]
+
     def set_priority(self, guild_id: int, channel_id: int, priority: str) -> dict[str, Any] | None:
         guild_state = self._ensure_guild(guild_id)
         ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
@@ -211,3 +246,22 @@ class TicketStore:
         ]
         tickets.sort(key=lambda item: item.get("opened_at", ""), reverse=True)
         return tickets[:limit]
+
+    def analytics(self, guild_id: int) -> dict[str, Any]:
+        tickets = self.list_tickets(guild_id, status=None, limit=1000)
+        open_tickets = [ticket for ticket in tickets if ticket.get("status") == "open"]
+        claimed_tickets = [ticket for ticket in tickets if ticket.get("claimed_by_id")]
+        priorities = {"low": 0, "normal": 0, "high": 0, "urgent": 0}
+        note_count = 0
+        for ticket in tickets:
+            priority = str(ticket.get("priority") or "normal").lower()
+            priorities[priority] = priorities.get(priority, 0) + 1
+            note_count += len(ticket.get("internal_notes", []))
+        return {
+            "total": len(tickets),
+            "open": len(open_tickets),
+            "closed": len([ticket for ticket in tickets if ticket.get("status") == "closed"]),
+            "claimed": len(claimed_tickets),
+            "internal_note_count": note_count,
+            "priorities": priorities,
+        }

@@ -210,6 +210,12 @@ class ServerDefenseManager:
         self._threat_cooldowns: dict[tuple[int, str], datetime] = {}
         self._started = False
 
+    def _guardian_available(self, guild_id: int) -> bool:
+        controls = getattr(self.bot, "command_controls", None)
+        if controls is None or not hasattr(controls, "is_premium_enabled"):
+            return False
+        return bool(controls.is_premium_enabled(guild_id))
+
     async def start(self) -> None:
         if self._started:
             return
@@ -498,6 +504,10 @@ class ServerDefenseManager:
 
         for feature in DEFENSE_FEATURES:
             state = self.store.get_feature(guild_id, feature)
+            if feature == "antiraid" and not self._guardian_available(guild_id):
+                if state.get("enabled"):
+                    state = self.store.patch_feature(guild_id, feature, enabled=False, ends_at=None)
+                self._threat_state[guild_id] = self._new_threat_state()
             ends_at = from_iso(state.get("ends_at"))
             if state.get("enabled") and ends_at and ends_at <= utcnow() and feature != "lockdown":
                 state = self.store.patch_feature(guild_id, feature, enabled=False, ends_at=None)
@@ -511,13 +521,18 @@ class ServerDefenseManager:
     def get_threat_summary(self, guild_id: int) -> dict[str, Any]:
         threat_state = self._apply_threat_decay(guild_id)
         antiraid_state = self.store.get_feature(guild_id, "antiraid")
+        guardian_available = self._guardian_available(guild_id)
         score = round(threat_state.get("score", 0.0), 1)
         level_key, level_label = self._score_level(score)
 
-        if not self._is_active(antiraid_state):
+        if not guardian_available:
+            level_key, level_label = ("normal", "Premium required")
+        elif not self._is_active(antiraid_state):
             level_key, level_label = ("normal", "Offline")
 
-        if level_key == "high":
+        if not guardian_available:
+            status_copy = "Upgrade this server to Premium to unlock Guardian threat scoring, raid presets, and automatic pressure tracking."
+        elif level_key == "high":
             status_copy = "Guardian has moved into raid response mode. Anti-join should be live and staff should be ready to hard-lock channels if pressure continues."
         elif level_key == "major":
             status_copy = "Coordinated activity is stacking. Strict filtering should already be tightening links, invites, spam, and mention abuse."
@@ -554,7 +569,8 @@ class ServerDefenseManager:
 
         next_threshold = next((threshold for _, _, threshold in THREAT_LEVELS[1:] if score < threshold), None)
         return {
-            "enabled": self._is_active(antiraid_state),
+            "enabled": guardian_available and self._is_active(antiraid_state),
+            "available": guardian_available,
             "score": score,
             "score_display": f"{int(round(score))}/100",
             "level_key": level_key,
@@ -574,6 +590,7 @@ class ServerDefenseManager:
     def build_dashboard_state(self, guild_id: int, role_lookup: dict[int, str] | None = None) -> dict[str, Any]:
         role_lookup = role_lookup or {}
         state = self.get_dashboard_state(guild_id)
+        guardian_available = self._guardian_available(guild_id)
 
         def remaining_minutes(item: dict[str, Any]) -> int | None:
             ends_at = from_iso(item.get("ends_at"))
@@ -620,10 +637,12 @@ class ServerDefenseManager:
                 "tag": tag,
                 "description": description,
                 "enabled": item.get("enabled", False),
+                "locked": feature == "antiraid" and not guardian_available,
                 "duration_minutes": minutes_left,
                 "duration_label": "Runs until disabled" if not item.get("ends_at") else f"{minutes_left} minute timer",
-                "status_label": "Armed" if item.get("enabled") else "Offline",
+                "status_label": "Premium only" if feature == "antiraid" and not guardian_available else ("Armed" if item.get("enabled") else "Offline"),
                 "remaining_label": remaining_label(item),
+                "remaining_premium_label": "Upgrade this server to unlock Guardian." if feature == "antiraid" and not guardian_available else None,
                 "tone": "danger" if item.get("enabled") else "muted",
                 "rate_label": rate_label,
                 "allowed_role_ids": lockdown_roles,
@@ -1127,7 +1146,7 @@ class ServerDefenseManager:
         guild_id = message.guild.id
         content = message.content or ""
         antiraid = self.store.get_feature(guild_id, "antiraid")
-        antiraid_active = self._is_active(antiraid)
+        antiraid_active = self._guardian_available(guild_id) and self._is_active(antiraid)
         allowed_domains = set(antiraid.get("allowed_domains", []))
         blocked_phrases = [phrase for phrase in antiraid.get("blocked_phrases", []) if phrase]
         autofilter = self.store.get_feature(guild_id, "autofilter")
@@ -1246,7 +1265,7 @@ class ServerDefenseManager:
         return False
 
     async def handle_member_join(self, member: discord.Member) -> bool:
-        if self._is_active(self.store.get_feature(member.guild.id, "antiraid")):
+        if self._guardian_available(member.guild.id) and self._is_active(self.store.get_feature(member.guild.id, "antiraid")):
             await self._record_join_risk(member)
 
         antijoin = self.store.get_feature(member.guild.id, "antijoin")
@@ -1259,21 +1278,21 @@ class ServerDefenseManager:
 
         try:
             await member.kick(reason="Anti-join is active.")
-            if self._is_active(self.store.get_feature(member.guild.id, "antiraid")):
+            if self._guardian_available(member.guild.id) and self._is_active(self.store.get_feature(member.guild.id, "antiraid")):
                 await self._record_module_trigger(member.guild, "antijoin", "Anti-join removed a fresh join during a high-pressure window.")
             return True
         except Exception:
             return False
 
     async def handle_member_remove(self, member: discord.Member) -> None:
-        if self._is_active(self.store.get_feature(member.guild.id, "antiraid")):
+        if self._guardian_available(member.guild.id) and self._is_active(self.store.get_feature(member.guild.id, "antiraid")):
             await self._record_leave_risk(member)
 
     async def handle_reaction_add(self, reaction: discord.Reaction, user: discord.abc.User | discord.Member) -> None:
         guild = getattr(getattr(reaction, "message", None), "guild", None)
         if guild is None:
             return
-        if self._is_active(self.store.get_feature(guild.id, "antiraid")):
+        if self._guardian_available(guild.id) and self._is_active(self.store.get_feature(guild.id, "antiraid")):
             await self._record_reaction_risk(reaction, user)
 
     async def enable_feature(
@@ -1285,6 +1304,8 @@ class ServerDefenseManager:
         actor: discord.abc.User | None = None,
         reason: str | None = None,
     ) -> dict[str, Any]:
+        if feature == "antiraid" and not self._guardian_available(guild_id):
+            raise PermissionError("Guardian is part of ServerCore Premium right now.")
         ends_at = utcnow() + timedelta(minutes=duration_minutes) if duration_minutes else None
 
         if feature == "lockdown":
@@ -1352,6 +1373,8 @@ class ServerDefenseManager:
         normalized = "mentionguard" if feature == "mentionblock" else feature
         if normalized not in DEFENSE_FEATURES:
             raise ValueError(f"Unknown defense feature: {feature}")
+        if normalized == "antiraid" and enabled and not self._guardian_available(guild_id):
+            raise PermissionError("Guardian is part of ServerCore Premium right now.")
         current = self.store.get_feature(guild_id, normalized)
         if enabled:
             if normalized == "lockdown" and current.get("enabled"):
@@ -1388,6 +1411,9 @@ class ServerDefenseManager:
     ) -> dict[str, dict[str, Any]]:
         results: dict[str, dict[str, Any]] = {}
         for feature in DEFENSE_FEATURES:
+            if feature == "antiraid" and not self._guardian_available(guild_id):
+                results[feature] = self.store.get_feature(guild_id, feature)
+                continue
             results[feature] = await self.enable_feature(
                 guild_id,
                 feature,
@@ -1417,6 +1443,8 @@ class ServerDefenseManager:
     def is_enabled(self, guild_id: int, feature: str) -> bool:
         normalized = "mentionguard" if feature == "mentionblock" else feature
         if normalized not in DEFENSE_FEATURES:
+            return False
+        if normalized == "antiraid" and not self._guardian_available(guild_id):
             return False
         return self._is_active(self.store.get_feature(guild_id, normalized))
 

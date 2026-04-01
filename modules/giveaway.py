@@ -65,6 +65,10 @@ class GiveawayCog(commands.Cog):
         self.store: GiveawayStore = bot.giveaway_store
         self._end_loop_task: asyncio.Task | None = None
 
+    def _premium_enabled(self, guild_id: int) -> bool:
+        controls = getattr(self.bot, "command_controls", None)
+        return bool(controls and hasattr(controls, "is_premium_enabled") and controls.is_premium_enabled(guild_id))
+
     async def cog_load(self) -> None:
         for record in self.store.all_active():
             message_id = int(record.get("message_id") or 0)
@@ -298,6 +302,13 @@ class GiveawayCog(commands.Cog):
         total_minutes = days * 1440 + hours * 60 + minutes
         if total_minutes <= 0:
             await interaction.response.send_message("Set at least one time value so the giveaway knows when to end.", ephemeral=True)
+            return
+        wants_premium_rules = bool(required_role or bonus_role or bonus_entries)
+        if wants_premium_rules and not self._premium_enabled(interaction.guild.id):
+            await interaction.response.send_message(
+                "Role requirements and bonus entries are part of ServerCore Premium right now.",
+                ephemeral=True,
+            )
             return
         ends_at = _utcnow() + timedelta(minutes=total_minutes)
         record = self.store.create_giveaway(

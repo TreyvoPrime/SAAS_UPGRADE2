@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import secrets
 import threading
@@ -25,6 +26,7 @@ from core.greetings import (
     DEFAULT_LEAVE_MESSAGE,
     DEFAULT_WELCOME_MESSAGE,
 )
+from core.premium import PREMIUM_FEATURES, TIER_FREE, TIER_PREMIUM, tier_label
 
 MANAGE_GUILD = 0x20
 ADMINISTRATOR = 0x08
@@ -87,6 +89,18 @@ class AlertSettingsPayload(BaseModel):
     only_offline_default: bool
     include_bots_default: bool
     cooldown_seconds: int = Field(ge=15, le=900)
+
+
+class SubscriptionTierPayload(BaseModel):
+    tier: str = Field(min_length=1)
+
+
+class ConfigTemplatePayload(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
+class ConfigImportPayload(BaseModel):
+    snapshot: dict
 
 
 class SetupWizardPayload(BaseModel):
@@ -375,7 +389,7 @@ def create_dashboard_app(bot) -> FastAPI:
         bot_loop = getattr(bot, "runtime_loop", None) or getattr(bot, "loop", None)
         current_loop = asyncio.get_running_loop()
         if bot_loop is None:
-            raise HTTPException(status_code=503, detail="Bot event loop is not available")
+            return await coro
         if getattr(bot_loop, "is_closed", lambda: False)():
             raise HTTPException(status_code=503, detail="Bot event loop is closed")
         if bot_loop == current_loop:
@@ -428,6 +442,22 @@ def create_dashboard_app(bot) -> FastAPI:
 
     def premium_enabled() -> bool:
         return any(command["tier"] == PREMIUM_TIER for command in build_command_catalog(bot))
+
+    def subscription_summary(guild_id: int) -> dict:
+        controls = bot.access_manager.controls
+        tier = controls.get_subscription_tier(guild_id)
+        is_premium = controls.is_premium_enabled(guild_id)
+        guild = bot.get_guild(guild_id)
+        return {
+            "tier": tier,
+            "label": tier_label(tier),
+            "is_premium": is_premium,
+            "guild_name": guild.name if guild is not None else "This server",
+            "guardian_locked": not is_premium,
+            "feature_count": len(PREMIUM_FEATURES),
+            "features": [{"key": key, "label": label} for key, label in PREMIUM_FEATURES.items()],
+            "config_templates": controls.list_config_templates(guild_id),
+        }
 
     async def build_live_guild_entry(guild_id: int, user_id: int) -> dict | None:
         guild = bot.get_guild(guild_id)
@@ -773,6 +803,7 @@ def create_dashboard_app(bot) -> FastAPI:
             "support_command_channel_id": command_channel_id,
             "support_command_channel_name": command_channel_name,
             "active_tickets": ticket_store.list_tickets(guild_id, status="open", limit=10),
+            "analytics": ticket_store.analytics(guild_id) if hasattr(ticket_store, "analytics") else None,
         }
 
     def giveaways_dashboard_summary(guild_id: int) -> dict:
@@ -805,6 +836,164 @@ def create_dashboard_app(bot) -> FastAPI:
             "active_count": len(active),
             "recent_count": len(recent),
         }
+
+    def analytics_summary(guild_id: int) -> dict:
+        logs = bot.command_logs.list_for_guild(guild_id, 500) if hasattr(bot, "command_logs") else []
+        case_store = getattr(bot, "case_store", None)
+        ticket_store = getattr(bot, "ticket_store", None)
+        giveaway_store = getattr(bot, "giveaway_store", None)
+        guild = bot.get_guild(guild_id)
+        cases = case_store.list_cases(guild_id, 500) if case_store is not None else []
+        ticket_stats = ticket_store.analytics(guild_id) if ticket_store is not None and hasattr(ticket_store, "analytics") else {
+            "total": 0,
+            "open": 0,
+            "closed": 0,
+            "claimed": 0,
+            "internal_note_count": 0,
+            "priorities": {"low": 0, "normal": 0, "high": 0, "urgent": 0},
+        }
+        giveaways = giveaway_store.list_giveaways(guild_id, status=None, limit=500) if giveaway_store is not None else []
+        command_entries = [entry for entry in logs if entry.get("kind") != "event"]
+        command_counts: dict[str, int] = defaultdict(int)
+        moderator_counts: dict[str, int] = defaultdict(int)
+        for entry in command_entries:
+            command_counts[str(entry.get("command") or "unknown")] += 1
+            user_name = str(entry.get("user_name") or "Unknown")
+            if entry.get("command") in {"warn", "timeout", "removetimeout", "kick", "ban"}:
+                moderator_counts[user_name] += 1
+        most_used_commands = sorted(command_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+        most_active_staff = sorted(moderator_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+        return {
+            "member_count": getattr(guild, "member_count", 0) or 0,
+            "command_count": len(command_entries),
+            "event_count": len([entry for entry in logs if entry.get("kind") == "event"]),
+            "case_count": len(cases),
+            "ticket_total": ticket_stats["total"],
+            "ticket_open": ticket_stats["open"],
+            "giveaway_total": len(giveaways),
+            "most_used_commands": most_used_commands,
+            "most_active_staff": most_active_staff,
+        }
+
+    def premium_log_entries(
+        guild_id: int,
+        *,
+        limit: int = 250,
+        query: str | None = None,
+        kind: str | None = None,
+        status: str | None = None,
+        category: str | None = None,
+        actor: str | None = None,
+    ) -> list[dict]:
+        if not hasattr(bot, "command_logs"):
+            return []
+        return bot.command_logs.list_for_guild(
+            guild_id,
+            max(1, min(limit, 1000)),
+            query=query,
+            kind=kind,
+            status=status,
+            category=category,
+            actor=actor,
+        )
+
+    def premium_case_entries(
+        guild_id: int,
+        *,
+        limit: int = 150,
+        query: str | None = None,
+        action: str | None = None,
+    ) -> list[dict]:
+        case_store = getattr(bot, "case_store", None)
+        if case_store is None:
+            return []
+        cases = case_store.list_cases(guild_id, 1000)
+        if query:
+            needle = str(query).strip().lower()
+            cases = [
+                case for case in cases
+                if needle in str(case.get("target_user_name") or "").lower()
+                or needle in str(case.get("moderator_name") or "").lower()
+                or needle in str(case.get("reason") or "").lower()
+                or needle == str(case.get("case_id"))
+                or any(needle in str(note.get("body") or "").lower() for note in case.get("notes", []))
+            ]
+        if action:
+            action_key = str(action).strip().lower()
+            cases = [case for case in cases if str(case.get("action") or "").lower() == action_key]
+        return cases[: max(1, min(limit, 500))]
+
+    def build_config_snapshot(guild_id: int) -> dict:
+        return {
+            "subscription_tier": bot.access_manager.controls.get_subscription_tier(guild_id),
+            "dashboard_editor_role_ids": bot.access_manager.controls.get_dashboard_editor_roles(guild_id),
+            "autorole_role_ids": bot.access_manager.controls.get_autorole_role_ids(guild_id),
+            "purge_settings": purge_settings_summary(guild_id),
+            "moderation_settings": moderation_settings_summary(guild_id),
+            "alert_settings": alert_settings_summary(guild_id),
+            "greetings": greetings_dashboard_summary(guild_id),
+            "support": support_dashboard_summary(guild_id),
+            "server_defense": bot.server_defense.get_dashboard_state(guild_id) if hasattr(bot, "server_defense") else {},
+        }
+
+    async def apply_config_snapshot(guild_id: int, snapshot: dict) -> None:
+        controls = bot.access_manager.controls
+        controls.set_subscription_tier(guild_id, str(snapshot.get("subscription_tier") or TIER_FREE))
+        controls.set_dashboard_editor_roles(guild_id, [int(role_id) for role_id in snapshot.get("dashboard_editor_role_ids", []) if str(role_id).isdigit()])
+        controls.set_autorole_role_ids(guild_id, [int(role_id) for role_id in snapshot.get("autorole_role_ids", []) if str(role_id).isdigit()])
+
+        purge = snapshot.get("purge_settings") or {}
+        controls.set_purge_settings(
+            guild_id,
+            limit=purge.get("limit"),
+            default_mode=purge.get("default_mode"),
+            include_pinned_default=purge.get("include_pinned_default"),
+        )
+
+        moderation = snapshot.get("moderation_settings") or {}
+        controls.set_moderation_settings(
+            guild_id,
+            confirmation_enabled=moderation.get("confirmation_enabled"),
+            default_timeout_minutes=moderation.get("default_timeout_minutes"),
+        )
+
+        alert = snapshot.get("alert_settings") or {}
+        controls.set_alert_settings(
+            guild_id,
+            confirmation_enabled=alert.get("confirmation_enabled"),
+            skip_in_voice_default=alert.get("skip_in_voice_default"),
+            only_offline_default=alert.get("only_offline_default"),
+            include_bots_default=alert.get("include_bots_default"),
+            cooldown_seconds=alert.get("cooldown_seconds"),
+        )
+
+        greetings = snapshot.get("greetings") or {}
+        manager = getattr(bot, "greetings", None)
+        if manager is not None:
+            welcome = greetings.get("welcome") or {}
+            leave = greetings.get("leave") or {}
+            join_dm = greetings.get("join_dm") or {}
+            manager.set_welcome(guild_id, channel_id=welcome.get("channel_id"), message=welcome.get("message"))
+            manager.set_leave(guild_id, channel_id=leave.get("channel_id"), message=leave.get("message"))
+            manager.set_join_dm(guild_id, enabled=join_dm.get("enabled"), message=join_dm.get("message"))
+
+        ticket_store = getattr(bot, "ticket_store", None)
+        support = snapshot.get("support") or {}
+        if ticket_store is not None:
+            ticket_store.set_issue_types(guild_id, support.get("issue_types", []))
+            ticket_store.set_support_command_channel_id(guild_id, support.get("support_command_channel_id"))
+
+        server_defense = snapshot.get("server_defense") or {}
+        if hasattr(bot, "server_defense") and isinstance(server_defense, dict):
+            for feature_name, state in server_defense.items():
+                if not isinstance(state, dict):
+                    continue
+                if feature_name == "active_count":
+                    continue
+                if feature_name not in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "autofilter", "lockdown", "antiraid"}:
+                    continue
+                if hasattr(bot.server_defense.store, "patch_feature"):
+                    bot.server_defense.store.patch_feature(guild_id, feature_name, **state)
 
     def autofeed_dashboard_summary(guild_id: int) -> dict:
         store = getattr(bot, "autofeed_store", None)
@@ -1159,6 +1348,8 @@ def create_dashboard_app(bot) -> FastAPI:
         giveaways_summary = giveaways_dashboard_summary(guild_id)
         autofeed_summary = autofeed_dashboard_summary(guild_id)
         case_summary = case_dashboard_summary(guild_id)
+        subscription = subscription_summary(guild_id)
+        analytics = analytics_summary(guild_id) if subscription["is_premium"] else None
         purge_settings = purge_settings_summary(guild_id)
         moderation_settings = moderation_settings_summary(guild_id)
         alert_settings = alert_settings_summary(guild_id)
@@ -1198,6 +1389,8 @@ def create_dashboard_app(bot) -> FastAPI:
                 "giveaways_summary": giveaways_summary,
                 "autofeed_summary": autofeed_summary,
                 "case_summary": case_summary,
+                "subscription": subscription,
+                "analytics": analytics,
                 "purge_settings": purge_settings,
                 "moderation_settings": moderation_settings,
                 "alert_settings": alert_settings,
@@ -1217,6 +1410,7 @@ def create_dashboard_app(bot) -> FastAPI:
         support_summary = support_dashboard_summary(guild_id)
         moderation_settings = moderation_settings_summary(guild_id)
         setup_summary = setup_wizard_summary(guild_id)
+        subscription = subscription_summary(guild_id)
         return render_template(
             "setup.html",
             request,
@@ -1231,6 +1425,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "support_summary": support_summary,
                 "moderation_settings": moderation_settings,
                 "setup_summary": setup_summary,
+                "subscription": subscription,
                 "current_view": "setup",
             },
         )
@@ -1360,11 +1555,135 @@ def create_dashboard_app(bot) -> FastAPI:
         return await render_dashboard_view(request, guild_id, "autofeed")
 
     @app.get("/api/guilds/{guild_id}/logs")
-    async def guild_logs(request: Request, guild_id: int, limit: int = 80):
+    async def guild_logs(
+        request: Request,
+        guild_id: int,
+        limit: int = 80,
+        query: str | None = None,
+        kind: str | None = None,
+        status: str | None = None,
+        category: str | None = None,
+        actor: str | None = None,
+    ):
         await require_guild_access(request, guild_id)
-        safe_limit = max(1, min(limit, 150))
-        logs = bot.command_logs.list_for_guild(guild_id, safe_limit) if hasattr(bot, "command_logs") else []
+        is_premium = bot.access_manager.controls.is_premium_enabled(guild_id)
+        if any(value for value in (query, kind, status, category, actor)) and not is_premium:
+            raise HTTPException(status_code=402, detail="Searchable logs are part of ServerCore Premium right now.")
+        safe_limit = max(1, min(limit, 500 if is_premium else 150))
+        logs = premium_log_entries(
+            guild_id,
+            limit=safe_limit,
+            query=query if is_premium else None,
+            kind=kind if is_premium else None,
+            status=status if is_premium else None,
+            category=category if is_premium else None,
+            actor=actor if is_premium else None,
+        )
         return JSONResponse({"entries": logs})
+
+    @app.get("/api/guilds/{guild_id}/logs/export")
+    async def export_guild_logs(
+        request: Request,
+        guild_id: int,
+        query: str | None = None,
+        kind: str | None = None,
+        status: str | None = None,
+        category: str | None = None,
+        actor: str | None = None,
+    ):
+        await require_guild_access(request, guild_id)
+        if not bot.access_manager.controls.is_premium_enabled(guild_id):
+            raise HTTPException(status_code=402, detail="Log exports are part of ServerCore Premium right now.")
+        return JSONResponse(
+            {
+                "guild_id": guild_id,
+                "exported_at": time.time(),
+                "entries": premium_log_entries(
+                    guild_id,
+                    limit=1000,
+                    query=query,
+                    kind=kind,
+                    status=status,
+                    category=category,
+                    actor=actor,
+                ),
+            }
+        )
+
+    @app.get("/api/guilds/{guild_id}/analytics")
+    async def guild_analytics(request: Request, guild_id: int):
+        await require_guild_access(request, guild_id)
+        if not bot.access_manager.controls.is_premium_enabled(guild_id):
+            raise HTTPException(status_code=402, detail="Analytics are part of ServerCore Premium right now.")
+        return JSONResponse(analytics_summary(guild_id))
+
+    @app.get("/api/guilds/{guild_id}/cases")
+    async def guild_cases(
+        request: Request,
+        guild_id: int,
+        limit: int = 80,
+        query: str | None = None,
+        action: str | None = None,
+    ):
+        await require_guild_access(request, guild_id)
+        if not bot.access_manager.controls.is_premium_enabled(guild_id):
+            raise HTTPException(status_code=402, detail="Advanced case history is part of ServerCore Premium right now.")
+        return JSONResponse({"entries": premium_case_entries(guild_id, limit=limit, query=query, action=action)})
+
+    @app.get("/api/guilds/{guild_id}/cases/export")
+    async def export_guild_cases(
+        request: Request,
+        guild_id: int,
+        query: str | None = None,
+        action: str | None = None,
+    ):
+        await require_guild_access(request, guild_id)
+        if not bot.access_manager.controls.is_premium_enabled(guild_id):
+            raise HTTPException(status_code=402, detail="Case exports are part of ServerCore Premium right now.")
+        return JSONResponse(
+            {
+                "guild_id": guild_id,
+                "exported_at": time.time(),
+                "entries": premium_case_entries(guild_id, limit=500, query=query, action=action),
+            }
+        )
+
+    @app.get("/api/guilds/{guild_id}/config-export")
+    async def export_config_snapshot(request: Request, guild_id: int):
+        await require_guild_access(request, guild_id)
+        if not bot.access_manager.controls.is_premium_enabled(guild_id):
+            raise HTTPException(status_code=402, detail="Config export is part of ServerCore Premium right now.")
+        return JSONResponse(build_config_snapshot(guild_id))
+
+    @app.post("/api/guilds/{guild_id}/config-import")
+    async def import_config_snapshot(request: Request, guild_id: int, payload: ConfigImportPayload):
+        await require_same_origin(request)
+        await require_guild_access(request, guild_id)
+        if not bot.access_manager.controls.is_premium_enabled(guild_id):
+            raise HTTPException(status_code=402, detail="Config import is part of ServerCore Premium right now.")
+        await apply_config_snapshot(guild_id, payload.snapshot)
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Config Imported",
+            description="Imported a saved dashboard snapshot for this server.",
+        )
+        return JSONResponse({"ok": True, "subscription": subscription_summary(guild_id)})
+
+    @app.post("/api/guilds/{guild_id}/config-template")
+    async def save_config_template(request: Request, guild_id: int, payload: ConfigTemplatePayload):
+        await require_same_origin(request)
+        await require_guild_access(request, guild_id)
+        if not bot.access_manager.controls.is_premium_enabled(guild_id):
+            raise HTTPException(status_code=402, detail="Saved templates are part of ServerCore Premium right now.")
+        templates = bot.access_manager.controls.save_config_template(guild_id, payload.name, build_config_snapshot(guild_id))
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Config Template Saved",
+            description=f"Saved the current server setup as template '{payload.name}'.",
+        )
+        return JSONResponse({"templates": templates})
 
     @app.post("/api/guilds/{guild_id}/command-policy")
     async def update_command_policy(request: Request, guild_id: int, payload: CommandPolicyPayload):
@@ -1430,14 +1749,17 @@ def create_dashboard_app(bot) -> FastAPI:
         if payload.defense_name not in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "autofilter", "lockdown", "antiraid"}:
             raise HTTPException(status_code=404, detail="Unknown defense")
 
-        result = await run_on_bot_loop(
-            manager.set_defense(
-                guild_id,
-                payload.defense_name,
-                enabled=payload.enabled,
-                duration_minutes=payload.duration_minutes,
+        try:
+            result = await run_on_bot_loop(
+                manager.set_defense(
+                    guild_id,
+                    payload.defense_name,
+                    enabled=payload.enabled,
+                    duration_minutes=payload.duration_minutes,
+                )
             )
-        )
+        except PermissionError as error:
+            raise HTTPException(status_code=402, detail=str(error)) from error
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         state = manager.build_dashboard_state(guild_id, role_lookup)
         card = next((item for item in state["cards"] if item["name"] == payload.defense_name), result)
@@ -1526,6 +1848,33 @@ def create_dashboard_app(bot) -> FastAPI:
     async def get_dashboard_access(request: Request, guild_id: int):
         await require_guild_access(request, guild_id)
         return JSONResponse(dashboard_access_summary(guild_id))
+
+    @app.get("/api/guilds/{guild_id}/subscription")
+    async def get_subscription(request: Request, guild_id: int):
+        await require_guild_access(request, guild_id)
+        return JSONResponse(subscription_summary(guild_id))
+
+    @app.post("/api/guilds/{guild_id}/subscription")
+    async def update_subscription(request: Request, guild_id: int, payload: SubscriptionTierPayload):
+        await require_same_origin(request)
+        await require_guild_access(request, guild_id)
+        tier = bot.access_manager.controls.set_subscription_tier(guild_id, payload.tier)
+        if tier != TIER_PREMIUM and hasattr(bot, "server_defense"):
+            try:
+                await run_on_bot_loop(bot.server_defense.disable_feature(guild_id, "antiraid", reason="Guardian requires Premium."))
+            except Exception:
+                if hasattr(bot.server_defense, "store"):
+                    bot.server_defense.store.patch_feature(guild_id, "antiraid", enabled=False, ends_at=None)
+                if hasattr(bot.server_defense, "reset_threat_state"):
+                    bot.server_defense.reset_threat_state(guild_id)
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Subscription Tier Updated",
+            description=f"Switched the testing tier for this server to {tier_label(tier)}.",
+            fields=[("Tier", tier_label(tier), True)],
+        )
+        return JSONResponse(subscription_summary(guild_id))
 
     @app.post("/api/guilds/{guild_id}/dashboard-access")
     async def update_dashboard_access(request: Request, guild_id: int, payload: DashboardAccessPayload):

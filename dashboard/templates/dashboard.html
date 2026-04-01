@@ -64,6 +64,7 @@
                         <span class="module-chip">{{ selected_guild.member_count }} members</span>
                         <span class="module-chip">{{ roles|length }} roles</span>
                         <span class="module-chip">{% if current_view == 'commands' %}{{ stats.commands }} commands{% elif current_view == 'defense' %}{{ defense_summary.active_count }} active protections{% else %}{{ selected_guild.name }}{% endif %}</span>
+                        <span class="module-chip" id="subscription-tier-chip">{{ subscription.label }} tier</span>
                     </div>
                 </div>
                 <div class="page-actions">
@@ -71,6 +72,23 @@
                     <a class="ghost-button" href="/servers">View all servers</a>
                 </div>
             </header>
+
+            <section class="surface command-settings-panel defense-settings-panel premium-tier-panel">
+                <div>
+                    <div class="eyebrow">Premium testing</div>
+                    <h3>Flip this server between Free and Premium</h3>
+                    <p>Use this temporary switch to test plan gating while Premium is still being built out. Guardian only arms when this server is on Premium.</p>
+                </div>
+                <div class="command-settings-actions">
+                    <div class="dashboard-access-summary" id="subscription-summary">
+                        {{ selected_guild.name }} is currently on the {{ subscription.label }} tier. Premium unlocks Guardian, advanced ticket tools, analytics, richer automation, config tools, and advanced giveaway rules.
+                    </div>
+                    <div class="defense-actions subscription-toggle-row">
+                        <button type="button" class="ghost-button compact-button {% if not subscription.is_premium %}is-active-toggle{% endif %}" id="set-tier-free">Use Free</button>
+                        <button type="button" class="primary-button compact-button {% if subscription.is_premium %}is-active-toggle{% endif %}" id="set-tier-premium">Use Premium</button>
+                    </div>
+                </div>
+            </section>
 
             <nav class="view-switcher" aria-label="Dashboard sections">
                 <a class="view-pill {% if current_view == 'commands' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}">Command Control</a>
@@ -218,6 +236,7 @@
                                 <input
                                     type="checkbox"
                                     {% if defense.enabled %}checked{% endif %}
+                                    {% if defense.locked %}disabled{% endif %}
                                     data-defense-toggle
                                     data-defense-name="{{ defense.name }}"
                                 >
@@ -241,11 +260,15 @@
                                     placeholder="Leave blank for indefinite"
                                     data-defense-duration
                                     data-defense-name="{{ defense.name }}"
+                                    {% if defense.locked %}disabled{% endif %}
                                     value="{{ defense.duration_minutes or '' }}"
                                 >
                             </label>
                             {% if defense.rate_label %}
                             <div class="defense-note">{{ defense.rate_label }}</div>
+                            {% endif %}
+                            {% if defense.locked %}
+                            <div class="dashboard-access-summary">{{ defense.remaining_premium_label }}</div>
                             {% endif %}
                             {% if defense.name == 'lockdown' %}
                             <div class="role-summary" data-lockdown-role-summary>{{ defense.allowed_role_summary }}</div>
@@ -259,7 +282,7 @@
                                 {% if defense.name == 'lockdown' %}
                                 <button type="button" class="ghost-button compact-button" data-defense-release data-defense-name="{{ defense.name }}">Unlock now</button>
                                 {% endif %}
-                                <button type="button" class="primary-button compact-button" data-defense-save data-defense-name="{{ defense.name }}">Apply</button>
+                                <button type="button" class="primary-button compact-button" data-defense-save data-defense-name="{{ defense.name }}" {% if defense.locked %}disabled{% endif %}>{% if defense.locked %}Premium only{% else %}Apply{% endif %}</button>
                             </div>
                         </div>
                     </article>
@@ -1118,6 +1141,10 @@
         const alertSettingsSummary = document.getElementById("alert-settings-summary");
         const alertSettingsPill = document.getElementById("alert-settings-pill");
         const saveAlertSettingsButton = document.getElementById("save-alert-settings");
+        const subscriptionSummary = document.getElementById("subscription-summary");
+        const subscriptionTierChip = document.getElementById("subscription-tier-chip");
+        const setTierFreeButton = document.getElementById("set-tier-free");
+        const setTierPremiumButton = document.getElementById("set-tier-premium");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
             disabled: document.querySelector('[data-stat="disabled"]'),
@@ -1374,6 +1401,26 @@
             return response.json();
         }
 
+        async function updateSubscriptionTier(tier) {
+            const response = await fetch(`/api/guilds/${guildId}/subscription`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ tier })
+            });
+
+            if (!response.ok) {
+                let message = "Subscription update failed";
+                try {
+                    const data = await response.json();
+                    message = data.detail || message;
+                } catch {}
+                showToast(message, "error");
+                throw new Error(message);
+            }
+
+            return response.json();
+        }
+
         async function updateModerationSettings(payload) {
             const response = await fetch(`/api/guilds/${guildId}/moderation-settings`, {
                 method: "POST",
@@ -1565,21 +1612,33 @@
             const status = card.querySelector("[data-defense-status]");
             const remaining = card.querySelector("[data-defense-remaining]");
             const durationInput = card.querySelector("[data-defense-duration]");
+            const saveButton = card.querySelector("[data-defense-save]");
+            const releaseButton = card.querySelector("[data-defense-release]");
 
             if (toggle) {
                 toggle.checked = Boolean(defense.enabled);
+                toggle.disabled = Boolean(defense.locked);
             }
             card.dataset.enabled = defense.enabled ? "true" : "false";
             card.dataset.durationMinutes = defense.duration_minutes ?? "";
+            card.dataset.locked = defense.locked ? "true" : "false";
 
             if (status) {
                 status.textContent = defense.status_label;
             }
             if (remaining) {
-                remaining.textContent = defense.remaining_label;
+                remaining.textContent = defense.locked ? (defense.remaining_premium_label || "Premium only") : defense.remaining_label;
             }
             if (durationInput) {
                 durationInput.value = defense.duration_minutes ?? "";
+                durationInput.disabled = Boolean(defense.locked);
+            }
+            if (saveButton) {
+                saveButton.disabled = Boolean(defense.locked);
+                saveButton.textContent = defense.locked ? "Premium only" : "Apply";
+            }
+            if (releaseButton) {
+                releaseButton.disabled = Boolean(defense.locked);
             }
 
             if (card.dataset.defenseName === "lockdown") {
@@ -1590,6 +1649,22 @@
                         : "Only server staff can talk";
                 }
                 card.dataset.lockdownRoleIds = (defense.allowed_role_ids || []).join(",");
+            }
+        }
+
+        function syncSubscriptionSummary(subscription) {
+            if (!subscription) return;
+            if (subscriptionSummary) {
+                subscriptionSummary.textContent = `${subscription.guild_name || "{{ selected_guild.name }}"} is currently on the ${subscription.label} tier. Premium unlocks Guardian, advanced ticket tools, analytics, richer automation, config tools, and advanced giveaway rules.`;
+            }
+            if (subscriptionTierChip) {
+                subscriptionTierChip.textContent = `${subscription.label} tier`;
+            }
+            if (setTierFreeButton) {
+                setTierFreeButton.classList.toggle("is-active-toggle", !subscription.is_premium);
+            }
+            if (setTierPremiumButton) {
+                setTierPremiumButton.classList.toggle("is-active-toggle", Boolean(subscription.is_premium));
             }
         }
 
@@ -2109,8 +2184,26 @@
                 const updatedDefense = (state.cards || []).find((item) => item.name === card.dataset.defenseName);
                 if (updatedDefense) {
                     syncDefenseCard(card, updatedDefense);
-                }
-            });
+            }
+        });
+
+        setTierFreeButton?.addEventListener("click", async () => {
+            try {
+                const result = await updateSubscriptionTier("free");
+                syncSubscriptionSummary(result);
+                await refreshDefenseSnapshot();
+                showToast("Server switched to the Free tier.");
+            } catch {}
+        });
+
+        setTierPremiumButton?.addEventListener("click", async () => {
+            try {
+                const result = await updateSubscriptionTier("premium");
+                syncSubscriptionSummary(result);
+                await refreshDefenseSnapshot();
+                showToast("Server switched to the Premium tier.");
+            } catch {}
+        });
         }
 
         updateStats();

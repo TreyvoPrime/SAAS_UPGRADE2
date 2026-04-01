@@ -217,6 +217,18 @@ class CommandControlStoreSettingsTests(unittest.TestCase):
         self.assertTrue(settings["include_bots_default"])
         self.assertEqual(settings["cooldown_seconds"], self.controls.MAX_ALERT_COOLDOWN_SECONDS)
 
+    def test_subscription_tier_round_trip_and_free_clamps_purge_limit(self) -> None:
+        self.controls.set_purge_settings(1001, limit=1500)
+        self.assertFalse(self.controls.is_premium_enabled(1001))
+
+        premium_tier = self.controls.set_subscription_tier(1001, "premium")
+        self.controls.set_purge_settings(1001, limit=1500)
+        free_tier = self.controls.set_subscription_tier(1001, "free")
+
+        self.assertEqual(premium_tier, "premium")
+        self.assertEqual(free_tier, "free")
+        self.assertEqual(self.controls.get_purge_settings(1001)["limit"], self.controls.FREE_PURGE_LIMIT_CAP)
+
 
 if __name__ == "__main__":
     unittest.main()

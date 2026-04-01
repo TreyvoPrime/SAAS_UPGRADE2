@@ -67,6 +67,19 @@ class ServerDefense(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    def _premium_enabled(self, guild_id: int) -> bool:
+        controls = getattr(self.bot, "command_controls", None)
+        return bool(controls and hasattr(controls, "is_premium_enabled") and controls.is_premium_enabled(guild_id))
+
+    async def _require_premium_guardian(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return False
+        if self._premium_enabled(interaction.guild.id):
+            return True
+        await interaction.response.send_message("Guardian is part of ServerCore Premium right now.", ephemeral=True)
+        return False
+
     @staticmethod
     def _moderation_embed(title: str, description: str, *, color: discord.Color) -> discord.Embed:
         embed = discord.Embed(title=title, description=description, color=color)
@@ -653,6 +666,8 @@ class ServerDefense(commands.Cog):
         interaction: discord.Interaction,
         duration_minutes: app_commands.Range[int, 1, MAX_DURATION_MINUTES] | None = None,
     ):
+        if not await self._require_premium_guardian(interaction):
+            return
         await self._enable_feature(
             interaction,
             "antiraid",
@@ -662,10 +677,14 @@ class ServerDefense(commands.Cog):
 
     @antiraid.command(name="disable", description="Stop Guardian threat scoring and clear the live threat state")
     async def antiraid_disable(self, interaction: discord.Interaction):
+        if not await self._require_premium_guardian(interaction):
+            return
         await self._disable_feature(interaction, "antiraid", "Guardian")
 
     @antiraid.command(name="status", description="View the live Guardian score and response tier")
     async def antiraid_status(self, interaction: discord.Interaction):
+        if not await self._require_premium_guardian(interaction):
+            return
         member = await self._require_admin(interaction)
         if member is None or interaction.guild is None:
             return
@@ -686,6 +705,8 @@ class ServerDefense(commands.Cog):
 
     @antiraid.command(name="reset", description="Clear the live Guardian score and recent signals")
     async def antiraid_reset(self, interaction: discord.Interaction):
+        if not await self._require_premium_guardian(interaction):
+            return
         member = await self._require_admin(interaction)
         if member is None or interaction.guild is None:
             return
@@ -697,6 +718,8 @@ class ServerDefense(commands.Cog):
 
     @antiraid.command(name="blacklistadd", description="Add a phrase Guardian should block immediately")
     async def antiraid_blacklist_add(self, interaction: discord.Interaction, phrase: app_commands.Range[str, 3, 80]):
+        if not await self._require_premium_guardian(interaction):
+            return
         member = await self._require_admin(interaction)
         if member is None or interaction.guild is None:
             return
@@ -709,6 +732,8 @@ class ServerDefense(commands.Cog):
 
     @antiraid.command(name="blacklistremove", description="Remove a blocked Guardian phrase")
     async def antiraid_blacklist_remove(self, interaction: discord.Interaction, phrase: app_commands.Range[str, 3, 80]):
+        if not await self._require_premium_guardian(interaction):
+            return
         member = await self._require_admin(interaction)
         if member is None or interaction.guild is None:
             return
@@ -719,6 +744,8 @@ class ServerDefense(commands.Cog):
 
     @antiraid.command(name="whitelistadd", description="Allow a domain through Link Block and Invite Block")
     async def antiraid_whitelist_add(self, interaction: discord.Interaction, domain: app_commands.Range[str, 3, 120]):
+        if not await self._require_premium_guardian(interaction):
+            return
         member = await self._require_admin(interaction)
         if member is None or interaction.guild is None:
             return
@@ -732,6 +759,8 @@ class ServerDefense(commands.Cog):
 
     @antiraid.command(name="whitelistremove", description="Remove a domain from the Guardian allow list")
     async def antiraid_whitelist_remove(self, interaction: discord.Interaction, domain: app_commands.Range[str, 3, 120]):
+        if not await self._require_premium_guardian(interaction):
+            return
         member = await self._require_admin(interaction)
         if member is None or interaction.guild is None:
             return
@@ -748,6 +777,8 @@ class ServerDefense(commands.Cog):
         app_commands.Choice(name="emergency", value="emergency"),
     ])
     async def antiraid_preset(self, interaction: discord.Interaction, preset: app_commands.Choice[str]):
+        if not await self._require_premium_guardian(interaction):
+            return
         member = await self._require_admin(interaction)
         if member is None or interaction.guild is None:
             return
