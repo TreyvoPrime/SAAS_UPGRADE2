@@ -68,6 +68,22 @@ class ModerationSettingsPayload(BaseModel):
     default_timeout_minutes: int = Field(ge=1, le=40320)
 
 
+class SetupWizardPayload(BaseModel):
+    moderation_confirmation_enabled: bool
+    default_timeout_minutes: int = Field(ge=1, le=40320)
+    moderation_role_ids: list[int] = Field(default_factory=list)
+    support_role_ids: list[int] = Field(default_factory=list)
+    community_role_ids: list[int] = Field(default_factory=list)
+    autorole_role_ids: list[int] = Field(default_factory=list)
+    welcome_channel_id: int | str | None = None
+    welcome_message: str | None = Field(default=None, max_length=1500)
+    leave_channel_id: int | str | None = None
+    leave_message: str | None = Field(default=None, max_length=1500)
+    join_dm_enabled: bool = False
+    join_dm_message: str | None = Field(default=None, max_length=1500)
+    support_issue_types: list[str] = Field(default_factory=list, max_length=20)
+
+
 def resolve_dashboard_host() -> str:
     return os.getenv("DASHBOARD_HOST") or os.getenv("HOST") or "0.0.0.0"
 
@@ -433,6 +449,15 @@ def create_dashboard_app(bot) -> FastAPI:
             "default_timeout_minutes": settings["default_timeout_minutes"],
         }
 
+    def autorole_settings_summary(guild_id: int) -> dict:
+        controls = bot.access_manager.controls
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        autorole_role_ids = controls.get_autorole_role_ids(guild_id)
+        return {
+            "role_ids": autorole_role_ids,
+            "role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in autorole_role_ids],
+        }
+
     def greetings_dashboard_summary(guild_id: int) -> dict:
         manager = getattr(bot, "greetings", None)
         channels = guild_text_channels(guild_id)
@@ -738,6 +763,77 @@ def create_dashboard_app(bot) -> FastAPI:
     def _slugify(value: str) -> str:
         return "".join(character.lower() if character.isalnum() else "-" for character in value).strip("-")
 
+    setup_command_groups = {
+        "moderation": [
+            "warn",
+            "timeout",
+            "removetimeout",
+            "kick",
+            "ban",
+            "purge",
+            "role add",
+            "role remove",
+            "role temp",
+            "history",
+            "staffnotes add",
+            "staffnotes view",
+            "staffnotes remove",
+        ],
+        "support": [
+            "ticketissue add",
+            "ticketissue remove",
+            "ticketissue list",
+            "ticketclaim",
+            "ticketpriority",
+            "tickettranscript",
+            "closeticket",
+        ],
+        "community": [
+            "poll",
+            "pollresults",
+            "endpoll",
+            "giveaway create",
+            "giveaway end",
+            "giveaway list",
+            "giveaway reroll",
+            "autofeed create",
+            "autofeed edit",
+            "autofeed delete",
+            "autofeed pause",
+            "autofeed resume",
+            "remind",
+        ],
+    }
+
+    def setup_role_group_summary(guild_id: int, group_name: str, role_lookup: dict[int, str]) -> dict:
+        command_names = setup_command_groups[group_name]
+        controls = bot.access_manager.controls
+        group_role_ids: set[int] = set()
+        allow_all = True
+        for command_name in command_names:
+            policy = controls.get_policy(guild_id, command_name)
+            role_ids = set(policy["allowed_role_ids"])
+            group_role_ids.update(role_ids)
+            if role_ids:
+                allow_all = False
+        role_ids_sorted = sorted(group_role_ids)
+        return {
+            "role_ids": role_ids_sorted,
+            "role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in role_ids_sorted],
+            "allow_all": allow_all,
+            "command_names": command_names,
+        }
+
+    def setup_wizard_summary(guild_id: int) -> dict:
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        return {
+            "completed": bot.access_manager.controls.is_setup_wizard_completed(guild_id),
+            "moderation": setup_role_group_summary(guild_id, "moderation", role_lookup),
+            "support": setup_role_group_summary(guild_id, "support", role_lookup),
+            "community": setup_role_group_summary(guild_id, "community", role_lookup),
+            "autorole": autorole_settings_summary(guild_id),
+        }
+
     def guild_command_rows(guild_id: int) -> tuple[list[dict], list[dict]]:
         roles = guild_roles(guild_id)
         role_names = {role["id"]: role["name"] for role in roles}
@@ -839,6 +935,36 @@ def create_dashboard_app(bot) -> FastAPI:
             },
         )
 
+    async def render_setup_wizard_view(request: Request, guild_id: int) -> HTMLResponse | RedirectResponse:
+        if session_user(request) is None:
+            return RedirectResponse(url="/", status_code=302)
+        selected_guild, guilds = await require_guild_access(request, guild_id, require_bot_installed=False)
+        if not selected_guild.get("bot_installed"):
+            return RedirectResponse(url=selected_guild["install_url"], status_code=302)
+        roles = guild_roles(guild_id)
+        text_channels = guild_text_channels(guild_id)
+        greetings_summary = greetings_dashboard_summary(guild_id)
+        support_summary = support_dashboard_summary(guild_id)
+        moderation_settings = moderation_settings_summary(guild_id)
+        setup_summary = setup_wizard_summary(guild_id)
+        return render_template(
+            "setup.html",
+            request,
+            {
+                "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
+                "user": session_user(request),
+                "guilds": guilds,
+                "selected_guild": selected_guild,
+                "roles": roles,
+                "text_channels": text_channels,
+                "greetings_summary": greetings_summary,
+                "support_summary": support_summary,
+                "moderation_settings": moderation_settings,
+                "setup_summary": setup_summary,
+                "current_view": "setup",
+            },
+        )
+
     @app.get("/health")
     async def health() -> dict:
         return {"ok": True, "guilds": len(bot.guilds) if bot else 0}
@@ -914,7 +1040,13 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.get("/dashboard/{guild_id}", response_class=HTMLResponse)
     async def dashboard(request: Request, guild_id: int):
+        if bot.access_manager.controls.is_setup_wizard_completed(guild_id) is False:
+            return RedirectResponse(url=f"/dashboard/{guild_id}/setup", status_code=302)
         return await render_dashboard_view(request, guild_id, "commands")
+
+    @app.get("/dashboard/{guild_id}/setup", response_class=HTMLResponse)
+    async def setup_wizard(request: Request, guild_id: int):
+        return await render_setup_wizard_view(request, guild_id)
 
     @app.get("/dashboard/{guild_id}/defense", response_class=HTMLResponse)
     async def defense_dashboard(request: Request, guild_id: int):
@@ -1226,6 +1358,98 @@ def create_dashboard_app(bot) -> FastAPI:
             ],
         )
         return JSONResponse(updated)
+
+    @app.post("/api/guilds/{guild_id}/setup-wizard")
+    async def update_setup_wizard(request: Request, guild_id: int, payload: SetupWizardPayload):
+        await require_guild_access(request, guild_id)
+
+        valid_role_ids = {role["id"] for role in guild_roles(guild_id)}
+        valid_channel_ids = {channel["id"] for channel in guild_text_channels(guild_id)}
+
+        def clean_role_ids(values: list[int]) -> list[int]:
+            return [role_id for role_id in values if role_id in valid_role_ids]
+
+        def clean_channel_id(value: int | str | None) -> int | None:
+            if value in (None, "", False):
+                return None
+            try:
+                channel_id = int(value)
+            except (TypeError, ValueError):
+                return None
+            return channel_id if channel_id in valid_channel_ids else None
+
+        moderation_role_ids = clean_role_ids(payload.moderation_role_ids)
+        support_role_ids = clean_role_ids(payload.support_role_ids)
+        community_role_ids = clean_role_ids(payload.community_role_ids)
+        autorole_role_ids = clean_role_ids(payload.autorole_role_ids)
+
+        bot.access_manager.controls.set_moderation_settings(
+            guild_id,
+            confirmation_enabled=payload.moderation_confirmation_enabled,
+            default_timeout_minutes=payload.default_timeout_minutes,
+        )
+        bot.access_manager.controls.set_autorole_role_ids(guild_id, autorole_role_ids)
+
+        for command_name in setup_command_groups["moderation"]:
+            bot.access_manager.controls.set_roles(guild_id, command_name, moderation_role_ids)
+        for command_name in setup_command_groups["support"]:
+            bot.access_manager.controls.set_roles(guild_id, command_name, support_role_ids)
+        for command_name in setup_command_groups["community"]:
+            bot.access_manager.controls.set_roles(guild_id, command_name, community_role_ids)
+
+        manager = getattr(bot, "greetings", None)
+        if manager is not None:
+            manager.set_welcome(
+                guild_id,
+                channel_id=clean_channel_id(payload.welcome_channel_id),
+                message=payload.welcome_message,
+            )
+            manager.set_leave(
+                guild_id,
+                channel_id=clean_channel_id(payload.leave_channel_id),
+                message=payload.leave_message,
+            )
+            manager.set_join_dm(
+                guild_id,
+                enabled=payload.join_dm_enabled,
+                message=payload.join_dm_message,
+            )
+
+        ticket_store = getattr(bot, "ticket_store", None)
+        if ticket_store is not None:
+            cleaned_issue_types = [
+                str(issue_type).strip()
+                for issue_type in payload.support_issue_types
+                if str(issue_type).strip()
+            ]
+            if cleaned_issue_types:
+                ticket_store.set_issue_types(guild_id, cleaned_issue_types)
+
+        bot.access_manager.controls.set_setup_wizard_completed(guild_id, True)
+
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Setup Wizard Completed",
+            description="Saved the server's guided setup settings from the dashboard.",
+            fields=[
+                ("Moderation Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in moderation_role_ids) or "Allow all", False),
+                ("Support Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in support_role_ids) or "Allow all", False),
+                ("Community Roles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in community_role_ids) or "Allow all", False),
+                ("Autoroles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in autorole_role_ids) or "None", False),
+            ],
+        )
+        return JSONResponse(
+            {
+                "completed": True,
+                "redirect_url": f"/dashboard/{guild_id}",
+                "setup_summary": setup_wizard_summary(guild_id),
+                "greetings_summary": greetings_dashboard_summary(guild_id),
+                "moderation_settings": moderation_settings_summary(guild_id),
+                "support_summary": support_dashboard_summary(guild_id),
+            }
+        )
 
     return app
 

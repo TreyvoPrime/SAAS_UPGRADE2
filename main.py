@@ -181,6 +181,21 @@ async def on_member_join(member: discord.Member):
     removed = await bot.server_defense.handle_member_join(member)
     if removed:
         return
+    autorole_role_ids = bot.command_controls.get_autorole_role_ids(member.guild.id)
+    if autorole_role_ids:
+        me = member.guild.me
+        if me is not None and me.guild_permissions.manage_roles:
+            roles_to_add = []
+            for role_id in autorole_role_ids:
+                role = member.guild.get_role(role_id)
+                if role is None or role.is_default() or role >= me.top_role or role in member.roles:
+                    continue
+                roles_to_add.append(role)
+            if roles_to_add:
+                try:
+                    await member.add_roles(*roles_to_add, reason="ServerCore setup wizard autorole")
+                except Exception:
+                    pass
     await bot.greetings.send_welcome(member)
 
 

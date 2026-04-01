@@ -74,6 +74,32 @@ class CommandControlStore:
         self.save()
         return self.get_dashboard_editor_roles(guild_id)
 
+    def get_autorole_role_ids(self, guild_id: int) -> list[int]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        return sorted(
+            {
+                int(role_id)
+                for role_id in dashboard_bucket.get("autorole_role_ids", [])
+                if str(role_id).isdigit()
+            }
+        )
+
+    def set_autorole_role_ids(self, guild_id: int, role_ids: list[int]) -> list[int]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        dashboard_bucket["autorole_role_ids"] = sorted({int(role_id) for role_id in role_ids})
+        self.save()
+        return self.get_autorole_role_ids(guild_id)
+
+    def is_setup_wizard_completed(self, guild_id: int) -> bool:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        return bool(dashboard_bucket.get("setup_wizard_completed", False))
+
+    def set_setup_wizard_completed(self, guild_id: int, completed: bool) -> bool:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        dashboard_bucket["setup_wizard_completed"] = bool(completed)
+        self.save()
+        return self.is_setup_wizard_completed(guild_id)
+
     def get_purge_limit(self, guild_id: int) -> int:
         dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
         raw_value = dashboard_bucket.get("purge_limit", self.DEFAULT_PURGE_LIMIT)

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ selected_guild.name }} Setup Wizard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body class="shell dashboard-view-setup">
+    <main class="workspace dashboard-shell">
+        <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
+        <aside class="sidebar surface">
+            <div class="brand-lockup">
+                <div class="brand-mark">
+                    <img src="/static/servercore-thumbnail.png" alt="ServerCore">
+                </div>
+                <div>
+                    <div class="eyebrow">ServerCore</div>
+                    <h1>{{ bot_name }}</h1>
+                </div>
+            </div>
+
+            <div class="guild-spotlight">
+                <img src="{{ selected_guild.icon_url }}" alt="{{ selected_guild.name }}">
+                <div>
+                    <strong>{{ selected_guild.name }}</strong>
+                    <p>{{ selected_guild.member_count }} members</p>
+                </div>
+            </div>
+
+            <section class="sidebar-quicklinks">
+                <div class="eyebrow">Quick links</div>
+                <nav class="sidebar-nav">
+                    <a class="nav-link active" href="/dashboard/{{ selected_guild.id }}/setup">Setup wizard</a>
+                    <a class="nav-link" href="/servers">All Servers</a>
+                    <a class="nav-link" href="/logout">Log Out</a>
+                </nav>
+            </section>
+
+            <section class="server-switcher">
+                <div class="eyebrow">Servers</div>
+                <div class="server-list">
+                    {% for item in guilds %}
+                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}/dashboard/{{ item.id }}/setup{% else %}{{ item.install_url }}{% endif %}">
+                        <img src="{{ item.icon_url }}" alt="{{ item.name }}">
+                        <span>{{ item.name }}{% if not item.bot_installed %} - Add app{% endif %}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </section>
+        </aside>
+
+        <section class="main-column">
+            <header class="page-head">
+                <div class="page-lead">
+                    <div class="eyebrow">Setup Wizard</div>
+                    <h2>Get {{ selected_guild.name }} ready in a few guided steps</h2>
+                    <p>Start with staff access and moderation, then move through welcomes, autoroles, support, and community tools. Everything here is focused on the most important setup first.</p>
+                    <div class="page-meta-row">
+                        <span class="module-chip">{{ selected_guild.member_count }} members</span>
+                        <span class="module-chip">{{ roles|length }} roles</span>
+                        <span class="module-chip">First-time setup</span>
+                    </div>
+                </div>
+                <div class="page-actions">
+                    <a class="ghost-button" href="/servers">Back to servers</a>
+                </div>
+            </header>
+
+            <section class="surface setup-shell">
+                <div class="setup-progress" id="setup-progress">
+                    <button type="button" class="setup-step-pill is-active" data-setup-step-trigger="0">
+                        <span class="setup-step-index">1</span>
+                        <span>
+                            <strong>Moderation</strong>
+                            <small>Staff actions and command access</small>
+                        </span>
+                    </button>
+                    <button type="button" class="setup-step-pill" data-setup-step-trigger="1">
+                        <span class="setup-step-index">2</span>
+                        <span>
+                            <strong>Welcome</strong>
+                            <small>Join, leave, and first impressions</small>
+                        </span>
+                    </button>
+                    <button type="button" class="setup-step-pill" data-setup-step-trigger="2">
+                        <span class="setup-step-index">3</span>
+                        <span>
+                            <strong>Autoroles</strong>
+                            <small>Starter roles for new members</small>
+                        </span>
+                    </button>
+                    <button type="button" class="setup-step-pill" data-setup-step-trigger="3">
+                        <span class="setup-step-index">4</span>
+                        <span>
+                            <strong>Support</strong>
+                            <small>Ticket categories and helpers</small>
+                        </span>
+                    </button>
+                    <button type="button" class="setup-step-pill" data-setup-step-trigger="4">
+                        <span class="setup-step-index">5</span>
+                        <span>
+                            <strong>Community</strong>
+                            <small>Polls, giveaways, reminders, and feeds</small>
+                        </span>
+                    </button>
+                </div>
+
+                <div class="setup-panels">
+                    <section class="setup-panel is-active" data-setup-step="0">
+                        <div class="setup-panel-head">
+                            <div>
+                                <div class="eyebrow">Step 1</div>
+                                <h3>Set up moderation first</h3>
+                                <p>Choose how staff actions should behave and who should be trusted with your moderation tools. Leave the role list empty if you want every member to use those commands.</p>
+                            </div>
+                            <div class="setup-summary-card">
+                                <strong>Current moderation access</strong>
+                                <span id="setup-moderation-summary">{{ "Allowed for everyone" if setup_summary.moderation.allow_all else (setup_summary.moderation.role_names|join(", ") if setup_summary.moderation.role_names else "Allowed for everyone") }}</span>
+                            </div>
+                        </div>
+
+                        <div class="setup-grid setup-grid-wide">
+                            <label class="toggle moderation-toggle">
+                                <input id="wizard-moderation-confirmation" type="checkbox" {% if moderation_settings.confirmation_enabled %}checked{% endif %}>
+                                <span>Ask staff for a final confirmation before warnings, timeouts, kicks, and bans</span>
+                            </label>
+
+                            <label class="search-shell">
+                                <span>Default timeout length in minutes</span>
+                                <input id="wizard-timeout-minutes" class="search-input" type="number" min="1" max="40320" step="1" value="{{ moderation_settings.default_timeout_minutes }}">
+                            </label>
+                        </div>
+
+                        <section class="setup-role-group">
+                            <div class="setup-role-head">
+                                <div>
+                                    <h4>Who can use moderation commands</h4>
+                                    <p>These roles will be able to use warn, timeout, ban, purge, role tools, history, and staff notes.</p>
+                                </div>
+                                <label class="toggle compact-toggle">
+                                    <input id="wizard-moderation-allow-all" type="checkbox" {% if setup_summary.moderation.allow_all %}checked{% endif %}>
+                                    <span>Allow everyone</span>
+                                </label>
+                            </div>
+                            <div class="setup-checklist" id="wizard-moderation-roles">
+                                {% for role in roles %}
+                                <label class="role-option">
+                                    <input type="checkbox" value="{{ role.id }}" data-role-group="moderation" {% if role.id in setup_summary.moderation.role_ids %}checked{% endif %}>
+                                    <span>{{ role.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+                    </section>
+
+                    <section class="setup-panel" data-setup-step="1">
+                        <div class="setup-panel-head">
+                            <div>
+                                <div class="eyebrow">Step 2</div>
+                                <h3>Shape the join and leave experience</h3>
+                                <p>Pick the right channels and write the messages new members and departing members should see. Use placeholders like <code>{user}</code>, <code>{server}</code>, and <code>{membercount}</code>.</p>
+                            </div>
+                            <div class="setup-summary-card">
+                                <strong>Welcome channel</strong>
+                                <span id="setup-welcome-channel-summary">{{ greetings_summary.welcome.channel_name }}</span>
+                            </div>
+                        </div>
+
+                        <div class="setup-grid">
+                            <label class="search-shell">
+                                <span>Welcome channel</span>
+                                <select id="wizard-welcome-channel" class="search-input">
+                                    <option value="">No welcome channel</option>
+                                    {% for channel in text_channels %}
+                                    <option value="{{ channel.id }}" {% if greetings_summary.welcome.channel_id == channel.id %}selected{% endif %}>{{ channel.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label class="search-shell">
+                                <span>Leave channel</span>
+                                <select id="wizard-leave-channel" class="search-input">
+                                    <option value="">No leave channel</option>
+                                    {% for channel in text_channels %}
+                                    <option value="{{ channel.id }}" {% if greetings_summary.leave.channel_id == channel.id %}selected{% endif %}>{{ channel.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label class="search-shell">
+                                <span>Welcome message</span>
+                                <textarea id="wizard-welcome-message" class="search-input greeting-textarea" rows="5">{{ greetings_summary.welcome.message }}</textarea>
+                            </label>
+                            <label class="search-shell">
+                                <span>Leave message</span>
+                                <textarea id="wizard-leave-message" class="search-input greeting-textarea" rows="5">{{ greetings_summary.leave.message }}</textarea>
+                            </label>
+                        </div>
+
+                        <section class="setup-subpanel">
+                            <div class="setup-role-head">
+                                <div>
+                                    <h4>Join DM guide</h4>
+                                    <p>Send a direct welcome message that helps new members understand where to start.</p>
+                                </div>
+                                <label class="toggle compact-toggle">
+                                    <input id="wizard-join-dm-enabled" type="checkbox" {% if greetings_summary.join_dm.enabled %}checked{% endif %}>
+                                    <span>Enable join DM</span>
+                                </label>
+                            </div>
+                            <label class="search-shell">
+                                <span>Join DM message</span>
+                                <textarea id="wizard-join-dm-message" class="search-input greeting-textarea" rows="4">{{ greetings_summary.join_dm.message }}</textarea>
+                            </label>
+                        </section>
+                    </section>
+
+                    <section class="setup-panel" data-setup-step="2">
+                        <div class="setup-panel-head">
+                            <div>
+                                <div class="eyebrow">Step 3</div>
+                                <h3>Pick roles new members should receive automatically</h3>
+                                <p>Choose the starter roles that should be added when someone joins. This is a good place for community, announcement, or onboarding roles.</p>
+                            </div>
+                            <div class="setup-summary-card">
+                                <strong>Autoroles</strong>
+                                <span id="setup-autorole-summary">{{ setup_summary.autorole.role_names|join(", ") if setup_summary.autorole.role_names else "No autoroles selected yet" }}</span>
+                            </div>
+                        </div>
+
+                        <section class="setup-role-group">
+                            <div class="setup-role-head">
+                                <div>
+                                    <h4>Autoroles for new members</h4>
+                                    <p>Members will receive every checked role when they join, as long as the bot can manage that role.</p>
+                                </div>
+                            </div>
+                            <div class="setup-checklist" id="wizard-autoroles">
+                                {% for role in roles %}
+                                <label class="role-option">
+                                    <input type="checkbox" value="{{ role.id }}" data-role-group="autorole" {% if role.id in setup_summary.autorole.role_ids %}checked{% endif %}>
+                                    <span>{{ role.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+                    </section>
+
+                    <section class="setup-panel" data-setup-step="3">
+                        <div class="setup-panel-head">
+                            <div>
+                                <div class="eyebrow">Step 4</div>
+                                <h3>Get support set up for members</h3>
+                                <p>Pick the staff roles that should manage support tools and create a clean ticket issue list for regular server help.</p>
+                            </div>
+                            <div class="setup-summary-card">
+                                <strong>Support access</strong>
+                                <span id="setup-support-summary">{{ "Allowed for everyone" if setup_summary.support.allow_all else (setup_summary.support.role_names|join(", ") if setup_summary.support.role_names else "Allowed for everyone") }}</span>
+                            </div>
+                        </div>
+
+                        <section class="setup-role-group">
+                            <div class="setup-role-head">
+                                <div>
+                                    <h4>Who can manage support commands</h4>
+                                    <p>These roles can adjust ticket issues, claim tickets, set ticket priority, and handle ticket close tools.</p>
+                                </div>
+                                <label class="toggle compact-toggle">
+                                    <input id="wizard-support-allow-all" type="checkbox" {% if setup_summary.support.allow_all %}checked{% endif %}>
+                                    <span>Allow everyone</span>
+                                </label>
+                            </div>
+                            <div class="setup-checklist" id="wizard-support-roles">
+                                {% for role in roles %}
+                                <label class="role-option">
+                                    <input type="checkbox" value="{{ role.id }}" data-role-group="support" {% if role.id in setup_summary.support.role_ids %}checked{% endif %}>
+                                    <span>{{ role.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <label class="search-shell">
+                            <span>Support issue types</span>
+                            <textarea id="wizard-support-issues" class="search-input greeting-textarea" rows="7" placeholder="One issue type per line">{% for issue in support_summary.issue_types %}{{ issue }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea>
+                        </label>
+                    </section>
+
+                    <section class="setup-panel" data-setup-step="4">
+                        <div class="setup-panel-head">
+                            <div>
+                                <div class="eyebrow">Step 5</div>
+                                <h3>Set community tools to the right access level</h3>
+                                <p>Choose whether polls, giveaways, autofeed, and reminders should be open to everyone or limited to certain staff or event roles.</p>
+                            </div>
+                            <div class="setup-summary-card">
+                                <strong>Community tool access</strong>
+                                <span id="setup-community-summary">{{ "Allowed for everyone" if setup_summary.community.allow_all else (setup_summary.community.role_names|join(", ") if setup_summary.community.role_names else "Allowed for everyone") }}</span>
+                            </div>
+                        </div>
+
+                        <section class="setup-role-group">
+                            <div class="setup-role-head">
+                                <div>
+                                    <h4>Who can use community management commands</h4>
+                                    <p>This covers polls, giveaways, autofeed, and reminders so you can keep event tools in the right hands.</p>
+                                </div>
+                                <label class="toggle compact-toggle">
+                                    <input id="wizard-community-allow-all" type="checkbox" {% if setup_summary.community.allow_all %}checked{% endif %}>
+                                    <span>Allow everyone</span>
+                                </label>
+                            </div>
+                            <div class="setup-checklist" id="wizard-community-roles">
+                                {% for role in roles %}
+                                <label class="role-option">
+                                    <input type="checkbox" value="{{ role.id }}" data-role-group="community" {% if role.id in setup_summary.community.role_ids %}checked{% endif %}>
+                                    <span>{{ role.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <div class="setup-review">
+                            <div class="setup-summary-card">
+                                <strong>Almost done</strong>
+                                <span>Finish setup to save your first moderation, onboarding, support, and community settings all at once.</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <footer class="setup-footer">
+                    <button type="button" class="ghost-button" id="setup-back-button" disabled>Back</button>
+                    <div class="setup-footer-copy" id="setup-footer-copy">Step 1 of 5</div>
+                    <button type="button" class="primary-button" id="setup-next-button">Continue</button>
+                    <button type="button" class="primary-button" id="setup-finish-button" hidden>Finish setup</button>
+                </footer>
+            </section>
+        </section>
+
+        <aside class="activity-column surface">
+            <div class="log-top">
+                <div>
+                    <div class="eyebrow">Quick setup guide</div>
+                    <h3>What this will handle</h3>
+                </div>
+            </div>
+            <div class="notice-card compact">
+                <strong>Priority first</strong>
+                <p>Moderation and join flow come first so the server feels safe and welcoming right away.</p>
+            </div>
+            <div class="notice-card compact">
+                <strong>Role-based access</strong>
+                <p>Choose trusted roles for moderation, support, and community tools, or leave access open to everyone.</p>
+            </div>
+            <div class="notice-card compact">
+                <strong>One save at the end</strong>
+                <p>The wizard bundles everything together so you can review the whole setup before you finish.</p>
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        const guildId = "{{ selected_guild.id }}";
+        const toastStack = document.getElementById("toast-stack");
+        const panels = Array.from(document.querySelectorAll("[data-setup-step]"));
+        const triggers = Array.from(document.querySelectorAll("[data-setup-step-trigger]"));
+        const backButton = document.getElementById("setup-back-button");
+        const nextButton = document.getElementById("setup-next-button");
+        const finishButton = document.getElementById("setup-finish-button");
+        const footerCopy = document.getElementById("setup-footer-copy");
+        let currentStep = 0;
+
+        function showToast(message, tone = "success") {
+            const toast = document.createElement("div");
+            toast.className = `toast ${tone}`;
+            toast.textContent = message;
+            toastStack?.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add("is-visible"));
+            setTimeout(() => {
+                toast.classList.remove("is-visible");
+                setTimeout(() => toast.remove(), 180);
+            }, 2800);
+        }
+
+        function setRoleGroupDisabled(groupName, disabled) {
+            document.querySelectorAll(`[data-role-group="${groupName}"]`).forEach((input) => {
+                input.disabled = disabled;
+            });
+        }
+
+        function syncAllowAllToggle(toggleId, groupName) {
+            const toggle = document.getElementById(toggleId);
+            if (!toggle) return;
+            const apply = () => setRoleGroupDisabled(groupName, toggle.checked);
+            toggle.addEventListener("change", apply);
+            apply();
+        }
+
+        function setActiveStep(nextStep) {
+            currentStep = Math.max(0, Math.min(nextStep, panels.length - 1));
+            panels.forEach((panel, index) => panel.classList.toggle("is-active", index === currentStep));
+            triggers.forEach((trigger, index) => trigger.classList.toggle("is-active", index === currentStep));
+            backButton.disabled = currentStep === 0;
+            nextButton.hidden = currentStep === panels.length - 1;
+            finishButton.hidden = currentStep !== panels.length - 1;
+            footerCopy.textContent = `Step ${currentStep + 1} of ${panels.length}`;
+        }
+
+        function checkedRoleIds(groupName, allowAllToggleId) {
+            if (document.getElementById(allowAllToggleId)?.checked) {
+                return [];
+            }
+            return Array.from(document.querySelectorAll(`[data-role-group="${groupName}"]:checked`)).map((input) => Number(input.value));
+        }
+
+        function cleanIssueTypes() {
+            return (document.getElementById("wizard-support-issues")?.value || "")
+                .split(/\r?\n/)
+                .map((value) => value.trim())
+                .filter((value, index, array) => value.length >= 3 && array.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index)
+                .slice(0, 20);
+        }
+
+        function buildPayload() {
+            return {
+                moderation_confirmation_enabled: Boolean(document.getElementById("wizard-moderation-confirmation")?.checked),
+                default_timeout_minutes: Number(document.getElementById("wizard-timeout-minutes")?.value || "10"),
+                moderation_role_ids: checkedRoleIds("moderation", "wizard-moderation-allow-all"),
+                support_role_ids: checkedRoleIds("support", "wizard-support-allow-all"),
+                community_role_ids: checkedRoleIds("community", "wizard-community-allow-all"),
+                autorole_role_ids: Array.from(document.querySelectorAll('[data-role-group="autorole"]:checked')).map((input) => Number(input.value)),
+                welcome_channel_id: document.getElementById("wizard-welcome-channel")?.value || null,
+                welcome_message: document.getElementById("wizard-welcome-message")?.value || "",
+                leave_channel_id: document.getElementById("wizard-leave-channel")?.value || null,
+                leave_message: document.getElementById("wizard-leave-message")?.value || "",
+                join_dm_enabled: Boolean(document.getElementById("wizard-join-dm-enabled")?.checked),
+                join_dm_message: document.getElementById("wizard-join-dm-message")?.value || "",
+                support_issue_types: cleanIssueTypes(),
+            };
+        }
+
+        async function finishSetup() {
+            const payload = buildPayload();
+            if (!Number.isInteger(payload.default_timeout_minutes) || payload.default_timeout_minutes < 1 || payload.default_timeout_minutes > 40320) {
+                showToast("Choose a timeout between 1 and 40320 minutes.", "error");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/guilds/${guildId}/setup-wizard`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || "Setup could not be saved right now.");
+                }
+                showToast("Setup saved. Taking you to the dashboard.");
+                setTimeout(() => {
+                    window.location.href = data.redirect_url || `/dashboard/${guildId}`;
+                }, 600);
+            } catch (error) {
+                showToast(error.message || "Setup could not be saved right now.", "error");
+            }
+        }
+
+        triggers.forEach((trigger) => {
+            trigger.addEventListener("click", () => setActiveStep(Number(trigger.dataset.setupStepTrigger || "0")));
+        });
+
+        backButton?.addEventListener("click", () => setActiveStep(currentStep - 1));
+        nextButton?.addEventListener("click", () => setActiveStep(currentStep + 1));
+        finishButton?.addEventListener("click", finishSetup);
+
+        syncAllowAllToggle("wizard-moderation-allow-all", "moderation");
+        syncAllowAllToggle("wizard-support-allow-all", "support");
+        syncAllowAllToggle("wizard-community-allow-all", "community");
+        setActiveStep(0);
+    </script>
+</body>
+</html>
