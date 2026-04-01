@@ -513,14 +513,14 @@ button {
     align-items: center;
     justify-content: center;
     min-width: 0;
-    padding: 0 12px;
+    padding: 0 10px;
     border-radius: 999px;
     color: var(--muted-strong);
     border: 1px solid transparent;
     transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
     text-align: center;
     white-space: nowrap;
-    font-size: clamp(0.82rem, 0.18vw + 0.78rem, 0.95rem);
+    font-size: clamp(0.74rem, 0.12vw + 0.72rem, 0.86rem);
     line-height: 1.1;
     overflow: hidden;
     text-overflow: ellipsis;
