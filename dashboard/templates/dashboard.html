@@ -123,7 +123,7 @@
                     <div>
                         <div class="eyebrow">ServerGuard</div>
                         <h3>How much cleanup staff can do at once</h3>
-                        <p>Set the biggest cleanup pass moderators can run in one go. Keep it tighter for careful cleanup, or raise it when your team needs to clear larger waves quickly.</p>
+                        <p>Set the biggest cleanup pass moderators can run in one go, choose the default cleanup focus, and decide whether pinned messages should stay protected by default.</p>
                     </div>
                     <div class="command-settings-actions">
                         <label class="search-shell compact-setting-shell">
@@ -138,8 +138,24 @@
                                 value="{{ purge_settings.limit }}"
                             >
                         </label>
-                        <div class="dashboard-access-summary" id="purge-limit-summary">Staff can currently clear up to {{ purge_settings.limit }} messages at once.</div>
-                        <button type="button" class="primary-button" id="save-purge-limit">Save cleanup limit</button>
+                        <label class="search-shell compact-setting-shell">
+                            <span>Default cleanup mode</span>
+                            <select id="purge-default-mode" class="search-input">
+                                <option value="all" {% if purge_settings.default_mode == 'all' %}selected{% endif %}>Everything</option>
+                                <option value="bots" {% if purge_settings.default_mode == 'bots' %}selected{% endif %}>Bots only</option>
+                                <option value="humans" {% if purge_settings.default_mode == 'humans' %}selected{% endif %}>Humans only</option>
+                                <option value="links" {% if purge_settings.default_mode == 'links' %}selected{% endif %}>Links</option>
+                                <option value="attachments" {% if purge_settings.default_mode == 'attachments' %}selected{% endif %}>Attachments</option>
+                                <option value="embeds" {% if purge_settings.default_mode == 'embeds' %}selected{% endif %}>Embeds</option>
+                                <option value="mentions" {% if purge_settings.default_mode == 'mentions' %}selected{% endif %}>Mentions</option>
+                            </select>
+                        </label>
+                        <label class="toggle moderation-toggle">
+                            <input id="purge-include-pinned-toggle" type="checkbox" {% if purge_settings.include_pinned_default %}checked{% endif %}>
+                            <span>Allow cleanup to include pinned messages by default</span>
+                        </label>
+                        <div class="dashboard-access-summary" id="purge-limit-summary">Staff can currently clear up to {{ purge_settings.limit }} messages at once. Default mode is {{ purge_settings.default_mode }}, and pinned messages are {% if purge_settings.include_pinned_default %}included{% else %}protected{% endif %}.</div>
+                        <button type="button" class="primary-button" id="save-purge-limit">Save cleanup defaults</button>
                     </div>
                 </section>
 
@@ -428,7 +444,12 @@
                             <textarea class="search-input greeting-textarea" rows="5" data-greeting-message="welcome">{{ greetings_summary.welcome.message }}</textarea>
                         </label>
                         <div class="role-summary" data-greeting-channel-name="welcome">{{ greetings_summary.welcome.channel_name }}</div>
+                        <div class="greeting-preview">
+                            <span class="eyebrow">Preview</span>
+                            <p data-greeting-preview="welcome">{{ greetings_summary.welcome.preview }}</p>
+                        </div>
                         <div class="defense-actions">
+                            <button type="button" class="ghost-button compact-button" data-greeting-reset="welcome" data-default-message="{{ greetings_summary.welcome.default_message }}">Reset text</button>
                             <button type="button" class="primary-button compact-button" data-greeting-save="welcome">Save welcome flow</button>
                         </div>
                     </article>
@@ -461,12 +482,17 @@
                             <textarea class="search-input greeting-textarea" rows="5" data-greeting-message="leave">{{ greetings_summary.leave.message }}</textarea>
                         </label>
                         <div class="role-summary" data-greeting-channel-name="leave">{{ greetings_summary.leave.channel_name }}</div>
+                        <div class="greeting-preview">
+                            <span class="eyebrow">Preview</span>
+                            <p data-greeting-preview="leave">{{ greetings_summary.leave.preview }}</p>
+                        </div>
                         <div class="defense-actions">
+                            <button type="button" class="ghost-button compact-button" data-greeting-reset="leave" data-default-message="{{ greetings_summary.leave.default_message }}">Reset text</button>
                             <button type="button" class="primary-button compact-button" data-greeting-save="leave">Save leave flow</button>
                         </div>
                     </article>
 
-                    <article class="greeting-card">
+                    <article class="greeting-card" data-greeting-card data-flow="join_dm">
                         <div class="command-flags">
                             <span class="tier tier-free">Greeting</span>
                             <span class="module-chip">Join guide DM</span>
@@ -476,12 +502,27 @@
                                 <h4>Join guide direct message</h4>
                                 <p>New members can also receive a welcome guide in DMs with the same placeholder system.</p>
                             </div>
-                            <span class="defense-status-pill {% if not greetings_summary.join_dm.enabled %}is-muted{% endif %}">
+                            <span class="defense-status-pill {% if not greetings_summary.join_dm.enabled %}is-muted{% endif %}" data-greeting-status="join_dm">
                                 {% if greetings_summary.join_dm.enabled %}Active{% else %}Off{% endif %}
                             </span>
                         </div>
-                        <div class="role-summary">{{ greetings_summary.join_dm.message }}</div>
-                        <div class="dashboard-access-summary">Use `/setjoindm true` to turn this on, then edit the guide text in the dashboard later if you want to personalize it even more.</div>
+                        <label class="toggle moderation-toggle">
+                            <input type="checkbox" data-greeting-join-dm-toggle {% if greetings_summary.join_dm.enabled %}checked{% endif %}>
+                            <span>Send the join guide to every new member in DMs</span>
+                        </label>
+                        <label class="search-shell">
+                            <span>Join DM message</span>
+                            <textarea class="search-input greeting-textarea" rows="5" data-greeting-message="join_dm">{{ greetings_summary.join_dm.message }}</textarea>
+                        </label>
+                        <div class="dashboard-access-summary" data-greeting-channel-name="join_dm">{% if greetings_summary.join_dm.enabled %}Join guide DM is currently on.{% else %}Join guide DM is currently off.{% endif %}</div>
+                        <div class="greeting-preview">
+                            <span class="eyebrow">Preview</span>
+                            <p data-greeting-preview="join_dm">{{ greetings_summary.join_dm.preview }}</p>
+                        </div>
+                        <div class="defense-actions">
+                            <button type="button" class="ghost-button compact-button" data-greeting-reset="join_dm" data-default-message="{{ greetings_summary.join_dm.default_message }}">Reset text</button>
+                            <button type="button" class="primary-button compact-button" data-greeting-save="join_dm">Save join DM</button>
+                        </div>
                     </article>
                 </div>
             </section>
@@ -499,6 +540,7 @@
                         <span class="module-chip">{{ support_summary.issue_count }} issue types</span>
                         <span class="module-chip">{{ support_summary.support_category_name }}</span>
                         <span class="module-chip">{{ support_summary.support_command_channel_name }}</span>
+                        <span class="module-chip">{% if alert_settings.confirmation_enabled %}Role alerts confirm{% else %}Role alerts send instantly{% endif %}</span>
                     </div>
                 </div>
 
@@ -571,6 +613,49 @@
                             {% endfor %}
                         </div>
                         {% endif %}
+                    </article>
+
+                    <article class="greeting-card support-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Alerts</span>
+                            <span class="module-chip">Role outreach</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Role alert defaults</h4>
+                                <p>Choose how `/dmrole` behaves before staff touch any overrides in Discord.</p>
+                            </div>
+                            <span class="defense-status-pill {% if alert_settings.confirmation_enabled %} {% else %}is-muted{% endif %}" id="alert-settings-pill">
+                                {% if alert_settings.confirmation_enabled %}Review first{% else %}Instant send{% endif %}
+                            </span>
+                        </div>
+                        <label class="toggle moderation-toggle">
+                            <input id="alert-confirmation-toggle" type="checkbox" {% if alert_settings.confirmation_enabled %}checked{% endif %}>
+                            <span>Ask staff for one last confirmation before sending a role alert</span>
+                        </label>
+                        <label class="toggle moderation-toggle">
+                            <input id="alert-skip-voice-toggle" type="checkbox" {% if alert_settings.skip_in_voice_default %}checked{% endif %}>
+                            <span>Skip members who are already in voice by default</span>
+                        </label>
+                        <label class="toggle moderation-toggle">
+                            <input id="alert-offline-toggle" type="checkbox" {% if alert_settings.only_offline_default %}checked{% endif %}>
+                            <span>Only target offline members by default</span>
+                        </label>
+                        <label class="toggle moderation-toggle">
+                            <input id="alert-include-bots-toggle" type="checkbox" {% if alert_settings.include_bots_default %}checked{% endif %}>
+                            <span>Include bots that share the selected role</span>
+                        </label>
+                        <label class="search-shell compact-setting-shell">
+                            <span>Cooldown between role alerts</span>
+                            <input id="alert-cooldown-input" class="search-input" type="number" min="15" max="900" step="15" value="{{ alert_settings.cooldown_seconds }}">
+                        </label>
+                        <div class="dashboard-access-summary" id="alert-settings-summary">
+                            Role alerts {% if alert_settings.confirmation_enabled %}ask for confirmation{% else %}send right away{% endif %}, wait {{ alert_settings.cooldown_seconds }} seconds between sends, and {% if alert_settings.skip_in_voice_default %}skip{% else %}include{% endif %} members already in voice by default.
+                        </div>
+                        <div class="role-summary">Discord command: `/dmrole` lets staff send role-targeted outreach without leaving the server.</div>
+                        <div class="defense-actions">
+                            <button type="button" class="primary-button compact-button" id="save-alert-settings">Save role alert defaults</button>
+                        </div>
                     </article>
                 </div>
             </section>
@@ -993,6 +1078,8 @@
         const saveDashboardAccessSelectionButton = document.getElementById("save-dashboard-access-selection");
         const clearDashboardAccessSelectionButton = document.getElementById("clear-dashboard-access-selection");
         const purgeLimitInput = document.getElementById("purge-limit-input");
+        const purgeDefaultModeInput = document.getElementById("purge-default-mode");
+        const purgeIncludePinnedToggle = document.getElementById("purge-include-pinned-toggle");
         const purgeLimitSummary = document.getElementById("purge-limit-summary");
         const savePurgeLimitButton = document.getElementById("save-purge-limit");
         const moderationConfirmationToggle = document.getElementById("moderation-confirmation-toggle");
@@ -1023,6 +1110,14 @@
         const supportCommandChannelInput = document.getElementById("support-command-channel-input");
         const addSupportIssueButton = document.getElementById("add-support-issue");
         const removeSupportIssuesButton = document.getElementById("remove-support-issues");
+        const alertConfirmationToggle = document.getElementById("alert-confirmation-toggle");
+        const alertSkipVoiceToggle = document.getElementById("alert-skip-voice-toggle");
+        const alertOfflineToggle = document.getElementById("alert-offline-toggle");
+        const alertIncludeBotsToggle = document.getElementById("alert-include-bots-toggle");
+        const alertCooldownInput = document.getElementById("alert-cooldown-input");
+        const alertSettingsSummary = document.getElementById("alert-settings-summary");
+        const alertSettingsPill = document.getElementById("alert-settings-pill");
+        const saveAlertSettingsButton = document.getElementById("save-alert-settings");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
             disabled: document.querySelector('[data-stat="disabled"]'),
@@ -1239,15 +1334,35 @@
             return response.json();
         }
 
-        async function updatePurgeLimit(limit) {
+        async function updatePurgeSettings(payload) {
             const response = await fetch(`/api/guilds/${guildId}/purge-settings`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ limit })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
-                let message = "Purge limit update failed";
+                let message = "Purge settings update failed";
+                try {
+                    const data = await response.json();
+                    message = data.detail || message;
+                } catch {}
+                showToast(message, "error");
+                throw new Error(message);
+            }
+
+            return response.json();
+        }
+
+        async function updateAlertSettings(payload) {
+            const response = await fetch(`/api/guilds/${guildId}/alert-settings`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                let message = "Role alert settings update failed";
                 try {
                     const data = await response.json();
                     message = data.detail || message;
@@ -1486,6 +1601,8 @@
             const textarea = card.querySelector(`[data-greeting-message="${flow}"]`);
             const status = card.querySelector(`[data-greeting-status="${flow}"]`);
             const channelName = card.querySelector(`[data-greeting-channel-name="${flow}"]`);
+            const preview = card.querySelector(`[data-greeting-preview="${flow}"]`);
+            const joinDmToggle = card.querySelector("[data-greeting-join-dm-toggle]");
 
             if (select) {
                 select.value = state.channel_id ? String(state.channel_id) : "";
@@ -1493,12 +1610,18 @@
             if (textarea) {
                 textarea.value = state.message || "";
             }
+            if (joinDmToggle && typeof state.enabled === "boolean") {
+                joinDmToggle.checked = state.enabled;
+            }
             if (status) {
-                status.textContent = state.enabled ? "Active" : "Not configured";
+                status.textContent = state.enabled ? "Active" : (flow === "join_dm" ? "Off" : "Not configured");
                 status.classList.toggle("is-muted", !state.enabled);
             }
             if (channelName) {
-                channelName.textContent = state.channel_name || "Not configured";
+                channelName.textContent = state.channel_name || (flow === "join_dm" ? (state.enabled ? "Join guide DM is on." : "Join guide DM is currently off.") : "Not configured");
+            }
+            if (preview) {
+                preview.textContent = state.preview || "";
             }
         }
 
@@ -1758,17 +1881,43 @@
             const saveButton = card.querySelector(`[data-greeting-save="${flow}"]`);
             const select = card.querySelector(`[data-greeting-channel="${flow}"]`);
             const textarea = card.querySelector(`[data-greeting-message="${flow}"]`);
+            const joinDmToggle = card.querySelector("[data-greeting-join-dm-toggle]");
 
             saveButton?.addEventListener("click", async () => {
                 try {
                     const result = await updateGreeting(flow, {
                         channel_id: select?.value ? String(select.value) : null,
+                        enabled: joinDmToggle ? Boolean(joinDmToggle.checked) : undefined,
                         message: textarea?.value || ""
                     });
                     syncGreetingCard("welcome", result.welcome);
                     syncGreetingCard("leave", result.leave);
-                    showToast(`${flow === "welcome" ? "Welcome" : "Leave"} flow updated.`);
+                    syncGreetingCard("join_dm", result.join_dm);
+                    showToast(
+                        flow === "welcome"
+                            ? "Welcome flow updated."
+                            : flow === "leave"
+                                ? "Leave flow updated."
+                                : "Join guide DM updated."
+                    );
                 } catch {}
+            });
+        });
+
+        document.querySelectorAll("[data-greeting-reset]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const flow = button.dataset.greetingReset;
+                const card = greetingCards.find((item) => item.dataset.flow === flow);
+                if (!card) return;
+                const textarea = card.querySelector(`[data-greeting-message="${flow}"]`);
+                const preview = card.querySelector(`[data-greeting-preview="${flow}"]`);
+                const defaultMessage = button.dataset.defaultMessage || "";
+                if (textarea) {
+                    textarea.value = defaultMessage;
+                }
+                if (preview) {
+                    preview.textContent = defaultMessage;
+                }
             });
         });
 
@@ -1829,14 +1978,24 @@
             }
 
             try {
-                const result = await updatePurgeLimit(nextValue);
+                const result = await updatePurgeSettings({
+                    limit: nextValue,
+                    default_mode: purgeDefaultModeInput?.value || "all",
+                    include_pinned_default: Boolean(purgeIncludePinnedToggle?.checked),
+                });
                 if (purgeLimitInput) {
                     purgeLimitInput.value = String(result.limit);
                 }
-                if (purgeLimitSummary) {
-                    purgeLimitSummary.textContent = `Staff can currently clear up to ${result.limit} messages at once.`;
+                if (purgeDefaultModeInput) {
+                    purgeDefaultModeInput.value = result.default_mode || "all";
                 }
-                showToast(`Cleanup limit saved at ${result.limit} messages.`);
+                if (purgeIncludePinnedToggle) {
+                    purgeIncludePinnedToggle.checked = Boolean(result.include_pinned_default);
+                }
+                if (purgeLimitSummary) {
+                    purgeLimitSummary.textContent = `Staff can currently clear up to ${result.limit} messages at once. Default mode is ${result.default_mode}, and pinned messages are ${result.include_pinned_default ? "included" : "protected"}.`;
+                }
+                showToast(`Cleanup defaults saved at ${result.limit} messages.`);
             } catch {}
         });
 
@@ -1871,6 +2030,37 @@
                 const result = await updateAutofilterTerms(terms);
                 syncAutofilterTermsResult(result);
                 showToast("AutoFilter terms updated.");
+            } catch {}
+        });
+
+        saveAlertSettingsButton?.addEventListener("click", async () => {
+            const cooldownSeconds = Number(alertCooldownInput?.value || "0");
+            if (!Number.isInteger(cooldownSeconds) || cooldownSeconds < 15 || cooldownSeconds > 900) {
+                showToast("Choose a role alert cooldown between 15 and 900 seconds.", "error");
+                return;
+            }
+
+            try {
+                const result = await updateAlertSettings({
+                    confirmation_enabled: Boolean(alertConfirmationToggle?.checked),
+                    skip_in_voice_default: Boolean(alertSkipVoiceToggle?.checked),
+                    only_offline_default: Boolean(alertOfflineToggle?.checked),
+                    include_bots_default: Boolean(alertIncludeBotsToggle?.checked),
+                    cooldown_seconds: cooldownSeconds
+                });
+                if (alertConfirmationToggle) alertConfirmationToggle.checked = Boolean(result.confirmation_enabled);
+                if (alertSkipVoiceToggle) alertSkipVoiceToggle.checked = Boolean(result.skip_in_voice_default);
+                if (alertOfflineToggle) alertOfflineToggle.checked = Boolean(result.only_offline_default);
+                if (alertIncludeBotsToggle) alertIncludeBotsToggle.checked = Boolean(result.include_bots_default);
+                if (alertCooldownInput) alertCooldownInput.value = String(result.cooldown_seconds);
+                if (alertSettingsPill) {
+                    alertSettingsPill.textContent = result.confirmation_enabled ? "Review first" : "Instant send";
+                    alertSettingsPill.classList.toggle("is-muted", !result.confirmation_enabled);
+                }
+                if (alertSettingsSummary) {
+                    alertSettingsSummary.textContent = `Role alerts ${result.confirmation_enabled ? "ask for confirmation" : "send right away"}, wait ${result.cooldown_seconds} seconds between sends, and ${result.skip_in_voice_default ? "skip" : "include"} members already in voice by default.`;
+                }
+                showToast("Role alert defaults updated.");
             } catch {}
         });
 

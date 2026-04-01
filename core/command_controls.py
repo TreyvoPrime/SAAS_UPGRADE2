@@ -10,9 +10,18 @@ class CommandControlStore:
     DEFAULT_PURGE_LIMIT = 100
     FREE_PURGE_LIMIT_CAP = 500
     PREMIUM_PURGE_LIMIT_CAP = 2000
+    DEFAULT_PURGE_MODE = "all"
+    VALID_PURGE_MODES = {"all", "bots", "humans", "links", "attachments", "embeds", "mentions"}
     DEFAULT_TIMEOUT_MINUTES = 10
     MIN_TIMEOUT_MINUTES = 1
     MAX_TIMEOUT_MINUTES = 40320
+    DEFAULT_ALERT_CONFIRMATION_ENABLED = True
+    DEFAULT_ALERT_SKIP_IN_VOICE = True
+    DEFAULT_ALERT_ONLY_OFFLINE = False
+    DEFAULT_ALERT_INCLUDE_BOTS = False
+    DEFAULT_ALERT_COOLDOWN_SECONDS = 120
+    MIN_ALERT_COOLDOWN_SECONDS = 15
+    MAX_ALERT_COOLDOWN_SECONDS = 900
 
     def __init__(self, path: str | Path = "dashboard_data/command_controls.json"):
         self.path = Path(path)
@@ -113,19 +122,49 @@ class CommandControlStore:
         return self.is_setup_wizard_completed(guild_id)
 
     def get_purge_limit(self, guild_id: int) -> int:
+        return self.get_purge_settings(guild_id)["limit"]
+
+    def get_purge_settings(self, guild_id: int) -> dict[str, Any]:
         dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
         raw_value = dashboard_bucket.get("purge_limit", self.DEFAULT_PURGE_LIMIT)
         try:
             normalized = int(raw_value)
         except (TypeError, ValueError):
             normalized = self.DEFAULT_PURGE_LIMIT
-        return max(1, min(normalized, self.PREMIUM_PURGE_LIMIT_CAP))
+        normalized_limit = max(1, min(normalized, self.PREMIUM_PURGE_LIMIT_CAP))
+        mode = str(dashboard_bucket.get("purge_default_mode", self.DEFAULT_PURGE_MODE)).strip().lower()
+        if mode not in self.VALID_PURGE_MODES:
+            mode = self.DEFAULT_PURGE_MODE
+        include_pinned_default = bool(dashboard_bucket.get("purge_include_pinned_default", False))
+        return {
+            "limit": normalized_limit,
+            "default_mode": mode,
+            "include_pinned_default": include_pinned_default,
+        }
 
     def set_purge_limit(self, guild_id: int, limit: int) -> int:
+        return self.set_purge_settings(guild_id, limit=limit)["limit"]
+
+    def set_purge_settings(
+        self,
+        guild_id: int,
+        *,
+        limit: int | None = None,
+        default_mode: str | None = None,
+        include_pinned_default: bool | None = None,
+    ) -> dict[str, Any]:
         dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
-        dashboard_bucket["purge_limit"] = max(1, min(int(limit), self.PREMIUM_PURGE_LIMIT_CAP))
+        if limit is not None:
+            dashboard_bucket["purge_limit"] = max(1, min(int(limit), self.PREMIUM_PURGE_LIMIT_CAP))
+        if default_mode is not None:
+            normalized_mode = str(default_mode).strip().lower()
+            dashboard_bucket["purge_default_mode"] = (
+                normalized_mode if normalized_mode in self.VALID_PURGE_MODES else self.DEFAULT_PURGE_MODE
+            )
+        if include_pinned_default is not None:
+            dashboard_bucket["purge_include_pinned_default"] = bool(include_pinned_default)
         self.save()
-        return self.get_purge_limit(guild_id)
+        return self.get_purge_settings(guild_id)
 
     def get_moderation_settings(self, guild_id: int) -> dict[str, Any]:
         dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
@@ -158,3 +197,54 @@ class CommandControlStore:
             )
         self.save()
         return self.get_moderation_settings(guild_id)
+
+    def get_alert_settings(self, guild_id: int) -> dict[str, Any]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        raw_cooldown = dashboard_bucket.get("alert_cooldown_seconds", self.DEFAULT_ALERT_COOLDOWN_SECONDS)
+        try:
+            cooldown_seconds = int(raw_cooldown)
+        except (TypeError, ValueError):
+            cooldown_seconds = self.DEFAULT_ALERT_COOLDOWN_SECONDS
+        cooldown_seconds = max(self.MIN_ALERT_COOLDOWN_SECONDS, min(cooldown_seconds, self.MAX_ALERT_COOLDOWN_SECONDS))
+        return {
+            "confirmation_enabled": bool(
+                dashboard_bucket.get("alert_confirmation_enabled", self.DEFAULT_ALERT_CONFIRMATION_ENABLED)
+            ),
+            "skip_in_voice_default": bool(
+                dashboard_bucket.get("alert_skip_in_voice_default", self.DEFAULT_ALERT_SKIP_IN_VOICE)
+            ),
+            "only_offline_default": bool(
+                dashboard_bucket.get("alert_only_offline_default", self.DEFAULT_ALERT_ONLY_OFFLINE)
+            ),
+            "include_bots_default": bool(
+                dashboard_bucket.get("alert_include_bots_default", self.DEFAULT_ALERT_INCLUDE_BOTS)
+            ),
+            "cooldown_seconds": cooldown_seconds,
+        }
+
+    def set_alert_settings(
+        self,
+        guild_id: int,
+        *,
+        confirmation_enabled: bool | None = None,
+        skip_in_voice_default: bool | None = None,
+        only_offline_default: bool | None = None,
+        include_bots_default: bool | None = None,
+        cooldown_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
+        if confirmation_enabled is not None:
+            dashboard_bucket["alert_confirmation_enabled"] = bool(confirmation_enabled)
+        if skip_in_voice_default is not None:
+            dashboard_bucket["alert_skip_in_voice_default"] = bool(skip_in_voice_default)
+        if only_offline_default is not None:
+            dashboard_bucket["alert_only_offline_default"] = bool(only_offline_default)
+        if include_bots_default is not None:
+            dashboard_bucket["alert_include_bots_default"] = bool(include_bots_default)
+        if cooldown_seconds is not None:
+            dashboard_bucket["alert_cooldown_seconds"] = max(
+                self.MIN_ALERT_COOLDOWN_SECONDS,
+                min(int(cooldown_seconds), self.MAX_ALERT_COOLDOWN_SECONDS),
+            )
+        self.save()
+        return self.get_alert_settings(guild_id)

@@ -410,6 +410,66 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(self.bot.ticket_store.get_issue_types(self.bot.guild.id), ["Moderation", "Appeals"])
         self.assertEqual(self.bot.ticket_store.get_support_command_channel_id(self.bot.guild.id), 3002)
 
+    def test_greetings_route_updates_join_dm_message_and_enabled_state(self) -> None:
+        self._authenticate()
+        response = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/greetings",
+            json={
+                "flow": "join_dm",
+                "enabled": True,
+                "message": "Welcome to {server}, {display_name}.",
+            },
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        join_dm = self.bot.greetings_store.get_guild(self.bot.guild.id)
+        self.assertTrue(join_dm["join_dm_enabled"])
+        self.assertEqual(join_dm["join_dm_message"], "Welcome to {server}, {display_name}.")
+        self.assertTrue(response.json()["join_dm"]["enabled"])
+
+    def test_purge_settings_route_saves_limit_mode_and_pinned_behavior(self) -> None:
+        self._authenticate()
+        response = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/purge-settings",
+            json={
+                "limit": 275,
+                "default_mode": "links",
+                "include_pinned_default": True,
+            },
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        settings = self.bot.command_controls.get_purge_settings(self.bot.guild.id)
+        self.assertEqual(settings["limit"], 275)
+        self.assertEqual(settings["default_mode"], "links")
+        self.assertTrue(settings["include_pinned_default"])
+        self.assertEqual(response.json()["default_mode"], "links")
+
+    def test_alert_settings_route_saves_role_alert_defaults(self) -> None:
+        self._authenticate()
+        response = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/alert-settings",
+            json={
+                "confirmation_enabled": False,
+                "skip_in_voice_default": False,
+                "only_offline_default": True,
+                "include_bots_default": True,
+                "cooldown_seconds": 300,
+            },
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        settings = self.bot.command_controls.get_alert_settings(self.bot.guild.id)
+        self.assertFalse(settings["confirmation_enabled"])
+        self.assertFalse(settings["skip_in_voice_default"])
+        self.assertTrue(settings["only_offline_default"])
+        self.assertTrue(settings["include_bots_default"])
+        self.assertEqual(settings["cooldown_seconds"], 300)
+        self.assertEqual(response.json()["cooldown_seconds"], 300)
+
     def test_dashboard_editor_role_can_edit_settings_but_cannot_manage_editor_roles(self) -> None:
         self.bot.command_controls.set_dashboard_editor_roles(self.bot.guild.id, [11])
         self._authenticate(user_id="5002", owner=False, permissions=0)

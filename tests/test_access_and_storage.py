@@ -178,5 +178,45 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(loaded["guilds"]["1"]["enabled"], True)
 
 
+class CommandControlStoreSettingsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        self.controls = CommandControlStore(self.root / "command_controls.json")
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_purge_settings_round_trip_and_mode_validation(self) -> None:
+        settings = self.controls.set_purge_settings(
+            1001,
+            limit=275,
+            default_mode="links",
+            include_pinned_default=True,
+        )
+        invalid_mode_settings = self.controls.set_purge_settings(1001, default_mode="not-a-mode")
+
+        self.assertEqual(settings["limit"], 275)
+        self.assertEqual(settings["default_mode"], "links")
+        self.assertTrue(settings["include_pinned_default"])
+        self.assertEqual(invalid_mode_settings["default_mode"], self.controls.DEFAULT_PURGE_MODE)
+
+    def test_alert_settings_round_trip_and_cooldown_clamping(self) -> None:
+        settings = self.controls.set_alert_settings(
+            1001,
+            confirmation_enabled=False,
+            skip_in_voice_default=False,
+            only_offline_default=True,
+            include_bots_default=True,
+            cooldown_seconds=9999,
+        )
+
+        self.assertFalse(settings["confirmation_enabled"])
+        self.assertFalse(settings["skip_in_voice_default"])
+        self.assertTrue(settings["only_offline_default"])
+        self.assertTrue(settings["include_bots_default"])
+        self.assertEqual(settings["cooldown_seconds"], self.controls.MAX_ALERT_COOLDOWN_SECONDS)
+
+
 if __name__ == "__main__":
     unittest.main()

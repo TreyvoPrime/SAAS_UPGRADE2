@@ -20,6 +20,11 @@ from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
 from core.command_catalog import FREE_TIER, PREMIUM_TIER, build_command_catalog
+from core.greetings import (
+    DEFAULT_JOIN_DM_MESSAGE,
+    DEFAULT_LEAVE_MESSAGE,
+    DEFAULT_WELCOME_MESSAGE,
+)
 
 MANAGE_GUILD = 0x20
 ADMINISTRATOR = 0x08
@@ -56,6 +61,7 @@ class AutoFilterTermsPayload(BaseModel):
 class GreetingConfigPayload(BaseModel):
     flow: str = Field(min_length=1)
     channel_id: int | str | None = None
+    enabled: bool | None = None
     message: str | None = Field(default=None, max_length=1500)
 
 
@@ -66,11 +72,21 @@ class SupportSettingsPayload(BaseModel):
 
 class PurgeSettingsPayload(BaseModel):
     limit: int = Field(ge=1, le=2000)
+    default_mode: str = Field(default="all", min_length=1)
+    include_pinned_default: bool = False
 
 
 class ModerationSettingsPayload(BaseModel):
     confirmation_enabled: bool
     default_timeout_minutes: int = Field(ge=1, le=40320)
+
+
+class AlertSettingsPayload(BaseModel):
+    confirmation_enabled: bool
+    skip_in_voice_default: bool
+    only_offline_default: bool
+    include_bots_default: bool
+    cooldown_seconds: int = Field(ge=15, le=900)
 
 
 class SetupWizardPayload(BaseModel):
@@ -586,6 +602,31 @@ def create_dashboard_app(bot) -> FastAPI:
         channels.sort(key=lambda item: item["position"])
         return channels
 
+    def greeting_preview(
+        template: str,
+        guild_id: int,
+        *,
+        fallback: str = DEFAULT_WELCOME_MESSAGE,
+        user_mention: str = "@new-member",
+        user_name: str = "new-member",
+        display_name: str = "New Member",
+    ) -> str:
+        guild = bot.get_guild(guild_id)
+        guild_name = guild.name if guild is not None else "Your Server"
+        member_count = guild.member_count if guild is not None and guild.member_count is not None else 0
+        values = {
+            "{user}": user_mention,
+            "{user_name}": user_name,
+            "{username}": user_name,
+            "{display_name}": display_name,
+            "{server}": guild_name,
+            "{membercount}": str(member_count),
+        }
+        preview = str(template or "").strip()
+        for token, replacement in values.items():
+            preview = preview.replace(token, replacement)
+        return preview or fallback
+
     def dashboard_access_summary(guild_id: int) -> dict:
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         editor_role_ids = bot.access_manager.controls.get_dashboard_editor_roles(guild_id)
@@ -596,11 +637,13 @@ def create_dashboard_app(bot) -> FastAPI:
 
     def purge_settings_summary(guild_id: int) -> dict:
         controls = bot.access_manager.controls
-        current_limit = controls.get_purge_limit(guild_id)
+        settings = controls.get_purge_settings(guild_id)
         max_limit = controls.FREE_PURGE_LIMIT_CAP
         premium_limit = controls.PREMIUM_PURGE_LIMIT_CAP
         return {
-            "limit": min(current_limit, max_limit),
+            "limit": min(settings["limit"], max_limit),
+            "default_mode": settings["default_mode"],
+            "include_pinned_default": settings["include_pinned_default"],
             "max_limit": max_limit,
             "premium_limit": premium_limit,
         }
@@ -627,7 +670,24 @@ def create_dashboard_app(bot) -> FastAPI:
         channels = guild_text_channels(guild_id)
         channel_lookup = {channel["id"]: channel["label"] for channel in channels}
         if manager is not None and hasattr(manager, "get_dashboard_state"):
-            return manager.get_dashboard_state(guild_id, channel_lookup)
+            summary = manager.get_dashboard_state(guild_id, channel_lookup)
+            summary["welcome"]["default_message"] = DEFAULT_WELCOME_MESSAGE
+            summary["leave"]["default_message"] = DEFAULT_LEAVE_MESSAGE
+            summary["join_dm"]["default_message"] = DEFAULT_JOIN_DM_MESSAGE
+            summary["join_dm"]["channel_name"] = (
+                "Join guide DM is currently on." if summary["join_dm"]["enabled"] else "Join guide DM is currently off."
+            )
+            summary["welcome"]["preview"] = greeting_preview(summary["welcome"]["message"], guild_id, fallback=DEFAULT_WELCOME_MESSAGE)
+            summary["leave"]["preview"] = greeting_preview(
+                summary["leave"]["message"],
+                guild_id,
+                fallback=DEFAULT_LEAVE_MESSAGE,
+                user_mention="@departing-member",
+                user_name="departing-member",
+                display_name="Departing Member",
+            )
+            summary["join_dm"]["preview"] = greeting_preview(summary["join_dm"]["message"], guild_id, fallback=DEFAULT_JOIN_DM_MESSAGE)
+            return summary
 
         return {
             "welcome": {
@@ -635,16 +695,30 @@ def create_dashboard_app(bot) -> FastAPI:
                 "channel_name": "Not configured",
                 "message": "Hello {user}, welcome to {server}.",
                 "enabled": False,
+                "default_message": DEFAULT_WELCOME_MESSAGE,
+                "preview": greeting_preview(DEFAULT_WELCOME_MESSAGE, guild_id, fallback=DEFAULT_WELCOME_MESSAGE),
             },
             "leave": {
                 "channel_id": None,
                 "channel_name": "Not configured",
                 "message": "{user_name} left {server}.",
                 "enabled": False,
+                "default_message": DEFAULT_LEAVE_MESSAGE,
+                "preview": greeting_preview(
+                    DEFAULT_LEAVE_MESSAGE,
+                    guild_id,
+                    fallback=DEFAULT_LEAVE_MESSAGE,
+                    user_mention="@departing-member",
+                    user_name="departing-member",
+                    display_name="Departing Member",
+                ),
             },
             "join_dm": {
                 "enabled": False,
                 "message": "Welcome to {server}, {display_name}. Read the server guide and check the rules channel to get started.",
+                "default_message": DEFAULT_JOIN_DM_MESSAGE,
+                "preview": greeting_preview(DEFAULT_JOIN_DM_MESSAGE, guild_id, fallback=DEFAULT_JOIN_DM_MESSAGE),
+                "channel_name": "Join guide DM is currently off.",
             },
             "placeholders": [
                 {"token": "{user}", "label": "Mentions the member"},
@@ -653,6 +727,17 @@ def create_dashboard_app(bot) -> FastAPI:
                 {"token": "{server}", "label": "Uses the server name"},
                 {"token": "{membercount}", "label": "Uses the current member count"},
             ],
+        }
+
+    def alert_settings_summary(guild_id: int) -> dict:
+        controls = bot.access_manager.controls
+        settings = controls.get_alert_settings(guild_id)
+        return {
+            "confirmation_enabled": settings["confirmation_enabled"],
+            "skip_in_voice_default": settings["skip_in_voice_default"],
+            "only_offline_default": settings["only_offline_default"],
+            "include_bots_default": settings["include_bots_default"],
+            "cooldown_seconds": settings["cooldown_seconds"],
         }
 
     def support_dashboard_summary(guild_id: int) -> dict:
@@ -1076,6 +1161,7 @@ def create_dashboard_app(bot) -> FastAPI:
         case_summary = case_dashboard_summary(guild_id)
         purge_settings = purge_settings_summary(guild_id)
         moderation_settings = moderation_settings_summary(guild_id)
+        alert_settings = alert_settings_summary(guild_id)
 
         stats = {
             "commands": len(commands),
@@ -1114,6 +1200,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "case_summary": case_summary,
                 "purge_settings": purge_settings,
                 "moderation_settings": moderation_settings,
+                "alert_settings": alert_settings,
                 "current_view": current_view,
             },
         )
@@ -1479,7 +1566,7 @@ def create_dashboard_app(bot) -> FastAPI:
             raise HTTPException(status_code=503, detail="Welcome / Leave is not available")
 
         flow = payload.flow.strip().lower()
-        if flow not in {"welcome", "leave"}:
+        if flow not in {"welcome", "leave", "join_dm"}:
             raise HTTPException(status_code=404, detail="Unknown greeting flow")
 
         valid_channel_ids = {channel["id"] for channel in guild_text_channels(guild_id)}
@@ -1492,6 +1579,10 @@ def create_dashboard_app(bot) -> FastAPI:
 
         if flow == "welcome":
             manager.set_welcome(guild_id, channel_id=channel_id, message=message)
+        elif flow == "join_dm":
+            current_state = greetings_dashboard_summary(guild_id)
+            join_dm_enabled = current_state.get("join_dm", {}).get("enabled", False) if payload.enabled is None else bool(payload.enabled)
+            manager.set_join_dm(guild_id, enabled=join_dm_enabled, message=message)
         else:
             manager.set_leave(guild_id, channel_id=channel_id, message=message)
 
@@ -1501,7 +1592,8 @@ def create_dashboard_app(bot) -> FastAPI:
             title="Dashboard Greeting Updated",
             description=f"Updated the {flow} flow from the dashboard.",
             fields=[
-                ("Channel", next((channel["label"] for channel in guild_text_channels(guild_id) if channel["id"] == channel_id), "Disabled"), False),
+                ("Channel", next((channel["label"] for channel in guild_text_channels(guild_id) if channel["id"] == channel_id), "Direct message" if flow == "join_dm" else "Disabled"), False),
+                ("Enabled", "Yes" if (bool(payload.enabled) if flow == "join_dm" else bool(channel_id)) else "No", True),
                 ("Message", (message or "Default message")[:240], False),
             ],
         )
@@ -1558,15 +1650,24 @@ def create_dashboard_app(bot) -> FastAPI:
         await require_guild_access(request, guild_id)
         controls = bot.access_manager.controls
         allowed_limit = min(int(payload.limit), controls.FREE_PURGE_LIMIT_CAP)
-        updated_limit = controls.set_purge_limit(guild_id, allowed_limit)
+        updated = controls.set_purge_settings(
+            guild_id,
+            limit=allowed_limit,
+            default_mode=payload.default_mode,
+            include_pinned_default=payload.include_pinned_default,
+        )
         await log_dashboard_event(
             request,
             guild_id,
             title="Dashboard Purge Limit Updated",
             description="Updated the maximum cleanup size from the dashboard.",
-            fields=[("Purge Limit", str(min(updated_limit, controls.FREE_PURGE_LIMIT_CAP)), False)],
+            fields=[
+                ("Purge Limit", str(min(updated["limit"], controls.FREE_PURGE_LIMIT_CAP)), True),
+                ("Default Mode", updated["default_mode"], True),
+                ("Pinned Messages", "Included" if updated["include_pinned_default"] else "Protected", True),
+            ],
         )
-        return JSONResponse(purge_settings_summary(guild_id) | {"limit": min(updated_limit, controls.FREE_PURGE_LIMIT_CAP)})
+        return JSONResponse(purge_settings_summary(guild_id))
 
     @app.get("/api/guilds/{guild_id}/moderation-settings")
     async def get_moderation_settings(request: Request, guild_id: int):
@@ -1590,6 +1691,38 @@ def create_dashboard_app(bot) -> FastAPI:
             fields=[
                 ("Confirmations", "On" if updated["confirmation_enabled"] else "Off", True),
                 ("Default Timeout", f"{updated['default_timeout_minutes']} minutes", True),
+            ],
+        )
+        return JSONResponse(updated)
+
+    @app.get("/api/guilds/{guild_id}/alert-settings")
+    async def get_alert_settings(request: Request, guild_id: int):
+        await require_guild_access(request, guild_id)
+        return JSONResponse(alert_settings_summary(guild_id))
+
+    @app.post("/api/guilds/{guild_id}/alert-settings")
+    async def update_alert_settings(request: Request, guild_id: int, payload: AlertSettingsPayload):
+        await require_same_origin(request)
+        await require_guild_access(request, guild_id)
+        updated = bot.access_manager.controls.set_alert_settings(
+            guild_id,
+            confirmation_enabled=payload.confirmation_enabled,
+            skip_in_voice_default=payload.skip_in_voice_default,
+            only_offline_default=payload.only_offline_default,
+            include_bots_default=payload.include_bots_default,
+            cooldown_seconds=payload.cooldown_seconds,
+        )
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Role Alerts Updated",
+            description="Updated the default delivery rules for role alerts.",
+            fields=[
+                ("Confirmation", "On" if updated["confirmation_enabled"] else "Off", True),
+                ("Skip In Voice", "Yes" if updated["skip_in_voice_default"] else "No", True),
+                ("Only Offline", "Yes" if updated["only_offline_default"] else "No", True),
+                ("Include Bots", "Yes" if updated["include_bots_default"] else "No", True),
+                ("Cooldown", f"{updated['cooldown_seconds']} seconds", True),
             ],
         )
         return JSONResponse(updated)
