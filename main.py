@@ -168,5 +168,32 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         ephemeral=True,
     )
 
+
+@bot.event
+async def on_message(message: discord.Message):
+    if await bot.server_defense.process_message(message):
+        return
+    await bot.process_commands(message)
+
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    removed = await bot.server_defense.handle_member_join(member)
+    if removed:
+        return
+    await bot.greetings.send_welcome(member)
+
+
+@bot.event
+async def on_member_remove(member: discord.Member):
+    await bot.server_defense.handle_member_remove(member)
+    await bot.greetings.send_leave(member)
+
+
+@bot.event
+async def on_reaction_add(reaction: discord.Reaction, user: discord.abc.User | discord.Member):
+    await bot.server_defense.handle_reaction_add(reaction, user)
+
+
 if __name__ == "__main__":
     bot.run(TOKEN)
