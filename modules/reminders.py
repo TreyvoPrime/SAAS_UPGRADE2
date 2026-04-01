@@ -1,14 +1,15 @@
-import asyncio
 import json
-import os
+import re
 import time
 from pathlib import Path
 
 import discord
-from discord.ext import commands, tasks
 from discord import app_commands
+from discord.ext import commands, tasks
+
 
 DATA_FILE = Path("reminders.json")
+TIME_TOKEN_PATTERN = re.compile(r"(\d+)\s*([smhd])", re.IGNORECASE)
 
 
 def load_reminders() -> list:
@@ -16,47 +17,46 @@ def load_reminders() -> list:
         return []
 
     try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        with DATA_FILE.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
             return data if isinstance(data, list) else []
     except Exception:
         return []
 
 
 def save_reminders(reminders: list) -> None:
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(reminders, f, indent=4)
+    with DATA_FILE.open("w", encoding="utf-8") as handle:
+        json.dump(reminders, handle, indent=4)
 
 
-def parse_duration(amount: int, unit: str) -> int:
-    unit = unit.lower()
+def parse_duration_input(value: str) -> int:
+    cleaned = (value or "").strip().lower()
+    if not cleaned:
+        return 0
 
-    if unit in ["second", "seconds"]:
-        return amount
-    if unit in ["minute", "minutes"]:
-        return amount * 60
-    if unit in ["hour", "hours"]:
-        return amount * 3600
-    if unit in ["day", "days"]:
-        return amount * 86400
+    total_seconds = 0
+    consumed = ""
 
-    return 0
+    for match in TIME_TOKEN_PATTERN.finditer(cleaned):
+        amount = int(match.group(1))
+        unit = match.group(2).lower()
+        consumed += match.group(0)
 
+        if unit == "s":
+            total_seconds += amount
+        elif unit == "m":
+            total_seconds += amount * 60
+        elif unit == "h":
+            total_seconds += amount * 3600
+        elif unit == "d":
+            total_seconds += amount * 86400
 
-def format_remaining(seconds: int) -> str:
-    if seconds < 60:
-        return f"{seconds} seconds"
+    normalized_input = re.sub(r"\s+", "", cleaned)
+    normalized_consumed = re.sub(r"\s+", "", consumed)
+    if total_seconds <= 0 or normalized_input != normalized_consumed:
+        return 0
 
-    minutes = seconds // 60
-    if minutes < 60:
-        return f"{minutes} minute(s)"
-
-    hours = minutes // 60
-    if hours < 24:
-        return f"{hours} hour(s)"
-
-    days = hours // 24
-    return f"{days} day(s)"
+    return total_seconds
 
 
 class ReminderCog(commands.Cog):
@@ -91,16 +91,16 @@ class ReminderCog(commands.Cog):
 
                 if user is not None:
                     embed = discord.Embed(
-                        title="⏰ Reminder",
+                        title="Reminder",
                         description=reminder["message"],
-                        color=discord.Color.blurple()
+                        color=discord.Color.blurple(),
                     )
 
                     if reminder.get("channel_id"):
                         embed.add_field(
                             name="Created In",
                             value=f"<#{reminder['channel_id']}>",
-                            inline=False
+                            inline=False,
                         )
 
                     try:
@@ -125,29 +125,21 @@ class ReminderCog(commands.Cog):
 
     @app_commands.command(name="remind", description="Set a reminder")
     @app_commands.describe(
-        amount="How long until the reminder",
-        unit="Time unit",
-        message="What you want to be reminded about"
+        time_input="When the reminder should happen, like 10m, 2h, or 1d 4h",
+        message="What you want to be reminded about",
     )
-    @app_commands.choices(unit=[
-        app_commands.Choice(name="seconds", value="seconds"),
-        app_commands.Choice(name="minutes", value="minutes"),
-        app_commands.Choice(name="hours", value="hours"),
-        app_commands.Choice(name="days", value="days"),
-    ])
     async def remind(
         self,
         interaction: discord.Interaction,
-        amount: app_commands.Range[int, 1, 100000],
-        unit: app_commands.Choice[str],
-        message: app_commands.Range[str, 1, 500]
+        time_input: app_commands.Range[str, 1, 40],
+        message: app_commands.Range[str, 1, 500],
     ):
-        seconds = parse_duration(amount, unit.value)
+        seconds = parse_duration_input(time_input)
 
         if seconds <= 0:
             await interaction.response.send_message(
-                "❌ Invalid reminder time.",
-                ephemeral=True
+                "Use a time like `10m`, `2h`, or `1d 4h 30m`.",
+                ephemeral=True,
             )
             return
 
@@ -161,19 +153,19 @@ class ReminderCog(commands.Cog):
             "channel_id": interaction.channel.id if interaction.channel else None,
             "message": message,
             "created_at": int(time.time()),
-            "due_at": due_at
+            "due_at": due_at,
         }
 
         self.reminders.append(reminder)
         save_reminders(self.reminders)
 
         embed = discord.Embed(
-            title="✅ Reminder Set",
-            color=discord.Color.green()
+            title="Reminder Set",
+            color=discord.Color.green(),
         )
         embed.add_field(name="Reminder ID", value=str(reminder_id), inline=False)
         embed.add_field(name="Message", value=message, inline=False)
-        embed.add_field(name="Due In", value=f"{amount} {unit.value}", inline=False)
+        embed.add_field(name="Due In", value=time_input, inline=False)
         embed.add_field(name="Due At", value=f"<t:{due_at}:F>\n<t:{due_at}:R>", inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -188,21 +180,21 @@ class ReminderCog(commands.Cog):
         if not user_reminders:
             await interaction.response.send_message(
                 "You have no active reminders.",
-                ephemeral=True
+                ephemeral=True,
             )
             return
 
-        user_reminders = sorted(user_reminders, key=lambda r: r["due_at"])
+        user_reminders = sorted(user_reminders, key=lambda item: item["due_at"])
 
         embed = discord.Embed(
-            title="📋 Your Reminders",
-            color=discord.Color.blurple()
+            title="Your Reminders",
+            color=discord.Color.blurple(),
         )
 
         lines = []
         for reminder in user_reminders[:10]:
             lines.append(
-                f"**ID {reminder['id']}** — {reminder['message']}\n"
+                f"**ID {reminder['id']}** - {reminder['message']}\n"
                 f"Due: <t:{reminder['due_at']}:F> (<t:{reminder['due_at']}:R>)"
             )
 
@@ -225,8 +217,8 @@ class ReminderCog(commands.Cog):
 
         if reminder_to_remove is None:
             await interaction.response.send_message(
-                "❌ Reminder not found, or it does not belong to you.",
-                ephemeral=True
+                "Reminder not found, or it does not belong to you.",
+                ephemeral=True,
             )
             return
 
@@ -234,8 +226,8 @@ class ReminderCog(commands.Cog):
         save_reminders(self.reminders)
 
         await interaction.response.send_message(
-            f"🗑️ Removed reminder `{reminder_id}`.",
-            ephemeral=True
+            f"Removed reminder `{reminder_id}`.",
+            ephemeral=True,
         )
 
 
