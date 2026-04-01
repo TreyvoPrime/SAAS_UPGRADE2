@@ -1030,13 +1030,10 @@ def create_dashboard_app(bot) -> FastAPI:
             seen.add(normalized)
             cleaned_terms.append(normalized)
 
-        updated = await run_on_bot_loop(manager.update_autofilter_terms(guild_id, cleaned_terms))
-        state = await run_on_bot_loop(
-            asyncio.to_thread(
-                manager.build_dashboard_state,
-                guild_id,
-                {role["id"]: role["name"] for role in guild_roles(guild_id)},
-            )
+        updated = manager.update_autofilter_terms(guild_id, cleaned_terms)
+        state = manager.build_dashboard_state(
+            guild_id,
+            {role["id"]: role["name"] for role in guild_roles(guild_id)},
         )
         await log_dashboard_event(
             request,
