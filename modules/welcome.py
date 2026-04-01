@@ -54,7 +54,10 @@ class WelcomeLeave(commands.Cog):
         if not await self._require_manager(interaction):
             return
 
-        assert interaction.guild is not None
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
         target_channel = self._target_channel(interaction, channel)
         if target_channel is None:
             await interaction.response.send_message(
@@ -64,7 +67,7 @@ class WelcomeLeave(commands.Cog):
             return
 
         self.bot.greetings.set_welcome(
-            interaction.guild.id,
+            guild.id,
             channel_id=target_channel.id,
         )
         await interaction.response.send_message(
@@ -87,7 +90,10 @@ class WelcomeLeave(commands.Cog):
         if not await self._require_manager(interaction):
             return
 
-        assert interaction.guild is not None
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
         target_channel = self._target_channel(interaction, channel)
         if target_channel is None:
             await interaction.response.send_message(
@@ -97,7 +103,7 @@ class WelcomeLeave(commands.Cog):
             return
 
         self.bot.greetings.set_leave(
-            interaction.guild.id,
+            guild.id,
             channel_id=target_channel.id,
         )
         await interaction.response.send_message(
@@ -118,20 +124,15 @@ class WelcomeLeave(commands.Cog):
         if not await self._require_manager(interaction):
             return
 
-        assert interaction.guild is not None
-        self.bot.greetings.set_join_dm(interaction.guild.id, enabled=enabled)
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
+        self.bot.greetings.set_join_dm(guild.id, enabled=enabled)
         await interaction.response.send_message(
             "Join guide DMs are now on." if enabled else "Join guide DMs are now off.",
             ephemeral=True,
         )
-
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member) -> None:
-        await self.bot.greetings.send_welcome(member)
-
-    @commands.Cog.listener()
-    async def on_member_remove(self, member: discord.Member) -> None:
-        await self.bot.greetings.send_leave(member)
 
 
 async def setup(bot: commands.Bot) -> None:

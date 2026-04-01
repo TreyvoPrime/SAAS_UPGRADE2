@@ -169,9 +169,11 @@ class Support(commands.Cog):
         return None
 
     async def _ensure_ticket_category(self, guild: discord.Guild) -> discord.CategoryChannel:
-        assert getattr(self.bot, "ticket_store", None) is not None
+        ticket_store = getattr(self.bot, "ticket_store", None)
+        if ticket_store is None:
+            raise RuntimeError("Ticket storage is unavailable.")
 
-        category_id = self.bot.ticket_store.get_support_category_id(guild.id)
+        category_id = ticket_store.get_support_category_id(guild.id)
         if category_id:
             category = guild.get_channel(category_id)
             if isinstance(category, discord.CategoryChannel):
@@ -179,26 +181,28 @@ class Support(commands.Cog):
 
         existing = discord.utils.get(guild.categories, name=SUPPORT_CATEGORY_NAME)
         if existing is not None:
-            self.bot.ticket_store.set_support_category_id(guild.id, existing.id)
+            ticket_store.set_support_category_id(guild.id, existing.id)
             return existing
 
         category = await guild.create_category(
             SUPPORT_CATEGORY_NAME,
             reason="Create support ticket category",
         )
-        self.bot.ticket_store.set_support_category_id(guild.id, category.id)
+        ticket_store.set_support_category_id(guild.id, category.id)
         return category
 
     async def _delete_empty_ticket_category(self, guild: discord.Guild) -> None:
-        assert getattr(self.bot, "ticket_store", None) is not None
+        ticket_store = getattr(self.bot, "ticket_store", None)
+        if ticket_store is None:
+            return
 
-        category_id = self.bot.ticket_store.get_support_category_id(guild.id)
+        category_id = ticket_store.get_support_category_id(guild.id)
         if not category_id:
             return
 
         category = guild.get_channel(category_id)
         if not isinstance(category, discord.CategoryChannel):
-            self.bot.ticket_store.set_support_category_id(guild.id, None)
+            ticket_store.set_support_category_id(guild.id, None)
             return
 
         if category.channels:
@@ -209,7 +213,7 @@ class Support(commands.Cog):
         except Exception:
             return
 
-        self.bot.ticket_store.set_support_category_id(guild.id, None)
+        ticket_store.set_support_category_id(guild.id, None)
 
     async def _build_transcript(self, channel: discord.TextChannel) -> tuple[str, discord.File]:
         lines: list[str] = [f"Transcript for #{channel.name}", ""]
@@ -585,7 +589,9 @@ class Support(commands.Cog):
             return
 
         ticket_store = getattr(self.bot, "ticket_store", None)
-        assert ticket_store is not None
+        if ticket_store is None:
+            await interaction.response.send_message("Ticket support is unavailable right now.", ephemeral=True)
+            return
         updated = ticket_store.add_issue_type(interaction.guild.id, name)
         await self._log_support_event(
             interaction.guild,
@@ -611,7 +617,9 @@ class Support(commands.Cog):
             return
 
         ticket_store = getattr(self.bot, "ticket_store", None)
-        assert ticket_store is not None
+        if ticket_store is None:
+            await interaction.response.send_message("Ticket support is unavailable right now.", ephemeral=True)
+            return
         available = ticket_store.get_issue_types(interaction.guild.id)
         matched = self._match_issue_type(name, available)
         if matched is None:

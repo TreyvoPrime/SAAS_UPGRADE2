@@ -63,7 +63,13 @@ class Lock(commands.Cog):
         if not await self.check_permissions(interaction):
             return
 
-        assert interaction.guild is not None
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "❌ This command can only be used in a server.",
+                ephemeral=True
+            )
+            return
         target_channel = channel or interaction.channel
 
         if not isinstance(target_channel, discord.TextChannel):
@@ -73,7 +79,7 @@ class Lock(commands.Cog):
             )
             return
 
-        overwrite = target_channel.overwrites_for(interaction.guild.default_role)
+        overwrite = target_channel.overwrites_for(guild.default_role)
         already_locked = overwrite.send_messages is False
 
         if already_locked:
@@ -87,7 +93,7 @@ class Lock(commands.Cog):
 
         try:
             await target_channel.set_permissions(
-                interaction.guild.default_role,
+                guild.default_role,
                 overwrite=overwrite,
                 reason=reason or f"Locked by {interaction.user}"
             )
@@ -131,19 +137,25 @@ class Lock(commands.Cog):
         if not await self.check_permissions(interaction):
             return
 
-        assert interaction.guild is not None
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "❌ This command can only be used in a server.",
+                ephemeral=True
+            )
+            return
 
         defense_manager = getattr(self.bot, "server_defense", None)
-        if channel is None and defense_manager is not None and defense_manager.is_enabled(interaction.guild.id, "lockdown"):
+        if channel is None and defense_manager is not None and defense_manager.is_enabled(guild.id, "lockdown"):
             await defense_manager.disable_feature(
-                interaction.guild.id,
+                guild.id,
                 "lockdown",
                 actor=interaction.user,
                 reason=reason,
             )
             embed = discord.Embed(
                 title="🔓 Server Unlocked",
-                description=f"{interaction.guild.name} has been released from lockdown.",
+                description=f"{guild.name} has been released from lockdown.",
                 color=discord.Color.green()
             )
             embed.add_field(name="Moderator", value=interaction.user.mention, inline=True)
@@ -160,7 +172,7 @@ class Lock(commands.Cog):
             )
             return
 
-        overwrite = target_channel.overwrites_for(interaction.guild.default_role)
+        overwrite = target_channel.overwrites_for(guild.default_role)
         already_unlocked = overwrite.send_messages is not False
 
         if already_unlocked:
@@ -174,7 +186,7 @@ class Lock(commands.Cog):
 
         try:
             await target_channel.set_permissions(
-                interaction.guild.default_role,
+                guild.default_role,
                 overwrite=overwrite,
                 reason=reason or f"Unlocked by {interaction.user}"
             )

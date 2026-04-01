@@ -72,8 +72,8 @@ class RoleManager(commands.Cog):
                 await self._expire_due_roles()
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                pass
+            except Exception as error:
+                print(f"Temp role loop error: {type(error).__name__}")
             await asyncio.sleep(30)
 
     async def _expire_due_roles(self):
@@ -119,9 +119,14 @@ class RoleManager(commands.Cog):
         *,
         action_name: str,
     ) -> bool:
-        assert interaction.guild is not None
-        assert isinstance(interaction.user, discord.Member)
-        me = interaction.guild.me
+        guild = interaction.guild
+        moderator = interaction.user
+        if guild is None or not isinstance(moderator, discord.Member):
+            if not interaction.response.is_done():
+                await interaction.response.send_message("I couldn't verify the server context for that action.", ephemeral=True)
+            return False
+
+        me = guild.me
         if me is None or not me.guild_permissions.manage_roles:
             await interaction.response.send_message("I need Manage Roles before I can do that.", ephemeral=True)
             return False
@@ -131,16 +136,16 @@ class RoleManager(commands.Cog):
         if role >= me.top_role:
             await interaction.response.send_message("That role is above my top role, so Discord will block the change.", ephemeral=True)
             return False
-        if interaction.guild.owner_id != interaction.user.id and role >= interaction.user.top_role:
+        if guild.owner_id != moderator.id and role >= moderator.top_role:
             await interaction.response.send_message(f"You can only {action_name} roles below your top role.", ephemeral=True)
             return False
-        if member.id == interaction.guild.owner_id and interaction.user.id != interaction.guild.owner_id:
+        if member.id == guild.owner_id and moderator.id != guild.owner_id:
             await interaction.response.send_message("Only the server owner can change roles on the server owner.", ephemeral=True)
             return False
-        if member != interaction.user and interaction.guild.owner_id != interaction.user.id and member.top_role >= interaction.user.top_role:
+        if member != moderator and guild.owner_id != moderator.id and member.top_role >= moderator.top_role:
             await interaction.response.send_message("You can only manage roles for members below your top role.", ephemeral=True)
             return False
-        if member.top_role >= me.top_role and member.id != interaction.guild.owner_id:
+        if member.top_role >= me.top_role and member.id != guild.owner_id:
             await interaction.response.send_message("I can only manage roles for members below my top role.", ephemeral=True)
             return False
         return True

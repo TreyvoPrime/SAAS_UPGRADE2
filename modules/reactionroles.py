@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from typing import Optional
 
@@ -6,25 +5,19 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
+from core.storage import read_json, write_json
+
 DATA_FILE = Path("reaction_roles.json")
 MAX_PANELS_PER_GUILD = 3  # free tier limit
 
 
 def load_data() -> dict:
-    if not DATA_FILE.exists():
-        return {}
-
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+    data = read_json(DATA_FILE, {})
+    return data if isinstance(data, dict) else {}
 
 
 def save_data(data: dict) -> None:
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+    write_json(DATA_FILE, data if isinstance(data, dict) else {})
 
 
 def parse_color(color_str: str) -> discord.Color:
@@ -399,7 +392,12 @@ class ReactionRoles(commands.Cog):
             return
 
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "❌ This command only works in a server.",
+                ephemeral=True
+            )
+            return
 
         panels = self.get_panels(guild.id)
         if len(panels) >= MAX_PANELS_PER_GUILD:
@@ -514,7 +512,12 @@ class ReactionRoles(commands.Cog):
             return
 
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "❌ This command only works in a server.",
+                ephemeral=True
+            )
+            return
 
         panels = self.get_panels(guild.id)
         if len(panels) >= MAX_PANELS_PER_GUILD:
@@ -573,7 +576,12 @@ class ReactionRoles(commands.Cog):
             return
 
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "❌ This command only works in a server.",
+                ephemeral=True
+            )
+            return
 
         panel = self.get_panel(guild.id, panel_id)
         if panel is None:
@@ -656,7 +664,12 @@ class ReactionRoles(commands.Cog):
             return
 
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "❌ This command only works in a server.",
+                ephemeral=True
+            )
+            return
 
         panel = self.get_panel(guild.id, panel_id)
         if panel is None:
@@ -694,7 +707,12 @@ class ReactionRoles(commands.Cog):
             return
 
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "❌ This command only works in a server.",
+                ephemeral=True
+            )
+            return
 
         panel = self.get_panel(guild.id, panel_id)
         if panel is None:
@@ -792,7 +810,12 @@ class ReactionRoles(commands.Cog):
             return
 
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "❌ This command only works in a server.",
+                ephemeral=True
+            )
+            return
 
         panels = self.get_panels(guild.id)
         if panel_id not in panels:

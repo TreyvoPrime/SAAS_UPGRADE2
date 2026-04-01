@@ -30,7 +30,15 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 APP_ID = os.getenv("DISCORD_APP_ID") or os.getenv("DISCORD_CLIENT_ID")
 
 if not TOKEN:
-    raise ValueError("DISCORD_TOKEN missing in .env")
+    raise RuntimeError("DISCORD_TOKEN is missing. Set it in the environment or .env before starting ServerCore.")
+
+
+def parse_application_id(raw_value: str | None) -> int | None:
+    if raw_value in (None, ""):
+        return None
+    if not str(raw_value).isdigit():
+        raise RuntimeError("DISCORD_APP_ID or DISCORD_CLIENT_ID must be a valid Discord application ID.")
+    return int(str(raw_value))
 
 
 class ServerCoreTree(app_commands.CommandTree):
@@ -67,12 +75,13 @@ class ServerCoreBot(commands.Bot):
         self.temp_role_store = TempRoleStore()
         self.warning_store = WarningStore()
         self._server_defense_initialized = False
+        self._commands_synced = False
         self.runtime_loop = None
 
         super().__init__(
             command_prefix="!",
             intents=intents,
-            application_id=int(APP_ID) if APP_ID else None,
+            application_id=parse_application_id(APP_ID),
             tree_cls=ServerCoreTree,
         )
 
@@ -90,6 +99,7 @@ class ServerCoreBot(commands.Bot):
             print("Sync failed:", error)
 
     async def close(self) -> None:
+        await self.server_defense.stop()
         await self.dashboard.stop()
         await super().close()
 
@@ -129,18 +139,20 @@ bot = ServerCoreBot()
 @bot.event
 async def on_ready():
     if not bot._server_defense_initialized:
-        await bot.server_defense.initialize()
+        await bot.server_defense.start()
         bot._server_defense_initialized = True
 
-    try:
-        synced_count = 0
-        for guild in bot.guilds:
-            synced = await bot.tree.sync(guild=guild)
-            synced_count += len(synced)
-        if bot.guilds:
-            print(f"Per-guild synced commands across {len(bot.guilds)} guild(s): {synced_count}")
-    except Exception as error:
-        print("Per-guild sync failed:", error)
+    if not bot._commands_synced:
+        try:
+            synced_count = 0
+            for guild in bot.guilds:
+                synced = await bot.tree.sync(guild=guild)
+                synced_count += len(synced)
+            if bot.guilds:
+                print(f"Per-guild synced commands across {len(bot.guilds)} guild(s): {synced_count}")
+            bot._commands_synced = True
+        except Exception as error:
+            print("Per-guild sync failed:", error)
 
     dashboard_host = resolve_dashboard_host()
     dashboard_port = resolve_dashboard_port()
@@ -180,6 +192,15 @@ async def on_message(message: discord.Message):
 async def on_member_join(member: discord.Member):
     removed = await bot.server_defense.handle_member_join(member)
     if removed:
+        channel = member.guild.system_channel
+        if channel is not None:
+            try:
+                await channel.send(
+                    f"Anti-join removed `{member}` while ServerGuard anti-join was active.",
+                    delete_after=8,
+                )
+            except Exception:
+                pass
         return
     autorole_role_ids = bot.command_controls.get_autorole_role_ids(member.guild.id)
     if autorole_role_ids:

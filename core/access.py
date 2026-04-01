@@ -111,6 +111,6 @@ class CommandAccessManager:
                 "status": "error",
                 "user_id": interaction.user.id,
                 "user_name": str(interaction.user),
-                "error": str(error),
+                "error": error.__class__.__name__,
             }
         )

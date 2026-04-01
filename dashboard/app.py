@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 import threading
+import time
 from collections import defaultdict
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 import uvicorn
@@ -23,6 +25,8 @@ MANAGE_GUILD = 0x20
 ADMINISTRATOR = 0x08
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 8
+DEFAULT_GUILD_CACHE_TTL_SECONDS = 30
 
 
 class CommandPolicyPayload(BaseModel):
@@ -94,7 +98,14 @@ def resolve_dashboard_host() -> str:
 
 
 def resolve_dashboard_port() -> int:
-    return int(os.getenv("PORT") or os.getenv("DASHBOARD_PORT") or "8000")
+    raw_value = os.getenv("PORT") or os.getenv("DASHBOARD_PORT") or "8000"
+    try:
+        port = int(raw_value)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("PORT or DASHBOARD_PORT must be a valid integer.") from error
+    if not (1 <= port <= 65535):
+        raise RuntimeError("PORT or DASHBOARD_PORT must be between 1 and 65535.")
+    return port
 
 
 def resolve_dashboard_base_url(host: str, port: int) -> str:
@@ -106,16 +117,122 @@ def resolve_dashboard_base_url(host: str, port: int) -> str:
     if railway_domain:
         return f"https://{railway_domain}".rstrip("/")
 
-    return f"http://{host}:{port}".rstrip("/")
+    public_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    return f"http://{public_host}:{port}".rstrip("/")
+
+
+def resolve_dashboard_secret_key(dashboard_base_url: str) -> str:
+    secret_key = os.getenv("DASHBOARD_SECRET_KEY")
+    if secret_key:
+        if len(secret_key) < 32:
+            raise RuntimeError("DASHBOARD_SECRET_KEY must be at least 32 characters long.")
+        return secret_key
+
+    parsed = urlparse(dashboard_base_url)
+    is_local = parsed.hostname in {"127.0.0.1", "localhost", "0.0.0.0", "::1"}
+    if is_local:
+        return "servercore-local-development-session-secret"
+    raise RuntimeError("DASHBOARD_SECRET_KEY is required for non-local dashboard deployments.")
+
+
+class DashboardSessionStore:
+    def __init__(
+        self,
+        *,
+        ttl_seconds: int = DEFAULT_SESSION_TTL_SECONDS,
+        guild_cache_ttl_seconds: int = DEFAULT_GUILD_CACHE_TTL_SECONDS,
+    ) -> None:
+        self.ttl_seconds = ttl_seconds
+        self.guild_cache_ttl_seconds = guild_cache_ttl_seconds
+        self._sessions: dict[str, dict] = {}
+
+    def _now(self) -> float:
+        return time.time()
+
+    def _prune(self) -> None:
+        now = self._now()
+        expired = [
+            session_id
+            for session_id, payload in self._sessions.items()
+            if float(payload.get("expires_at", 0)) <= now
+        ]
+        for session_id in expired:
+            self._sessions.pop(session_id, None)
+
+    def create_session(self, *, access_token: str, user: dict) -> str:
+        self._prune()
+        session_id = secrets.token_urlsafe(32)
+        self._sessions[session_id] = {
+            "access_token": str(access_token),
+            "user": dict(user),
+            "expires_at": self._now() + self.ttl_seconds,
+            "guild_cache": None,
+            "guild_cache_expires_at": 0.0,
+        }
+        return session_id
+
+    def get_session(self, session_id: str | None) -> dict | None:
+        self._prune()
+        if not session_id:
+            return None
+        payload = self._sessions.get(session_id)
+        if payload is None:
+            return None
+        payload["expires_at"] = self._now() + self.ttl_seconds
+        return payload
+
+    def get_user(self, session_id: str | None) -> dict | None:
+        payload = self.get_session(session_id)
+        return dict(payload["user"]) if payload else None
+
+    def get_access_token(self, session_id: str | None) -> str | None:
+        payload = self.get_session(session_id)
+        return str(payload["access_token"]) if payload else None
+
+    def get_cached_guilds(self, session_id: str | None) -> list[dict] | None:
+        payload = self.get_session(session_id)
+        if payload is None:
+            return None
+        if float(payload.get("guild_cache_expires_at", 0)) <= self._now():
+            return None
+        cached = payload.get("guild_cache")
+        return list(cached) if isinstance(cached, list) else None
+
+    def set_cached_guilds(self, session_id: str | None, guilds: list[dict]) -> None:
+        payload = self.get_session(session_id)
+        if payload is None:
+            return
+        payload["guild_cache"] = list(guilds)
+        payload["guild_cache_expires_at"] = self._now() + self.guild_cache_ttl_seconds
+
+    def clear_cached_guilds(self, session_id: str | None) -> None:
+        payload = self.get_session(session_id)
+        if payload is None:
+            return
+        payload["guild_cache"] = None
+        payload["guild_cache_expires_at"] = 0.0
+
+    def delete_session(self, session_id: str | None) -> None:
+        if session_id:
+            self._sessions.pop(session_id, None)
 
 
 def create_dashboard_app(bot) -> FastAPI:
+    dashboard_host = resolve_dashboard_host()
+    dashboard_port = resolve_dashboard_port()
+    dashboard_base_url = resolve_dashboard_base_url(dashboard_host, dashboard_port)
+    session_secret_key = resolve_dashboard_secret_key(dashboard_base_url)
+    secure_sessions = dashboard_base_url.startswith("https://")
+
     app = FastAPI(title="ServerCore Dashboard")
+    app.state.dashboard_sessions = DashboardSessionStore()
     app.add_middleware(
         SessionMiddleware,
-        secret_key=os.getenv("DASHBOARD_SECRET_KEY", "servercore-dashboard-secret"),
+        secret_key=session_secret_key,
         same_site="lax",
-        https_only=False,
+        https_only=secure_sessions,
+        max_age=DEFAULT_SESSION_TTL_SECONDS,
+        session_cookie="servercore_dashboard_session",
     )
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
@@ -125,19 +242,27 @@ def create_dashboard_app(bot) -> FastAPI:
         template = templates.get_template(name)
         return HTMLResponse(template.render(merged_context))
 
-    dashboard_host = resolve_dashboard_host()
-    dashboard_port = resolve_dashboard_port()
     discord_client_id = os.getenv("DISCORD_CLIENT_ID") or os.getenv("DISCORD_APP_ID")
     discord_client_secret = os.getenv("DISCORD_CLIENT_SECRET")
-    dashboard_base_url = resolve_dashboard_base_url(dashboard_host, dashboard_port)
     redirect_uri = os.getenv("DISCORD_REDIRECT_URI") or f"{dashboard_base_url}/auth/callback"
     install_permissions = os.getenv("DISCORD_INSTALL_PERMISSIONS", "8")
+    session_store: DashboardSessionStore = app.state.dashboard_sessions
 
     def oauth_ready() -> bool:
         return bool(discord_client_id and discord_client_secret)
 
+    def session_id(request: Request) -> str | None:
+        return request.session.get("dashboard_session_id")
+
     def session_user(request: Request) -> dict | None:
-        return request.session.get("discord_user")
+        return session_store.get_user(session_id(request))
+
+    def session_access_token(request: Request) -> str | None:
+        return session_store.get_access_token(session_id(request))
+
+    def clear_session(request: Request) -> None:
+        session_store.delete_session(session_id(request))
+        request.session.clear()
 
     def _guild_icon_url(raw_guild: dict, live_guild) -> str:
         if live_guild and getattr(live_guild, "icon", None):
@@ -151,6 +276,8 @@ def create_dashboard_app(bot) -> FastAPI:
         return f"https://cdn.discordapp.com/embed/avatars/{guild_id % 5}.png"
 
     def build_install_url(guild_id: int) -> str:
+        if not discord_client_id:
+            return "/"
         params = urlencode(
             {
                 "client_id": discord_client_id,
@@ -195,6 +322,25 @@ def create_dashboard_app(bot) -> FastAPI:
             response.raise_for_status()
             return response.json()
 
+    def _request_origin_matches_dashboard(request: Request) -> bool:
+        dashboard_origin = urlparse(dashboard_base_url)
+        expected_origin = f"{dashboard_origin.scheme}://{dashboard_origin.netloc}"
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+        if origin:
+            return origin.rstrip("/") == expected_origin.rstrip("/")
+        if referer:
+            parsed_referer = urlparse(referer)
+            referer_origin = f"{parsed_referer.scheme}://{parsed_referer.netloc}"
+            return referer_origin.rstrip("/") == expected_origin.rstrip("/")
+        return True
+
+    async def require_same_origin(request: Request) -> None:
+        if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
+            return
+        if not _request_origin_matches_dashboard(request):
+            raise HTTPException(status_code=403, detail="Request origin denied")
+
     async def fetch_user_guild_member_roles(user_id: int, guild_id: int) -> set[int]:
         guild = bot.get_guild(guild_id)
         if guild is None:
@@ -220,7 +366,11 @@ def create_dashboard_app(bot) -> FastAPI:
             return await coro
 
         future = asyncio.run_coroutine_threadsafe(coro, bot_loop)
-        return await asyncio.wrap_future(future)
+        try:
+            return await asyncio.wait_for(asyncio.wrap_future(future), timeout=15)
+        except TimeoutError as error:
+            future.cancel()
+            raise HTTPException(status_code=504, detail="Bot worker timed out while processing that request") from error
 
     async def log_dashboard_event(
         request: Request,
@@ -312,17 +462,25 @@ def create_dashboard_app(bot) -> FastAPI:
         }
 
     async def load_user_guilds(request: Request) -> list[dict]:
-        access_token = request.session.get("access_token")
+        access_token = session_access_token(request)
         user = session_user(request)
         if not access_token:
             return []
         if not user or not str(user.get("id", "")).isdigit():
             return []
 
+        cached_guilds = session_store.get_cached_guilds(session_id(request))
+        if cached_guilds is not None:
+            return cached_guilds
+
         try:
             discord_guilds = await fetch_discord_resource(access_token, "/users/@me/guilds")
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code in {401, 403}:
+                clear_session(request)
+            return cached_guilds or []
         except Exception:
-            return []
+            return cached_guilds or []
 
         premium_available = premium_enabled()
         user_id = int(user["id"])
@@ -362,6 +520,7 @@ def create_dashboard_app(bot) -> FastAPI:
             )
 
         manageable_guilds.sort(key=lambda item: item["name"].lower())
+        session_store.set_cached_guilds(session_id(request), manageable_guilds)
         return manageable_guilds
 
     async def require_user(request: Request) -> dict:
@@ -902,6 +1061,8 @@ def create_dashboard_app(bot) -> FastAPI:
         selected_guild, guilds = await require_guild_access(request, guild_id, require_bot_installed=False)
         if not selected_guild.get("bot_installed"):
             return RedirectResponse(url=selected_guild["install_url"], status_code=302)
+        if current_view != "setup" and not bot.access_manager.controls.is_setup_wizard_completed(guild_id):
+            return RedirectResponse(url=f"/dashboard/{guild_id}/setup", status_code=302)
         roles = guild_roles(guild_id)
         text_channels = guild_text_channels(guild_id)
         commands, module_cards = guild_command_rows(guild_id)
@@ -1026,10 +1187,12 @@ def create_dashboard_app(bot) -> FastAPI:
         )
 
     @app.get("/login")
-    async def login():
+    async def login(request: Request):
         if not oauth_ready():
             raise HTTPException(status_code=500, detail="Discord OAuth is not configured")
 
+        oauth_state = secrets.token_urlsafe(24)
+        request.session["oauth_state"] = oauth_state
         query = urlencode(
             {
                 "client_id": discord_client_id,
@@ -1037,33 +1200,52 @@ def create_dashboard_app(bot) -> FastAPI:
                 "response_type": "code",
                 "scope": "identify guilds",
                 "prompt": "consent",
+                "state": oauth_state,
             }
         )
         return RedirectResponse(url=f"https://discord.com/oauth2/authorize?{query}", status_code=302)
 
     @app.get("/auth/callback")
-    async def auth_callback(request: Request, code: str):
-        token_data = await fetch_discord_token(code)
-        user_data = await fetch_discord_resource(token_data["access_token"], "/users/@me")
+    async def auth_callback(
+        request: Request,
+        code: str | None = None,
+        state: str | None = None,
+        error: str | None = None,
+    ):
+        expected_state = request.session.pop("oauth_state", None)
+        if error:
+            clear_session(request)
+            return RedirectResponse(url="/", status_code=302)
+        if not code or not state or not expected_state or state != expected_state:
+            clear_session(request)
+            raise HTTPException(status_code=400, detail="Invalid OAuth callback")
 
-        request.session["access_token"] = token_data["access_token"]
-        request.session["discord_user"] = {
-            "id": user_data["id"],
-            "username": user_data["username"],
-            "global_name": user_data.get("global_name"),
-            "avatar": user_data.get("avatar"),
-        }
+        try:
+            token_data = await fetch_discord_token(code)
+            user_data = await fetch_discord_resource(token_data["access_token"], "/users/@me")
+        except httpx.HTTPError as error:
+            clear_session(request)
+            raise HTTPException(status_code=502, detail="Discord OAuth could not be completed") from error
+
+        dashboard_session_id = session_store.create_session(
+            access_token=token_data["access_token"],
+            user={
+                "id": user_data["id"],
+                "username": user_data["username"],
+                "global_name": user_data.get("global_name"),
+                "avatar": user_data.get("avatar"),
+            },
+        )
+        request.session["dashboard_session_id"] = dashboard_session_id
         return RedirectResponse(url="/servers", status_code=302)
 
     @app.get("/logout")
     async def logout(request: Request):
-        request.session.clear()
+        clear_session(request)
         return RedirectResponse(url="/", status_code=302)
 
     @app.get("/dashboard/{guild_id}", response_class=HTMLResponse)
     async def dashboard(request: Request, guild_id: int):
-        if bot.access_manager.controls.is_setup_wizard_completed(guild_id) is False:
-            return RedirectResponse(url=f"/dashboard/{guild_id}/setup", status_code=302)
         return await render_dashboard_view(request, guild_id, "commands")
 
     @app.get("/dashboard/{guild_id}/setup", response_class=HTMLResponse)
@@ -1093,11 +1275,13 @@ def create_dashboard_app(bot) -> FastAPI:
     @app.get("/api/guilds/{guild_id}/logs")
     async def guild_logs(request: Request, guild_id: int, limit: int = 80):
         await require_guild_access(request, guild_id)
-        logs = bot.command_logs.list_for_guild(guild_id, min(limit, 150)) if hasattr(bot, "command_logs") else []
+        safe_limit = max(1, min(limit, 150))
+        logs = bot.command_logs.list_for_guild(guild_id, safe_limit) if hasattr(bot, "command_logs") else []
         return JSONResponse({"entries": logs})
 
     @app.post("/api/guilds/{guild_id}/command-policy")
     async def update_command_policy(request: Request, guild_id: int, payload: CommandPolicyPayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id)
 
         commands = build_command_catalog(bot)
@@ -1150,6 +1334,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.post("/api/guilds/{guild_id}/defense-state")
     async def update_defense_state(request: Request, guild_id: int, payload: DefenseTogglePayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id)
         manager = getattr(bot, "server_defense", None)
         if manager is None or not hasattr(manager, "set_defense"):
@@ -1180,6 +1365,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.post("/api/guilds/{guild_id}/autofilter-terms")
     async def update_autofilter_terms(request: Request, guild_id: int, payload: AutoFilterTermsPayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id)
         manager = getattr(bot, "server_defense", None)
         if manager is None or not hasattr(manager, "update_autofilter_terms"):
@@ -1217,6 +1403,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.post("/api/guilds/{guild_id}/defense-lockdown-roles")
     async def update_defense_lockdown_roles(request: Request, guild_id: int, payload: DefenseLockdownRolesPayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id, require_editor_role_management=True)
         manager = getattr(bot, "server_defense", None)
         if manager is None or not (hasattr(manager, "ensure_lockdown_roles") or hasattr(manager, "set_lockdown_roles")):
@@ -1255,6 +1442,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.post("/api/guilds/{guild_id}/dashboard-access")
     async def update_dashboard_access(request: Request, guild_id: int, payload: DashboardAccessPayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id, require_editor_role_management=True)
         valid_role_ids = {role["id"] for role in guild_roles(guild_id)}
         safe_role_ids = [role_id for role_id in payload.editor_role_ids if role_id in valid_role_ids]
@@ -1283,6 +1471,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.post("/api/guilds/{guild_id}/greetings")
     async def update_greetings(request: Request, guild_id: int, payload: GreetingConfigPayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id)
 
         manager = getattr(bot, "greetings", None)
@@ -1325,6 +1514,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.post("/api/guilds/{guild_id}/support-settings")
     async def update_support_settings(request: Request, guild_id: int, payload: SupportSettingsPayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id)
 
         ticket_store = getattr(bot, "ticket_store", None)
@@ -1364,6 +1554,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.post("/api/guilds/{guild_id}/purge-settings")
     async def update_purge_settings(request: Request, guild_id: int, payload: PurgeSettingsPayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id)
         controls = bot.access_manager.controls
         allowed_limit = min(int(payload.limit), controls.FREE_PURGE_LIMIT_CAP)
@@ -1384,6 +1575,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.post("/api/guilds/{guild_id}/moderation-settings")
     async def update_moderation_settings(request: Request, guild_id: int, payload: ModerationSettingsPayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id)
         updated = bot.access_manager.controls.set_moderation_settings(
             guild_id,
@@ -1404,6 +1596,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
     @app.post("/api/guilds/{guild_id}/setup-wizard")
     async def update_setup_wizard(request: Request, guild_id: int, payload: SetupWizardPayload):
+        await require_same_origin(request)
         await require_guild_access(request, guild_id)
 
         valid_role_ids = {role["id"] for role in guild_roles(guild_id)}
@@ -1537,17 +1730,24 @@ class DashboardServer:
         self.bot = bot
         self.command_controls = command_controls
         self.command_logs = command_logs
-        self._thread = None
+        self._thread: threading.Thread | None = None
+        self._server: uvicorn.Server | None = None
 
     async def start(self):
-        self._thread = start_dashboard_server(self.bot)
+        if self._thread and self._thread.is_alive():
+            return
+        self._server, self._thread = start_dashboard_server(self.bot)
 
     async def stop(self):
+        if self._server is not None:
+            self._server.should_exit = True
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=5)
+            self._thread.join(timeout=10)
+        self._server = None
+        self._thread = None
 
 
-def start_dashboard_server(bot) -> threading.Thread:
+def start_dashboard_server(bot) -> tuple[uvicorn.Server, threading.Thread]:
     port = resolve_dashboard_port()
     host = resolve_dashboard_host()
     app = create_dashboard_app(bot)
@@ -1556,4 +1756,4 @@ def start_dashboard_server(bot) -> threading.Thread:
 
     thread = threading.Thread(target=server.run, daemon=True, name="servercore-dashboard")
     thread.start()
-    return thread
+    return server, thread

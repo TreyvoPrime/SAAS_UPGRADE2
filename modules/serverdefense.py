@@ -215,8 +215,11 @@ class ServerDefense(commands.Cog):
         return f"Enabled until `{ends_at}`" if ends_at else "Enabled until manually disabled"
 
     async def _send_status(self, interaction: discord.Interaction, feature: str, title: str, extra_lines: list[str] | None = None):
-        assert interaction.guild is not None
-        state = self.bot.server_defense.get_dashboard_state(interaction.guild.id)[feature]
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
+        state = self.bot.server_defense.get_dashboard_state(guild.id)[feature]
         embed = discord.Embed(title=title, color=discord.Color.blurple())
         embed.add_field(name="State", value=self._state_line(state), inline=False)
         for line in extra_lines or []:
@@ -311,8 +314,11 @@ class ServerDefense(commands.Cog):
         prompt: str,
         action: Callable[[], Awaitable[str]],
     ) -> None:
-        assert interaction.guild is not None
-        settings = self._moderation_settings(interaction.guild.id)
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
+        settings = self._moderation_settings(guild.id)
         if settings.get("confirmation_enabled", True):
             await interaction.response.send_message(
                 prompt,
@@ -337,26 +343,30 @@ class ServerDefense(commands.Cog):
         action_name: str,
         require_bot_permission: str | None = None,
     ) -> bool:
-        assert interaction.guild is not None
-        assert isinstance(interaction.user, discord.Member)
+        guild = interaction.guild
+        moderator = interaction.user
+        if guild is None or not isinstance(moderator, discord.Member):
+            if not interaction.response.is_done():
+                await interaction.response.send_message("I couldn't verify the server context for that action.", ephemeral=True)
+            return False
 
-        if member.id == interaction.user.id:
+        if member.id == moderator.id:
             await interaction.response.send_message(f"You can't {action_name} yourself.", ephemeral=True)
             return False
         if member.id == self.bot.user.id:
             await interaction.response.send_message(f"You can't {action_name} the bot.", ephemeral=True)
             return False
-        if member.id == interaction.guild.owner_id:
+        if member.id == guild.owner_id:
             await interaction.response.send_message(f"You can't {action_name} the server owner.", ephemeral=True)
             return False
-        if interaction.guild.owner_id != interaction.user.id and member.top_role >= interaction.user.top_role:
+        if guild.owner_id != moderator.id and member.top_role >= moderator.top_role:
             await interaction.response.send_message(
                 f"You can only {action_name} members below your top role.",
                 ephemeral=True,
             )
             return False
 
-        me = interaction.guild.me
+        me = guild.me
         if me is None:
             await interaction.response.send_message("I couldn't verify my moderation permissions right now.", ephemeral=True)
             return False
@@ -402,32 +412,6 @@ class ServerDefense(commands.Cog):
         name="staffnotes",
         description="Keep internal staff notes on members",
     )
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        await self.bot.server_defense.process_message(message)
-
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-        removed = await self.bot.server_defense.handle_member_join(member)
-        if removed:
-            channel = member.guild.system_channel
-            if channel is not None:
-                try:
-                    await channel.send(
-                        f"Anti-join removed `{member}` while ServerDefense anti-join was active.",
-                        delete_after=8,
-                    )
-                except Exception:
-                    pass
-
-    @commands.Cog.listener()
-    async def on_member_remove(self, member: discord.Member):
-        await self.bot.server_defense.handle_member_remove(member)
-
-    @commands.Cog.listener()
-    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.abc.User | discord.Member):
-        await self.bot.server_defense.handle_reaction_add(reaction, user)
 
     @linkblock.command(name="enable", description="Block external links in this server")
     async def linkblock_enable(
