@@ -131,10 +131,10 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can use moderation commands</h4>
-                                    <p>These roles can use warn, timeout, ban, purge, role tools, history, and staff notes.</p>
+                                    <p>These roles can use warn, timeout, ban, purge, role tools, history, and staff notes. Leave every role unchecked if you want those tools open to everyone.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
-                                    <input id="wizard-moderation-allow-all" type="checkbox" {% if setup_summary.moderation.allow_all %}checked{% endif %}>
+                                    <input id="wizard-moderation-allow-all" type="checkbox">
                                     <span>Allow everyone</span>
                                 </label>
                             </div>
@@ -257,10 +257,10 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can manage support commands</h4>
-                                    <p>These roles can manage ticket issues, claims, priority, and close actions.</p>
+                                    <p>These roles can manage ticket issues, claims, priority, and close actions. Leave every role unchecked if you want those tools open to everyone.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
-                                    <input id="wizard-support-allow-all" type="checkbox" {% if setup_summary.support.allow_all %}checked{% endif %}>
+                                    <input id="wizard-support-allow-all" type="checkbox">
                                     <span>Allow everyone</span>
                                 </label>
                             </div>
@@ -298,10 +298,10 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can use community management commands</h4>
-                                    <p>This covers polls, giveaways, autofeed, and reminders.</p>
+                                    <p>This covers polls, giveaways, autofeed, and reminders. Leave every role unchecked if you want those tools open to everyone.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
-                                    <input id="wizard-community-allow-all" type="checkbox" {% if setup_summary.community.allow_all %}checked{% endif %}>
+                                    <input id="wizard-community-allow-all" type="checkbox">
                                     <span>Allow everyone</span>
                                 </label>
                             </div>
