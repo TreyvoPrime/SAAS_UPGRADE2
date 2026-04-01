@@ -232,6 +232,22 @@
                     {% endfor %}
                 </div>
 
+                <section class="surface command-settings-panel defense-settings-panel">
+                    <div>
+                        <div class="eyebrow">AutoFilter</div>
+                        <h3>Blocked words and phrases</h3>
+                        <p>Keep a live list of words or phrases that should never land in chat. Members get three warnings, and after that AutoFilter applies a one-hour timeout automatically.</p>
+                    </div>
+                    <div class="command-settings-actions">
+                        <label class="search-shell">
+                            <span>Blocked terms</span>
+                            <textarea id="autofilter-terms-input" class="search-input greeting-textarea" rows="6" placeholder="One word or phrase per line">{{ defense_summary.autofilter_terms|join('\n') }}</textarea>
+                        </label>
+                        <div class="dashboard-access-summary" id="autofilter-summary">AutoFilter is tracking {{ defense_summary.autofilter_terms|length }} blocked term(s). It warns 3 times, then times out for {{ defense_summary.autofilter_timeout_minutes }} minutes.</div>
+                        <button type="button" class="primary-button" id="save-autofilter-terms">Save blocked terms</button>
+                    </div>
+                </section>
+
                 <section class="surface threat-stage">
                     <div class="threat-stage-copy">
                         <div class="eyebrow">Guardian</div>
@@ -972,6 +988,9 @@
         const threatBarFill = document.getElementById("threat-bar-fill");
         const threatSignalList = document.getElementById("threat-signal-list");
         const threatActionStrip = document.getElementById("threat-action-strip");
+        const autofilterTermsInput = document.getElementById("autofilter-terms-input");
+        const autofilterSummary = document.getElementById("autofilter-summary");
+        const saveAutofilterTermsButton = document.getElementById("save-autofilter-terms");
         const greetingCards = Array.from(document.querySelectorAll("[data-greeting-card]"));
         const supportIssueList = document.getElementById("support-issue-list");
         const supportIssueInput = document.getElementById("support-issue-input");
@@ -1221,6 +1240,26 @@
 
             if (!response.ok) {
                 let message = "Moderation settings update failed";
+                try {
+                    const data = await response.json();
+                    message = data.detail || message;
+                } catch {}
+                showToast(message, "error");
+                throw new Error(message);
+            }
+
+            return response.json();
+        }
+
+        async function updateAutofilterTerms(terms) {
+            const response = await fetch(`/api/guilds/${guildId}/autofilter-terms`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ terms })
+            });
+
+            if (!response.ok) {
+                let message = "AutoFilter update failed";
                 try {
                     const data = await response.json();
                     message = data.detail || message;
@@ -1752,6 +1791,26 @@
                     moderationSettingsSummary.textContent = `${result.confirmation_enabled ? "Staff will see a final check before actions go through." : "Actions will go through right away without the extra check."} Default timeout: ${result.default_timeout_minutes} minutes.`;
                 }
                 showToast("Moderation flow updated.");
+            } catch {}
+        });
+
+        saveAutofilterTermsButton?.addEventListener("click", async () => {
+            const terms = (autofilterTermsInput?.value || "")
+                .split("\n")
+                .map((item) => item.trim())
+                .filter(Boolean);
+            try {
+                const result = await updateAutofilterTerms(terms);
+                if (autofilterTermsInput) {
+                    autofilterTermsInput.value = (result.terms || []).join("\n");
+                }
+                if (autofilterSummary) {
+                    autofilterSummary.textContent = `AutoFilter is tracking ${(result.terms || []).length} blocked term(s). It warns ${result.warning_limit || 3} times, then times out for ${result.timeout_minutes || 60} minutes.`;
+                }
+                if (result.state) {
+                    syncDefenseSummary(result.state);
+                }
+                showToast("AutoFilter terms updated.");
             } catch {}
         });
 

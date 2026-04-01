@@ -45,6 +45,10 @@ class DefenseLockdownRolesPayload(BaseModel):
     lockdown_role_ids: list[int] = Field(default_factory=list)
 
 
+class AutoFilterTermsPayload(BaseModel):
+    terms: list[str] = Field(default_factory=list, max_length=100)
+
+
 class GreetingConfigPayload(BaseModel):
     flow: str = Field(min_length=1)
     channel_id: int | str | None = None
@@ -625,6 +629,19 @@ def create_dashboard_app(bot) -> FastAPI:
                     "rate_label": "5 mentions / 10 seconds",
                 },
                 {
+                    "name": "autofilter",
+                    "title": "AutoFilter",
+                    "tag": "Blocked words",
+                    "description": "Blocks flagged words or phrases, warns members up to three times, then times them out for one hour if they keep pushing it.",
+                    "enabled": False,
+                    "duration_minutes": None,
+                    "duration_label": "Until disabled",
+                    "status_label": "Offline",
+                    "remaining_label": "No timer",
+                    "tone": "muted",
+                    "rate_label": "3 warnings, then 60-minute timeout",
+                },
+                {
                     "name": "lockdown",
                     "title": "Lockdown",
                     "tag": "Channel freeze",
@@ -659,6 +676,9 @@ def create_dashboard_app(bot) -> FastAPI:
             "lockdown_role_ids": [],
             "lockdown_role_names": [],
             "lockdown_role_count": 0,
+            "autofilter_terms": [],
+            "autofilter_warning_limit": 3,
+            "autofilter_timeout_minutes": 60,
             "threat": {
                 "enabled": False,
                 "score": 0,
@@ -971,7 +991,7 @@ def create_dashboard_app(bot) -> FastAPI:
         if manager is None or not hasattr(manager, "set_defense"):
             raise HTTPException(status_code=503, detail="ServerDefense is not available")
 
-        if payload.defense_name not in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown", "antiraid"}:
+        if payload.defense_name not in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "autofilter", "lockdown", "antiraid"}:
             raise HTTPException(status_code=404, detail="Unknown defense")
 
         result = await run_on_bot_loop(
@@ -993,6 +1013,40 @@ def create_dashboard_app(bot) -> FastAPI:
             fields=[("Duration", card.get("duration_label") or "Until disabled", False)],
         )
         return JSONResponse({"card": card, "state": state})
+
+    @app.post("/api/guilds/{guild_id}/autofilter-terms")
+    async def update_autofilter_terms(request: Request, guild_id: int, payload: AutoFilterTermsPayload):
+        await require_guild_access(request, guild_id)
+        manager = getattr(bot, "server_defense", None)
+        if manager is None or not hasattr(manager, "update_autofilter_terms"):
+            raise HTTPException(status_code=503, detail="ServerDefense is not available")
+
+        cleaned_terms = []
+        seen: set[str] = set()
+        for term in payload.terms:
+            normalized = str(term).strip().lower()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            cleaned_terms.append(normalized)
+
+        updated = manager.update_autofilter_terms(guild_id, cleaned_terms)
+        state = manager.build_dashboard_state(guild_id, {role["id"]: role["name"] for role in guild_roles(guild_id)})
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard AutoFilter Updated",
+            description="Updated the blocked words and phrases in AutoFilter.",
+            fields=[("Term Count", str(len(updated.get("filter_terms", []))), True)],
+        )
+        return JSONResponse(
+            {
+                "terms": updated.get("filter_terms", []),
+                "warning_limit": updated.get("warning_limit", 3),
+                "timeout_minutes": updated.get("timeout_minutes", 60),
+                "state": state,
+            }
+        )
 
     @app.post("/api/guilds/{guild_id}/defense-lockdown-roles")
     async def update_defense_lockdown_roles(request: Request, guild_id: int, payload: DefenseLockdownRolesPayload):

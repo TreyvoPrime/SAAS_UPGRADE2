@@ -126,6 +126,10 @@ class ServerDefense(commands.Cog):
         name="mentionguard",
         description="Block mention spam bursts in this server",
     )
+    autofilter = app_commands.Group(
+        name="autofilter",
+        description="Block flagged words or phrases automatically",
+    )
     antiraid = app_commands.Group(
         name="guardian",
         description="Watch for raid pressure and raise the server threat level automatically",
@@ -580,6 +584,84 @@ class ServerDefense(commands.Cog):
                 "Action: Clears the burst and attempts a short timeout.",
             ],
         )
+
+    @autofilter.command(name="enable", description="Turn on the blocked-word autofilter")
+    async def autofilter_enable(
+        self,
+        interaction: discord.Interaction,
+        duration_minutes: app_commands.Range[int, 1, MAX_DURATION_MINUTES] | None = None,
+    ):
+        await self._enable_feature(
+            interaction,
+            "autofilter",
+            "AutoFilter",
+            duration_minutes=duration_minutes,
+            permission_requirements={"manage_messages": True, "moderate_members": True},
+        )
+
+    @autofilter.command(name="disable", description="Turn off the blocked-word autofilter")
+    async def autofilter_disable(self, interaction: discord.Interaction):
+        await self._disable_feature(interaction, "autofilter", "AutoFilter")
+
+    @autofilter.command(name="status", description="View the current autofilter status and term list")
+    async def autofilter_status(self, interaction: discord.Interaction):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        state = self.bot.server_defense.get_dashboard_state(interaction.guild.id)["autofilter"]
+        terms = state.get("filter_terms", [])
+        await self._send_status(
+            interaction,
+            "autofilter",
+            "AutoFilter",
+            [
+                f"Warnings: {state.get('warning_limit', 3)} before a {state.get('timeout_minutes', 60)} minute timeout.",
+                f"Terms: {', '.join(terms[:12]) if terms else 'No blocked terms configured yet.'}",
+            ],
+        )
+
+    @autofilter.command(name="add", description="Add a blocked word or phrase to AutoFilter")
+    async def autofilter_add(self, interaction: discord.Interaction, phrase: app_commands.Range[str, 1, 80]):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        state = self.bot.server_defense.get_dashboard_state(interaction.guild.id)["autofilter"]
+        terms = list(state.get("filter_terms", []))
+        cleaned = phrase.strip().lower()
+        if cleaned not in terms:
+            terms.append(cleaned)
+        updated = self.bot.server_defense.update_autofilter_terms(interaction.guild.id, terms)
+        await interaction.response.send_message(
+            f"AutoFilter updated. It is now blocking {len(updated.get('filter_terms', []))} word(s) or phrase(s).",
+            ephemeral=True,
+        )
+
+    @autofilter.command(name="remove", description="Remove a blocked word or phrase from AutoFilter")
+    async def autofilter_remove(self, interaction: discord.Interaction, phrase: app_commands.Range[str, 1, 80]):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        state = self.bot.server_defense.get_dashboard_state(interaction.guild.id)["autofilter"]
+        cleaned = phrase.strip().lower()
+        terms = [term for term in state.get("filter_terms", []) if term != cleaned]
+        updated = self.bot.server_defense.update_autofilter_terms(interaction.guild.id, terms)
+        await interaction.response.send_message(
+            f"AutoFilter updated. It is now blocking {len(updated.get('filter_terms', []))} word(s) or phrase(s).",
+            ephemeral=True,
+        )
+
+    @autofilter.command(name="list", description="List the blocked words and phrases in AutoFilter")
+    async def autofilter_list(self, interaction: discord.Interaction):
+        member = await self._require_admin(interaction)
+        if member is None or interaction.guild is None:
+            return
+        state = self.bot.server_defense.get_dashboard_state(interaction.guild.id)["autofilter"]
+        terms = state.get("filter_terms", [])
+        if not terms:
+            await interaction.response.send_message("AutoFilter has no blocked terms configured yet.", ephemeral=True)
+            return
+        embed = discord.Embed(title="AutoFilter terms", description="\n".join(f"- {term}" for term in terms[:50]), color=discord.Color.orange())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @antiraid.command(name="enable", description="Start Guardian threat scoring and automatic escalation")
     async def antiraid_enable(

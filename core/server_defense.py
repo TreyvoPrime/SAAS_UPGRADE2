@@ -13,7 +13,7 @@ import discord
 from core.storage import read_json, write_json
 
 
-DEFENSE_FEATURES = ("linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "lockdown", "antiraid")
+DEFENSE_FEATURES = ("linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "autofilter", "lockdown", "antiraid")
 
 URL_PATTERN = re.compile(r"(https?://\S+|www\.\S+|discord(?:\.gg|(?:app)?\.com/invite)/\S+)", re.IGNORECASE)
 INVITE_PATTERN = re.compile(r"(discord(?:\.gg|(?:app)?\.com/invite)/\S+)", re.IGNORECASE)
@@ -45,6 +45,14 @@ DEFAULT_GUILD_DEFENSES = {
         "mention_limit": 5,
         "window_seconds": 10,
         "timeout_seconds": 90,
+    },
+    "autofilter": {
+        "enabled": False,
+        "ends_at": None,
+        "filter_terms": [],
+        "warning_limit": 3,
+        "timeout_minutes": 60,
+        "warning_counts": {},
     },
     "lockdown": {
         "enabled": False,
@@ -157,6 +165,15 @@ class ServerDefenseStore:
             bucket["blocked_phrases"] = [str(item).strip() for item in bucket.get("blocked_phrases", []) if str(item).strip()][:50]
             bucket["allowed_domains"] = [str(item).strip().lower() for item in bucket.get("allowed_domains", []) if str(item).strip()][:50]
             bucket["preset"] = str(bucket.get("preset") or "balanced")
+        if feature == "autofilter":
+            bucket["filter_terms"] = [str(item).strip().lower() for item in bucket.get("filter_terms", []) if str(item).strip()][:100]
+            bucket["warning_limit"] = max(1, int(bucket.get("warning_limit", 3)))
+            bucket["timeout_minutes"] = max(1, int(bucket.get("timeout_minutes", 60)))
+            bucket["warning_counts"] = {
+                str(user_id): int(count)
+                for user_id, count in (bucket.get("warning_counts") or {}).items()
+                if str(user_id).isdigit()
+            }
         return bucket
 
     def get_all(self, guild_id: int) -> dict[str, dict[str, Any]]:
@@ -648,6 +665,13 @@ class ServerDefenseManager:
                 rate_label="5 mentions / 10 seconds",
             ),
             make_card(
+                "autofilter",
+                "AutoFilter",
+                "Blocked words",
+                "Blocks flagged words or phrases, warns members up to three times, then times them out for one hour if they keep pushing it.",
+                rate_label="3 warnings, then 60-minute timeout",
+            ),
+            make_card(
                 "lockdown",
                 "Lockdown",
                 "Channel freeze",
@@ -672,6 +696,9 @@ class ServerDefenseManager:
             "lockdown_role_ids": lockdown_roles,
             "lockdown_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in lockdown_roles],
             "lockdown_role_count": len(lockdown_roles),
+            "autofilter_terms": state["autofilter"].get("filter_terms", []),
+            "autofilter_warning_limit": state["autofilter"].get("warning_limit", 3),
+            "autofilter_timeout_minutes": state["autofilter"].get("timeout_minutes", 60),
             "threat": threat_summary,
         }
 
@@ -699,6 +726,14 @@ class ServerDefenseManager:
             blocked_phrases=next_phrases,
             allowed_domains=next_domains,
         )
+
+    def update_autofilter_terms(self, guild_id: int, terms: list[str]) -> dict[str, Any]:
+        cleaned = [
+            str(item).strip().lower()
+            for item in terms
+            if str(item).strip()
+        ][:100]
+        return self.store.patch_feature(guild_id, "autofilter", filter_terms=cleaned)
 
     def apply_guardian_preset(self, guild_id: int, preset: str) -> dict[str, Any]:
         preset_name = str(preset).strip().lower()
@@ -1095,6 +1130,8 @@ class ServerDefenseManager:
         antiraid_active = self._is_active(antiraid)
         allowed_domains = set(antiraid.get("allowed_domains", []))
         blocked_phrases = [phrase for phrase in antiraid.get("blocked_phrases", []) if phrase]
+        autofilter = self.store.get_feature(guild_id, "autofilter")
+        autofilter_terms = [term for term in autofilter.get("filter_terms", []) if term]
 
         if antiraid_active:
             await self._record_message_risk(message)
@@ -1102,6 +1139,38 @@ class ServerDefenseManager:
             if blocked_phrases and any(phrase in lowered for phrase in blocked_phrases):
                 await self._delete_message(message, "Guardian removed a blocked phrase.")
                 await self._record_module_trigger(message.guild, "guardian blacklist", "Guardian removed a blocked phrase during active monitoring.")
+                return True
+
+        if self._is_active(autofilter):
+            lowered = content.lower()
+            matched_term = next((term for term in autofilter_terms if term in lowered), None)
+            if matched_term:
+                await self._delete_message(message, "AutoFilter blocked that message.")
+                warning_counts = dict(autofilter.get("warning_counts", {}))
+                user_key = str(message.author.id)
+                warning_count = int(warning_counts.get(user_key, 0)) + 1
+                warning_counts[user_key] = warning_count
+                self.store.patch_feature(guild_id, "autofilter", warning_counts=warning_counts)
+                warning_limit = int(autofilter.get("warning_limit", 3))
+                timeout_minutes = int(autofilter.get("timeout_minutes", 60))
+                if warning_count > warning_limit:
+                    await self._timeout_member(
+                        message.author,
+                        timeout_minutes * 60,
+                        "AutoFilter repeated violations.",
+                    )
+                    await self._warn_channel(
+                        message.channel,
+                        f"{message.author.mention} triggered AutoFilter again and has been timed out for {timeout_minutes} minutes.",
+                    )
+                else:
+                    remaining = max(warning_limit - warning_count, 0)
+                    await self._warn_channel(
+                        message.channel,
+                        f"{message.author.mention}, that word or phrase is blocked here. Warning {warning_count}/{warning_limit}.{f' {remaining} warning(s) left before a timeout.' if remaining else ''}",
+                    )
+                if antiraid_active:
+                    await self._record_module_trigger(message.guild, "autofilter", "AutoFilter blocked a flagged word or phrase during active monitoring.")
                 return True
 
         linkblock = self.store.get_feature(guild_id, "linkblock")
@@ -1242,6 +1311,8 @@ class ServerDefenseManager:
             return await self._lift_lockdown(guild_id, reason=reason, actor=actor)
         if feature == "antiraid":
             self._threat_state[guild_id] = self._new_threat_state()
+        if feature == "autofilter":
+            return self.store.patch_feature(guild_id, feature, enabled=False, ends_at=None, warning_counts={})
         return self.store.patch_feature(guild_id, feature, enabled=False, ends_at=None)
 
     async def set_duration(
