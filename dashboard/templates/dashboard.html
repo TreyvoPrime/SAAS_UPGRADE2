@@ -79,15 +79,19 @@
                     <h3>Flip this server between Free and Premium</h3>
                     <p>Use this temporary switch to test plan gating while Premium is still being built out. Guardian only arms when this server is on Premium.</p>
                 </div>
-                <div class="command-settings-actions">
-                    <div class="dashboard-access-summary" id="subscription-summary">
-                        {{ selected_guild.name }} is currently on the {{ subscription.label }} tier. Premium unlocks Guardian, advanced ticket tools, analytics, richer automation, config tools, and advanced giveaway rules.
+                    <div class="command-settings-actions">
+                        <div class="dashboard-access-summary" id="subscription-summary">
+                            {{ selected_guild.name }} is currently on the {{ subscription.label }} tier. Premium unlocks Guardian, advanced ticket tools, analytics, richer automation, config tools, and advanced giveaway rules.
+                        </div>
+                        <div class="subscription-state-pill {% if subscription.is_premium %}is-premium{% else %}is-free{% endif %}" id="subscription-state-pill">
+                            <strong id="subscription-state-title">{% if subscription.is_premium %}Premium is active{% else %}Free is active{% endif %}</strong>
+                            <span id="subscription-state-copy">{% if subscription.is_premium %}Guardian and advanced tools are unlocked for this server.{% else %}Guardian and advanced tools stay locked until Premium is turned on.{% endif %}</span>
+                        </div>
+                        <div class="defense-actions subscription-toggle-row">
+                            <button type="button" class="ghost-button compact-button {% if not subscription.is_premium %}is-active-toggle{% endif %}" id="set-tier-free">Use Free</button>
+                            <button type="button" class="primary-button compact-button {% if subscription.is_premium %}is-active-toggle{% endif %}" id="set-tier-premium">Use Premium</button>
+                        </div>
                     </div>
-                    <div class="defense-actions subscription-toggle-row">
-                        <button type="button" class="ghost-button compact-button {% if not subscription.is_premium %}is-active-toggle{% endif %}" id="set-tier-free">Use Free</button>
-                        <button type="button" class="primary-button compact-button {% if subscription.is_premium %}is-active-toggle{% endif %}" id="set-tier-premium">Use Premium</button>
-                    </div>
-                </div>
             </section>
 
             <nav class="view-switcher" aria-label="Dashboard sections">
@@ -223,6 +227,12 @@
                         data-lockdown-role-ids="{{ defense.allowed_role_ids|join(',') }}"
                         {% endif %}
                     >
+                        {% if defense.name == 'antiraid' %}
+                        <div class="premium-card-lock{% if not defense.locked %} is-hidden{% endif %}" data-premium-lock>
+                            <strong>Guardian is locked</strong>
+                            <span>Turn Premium on for this server to unlock live threat watching and raid response.</span>
+                        </div>
+                        {% endif %}
                         <div class="command-flags defense-flags">
                             <span class="tier tier-free">Defense</span>
                             <span class="module-chip">{{ defense.tag }}</span>
@@ -306,6 +316,10 @@
                 </section>
 
                 <section class="surface threat-stage">
+                    <div class="guardian-stage-lock{% if subscription.is_premium %} is-hidden{% endif %}" id="guardian-stage-lock">
+                        <strong>Guardian is part of Premium</strong>
+                        <span>Switch this server to Premium above to unlock the live threat meter, raid response, and advanced ServerGuard control.</span>
+                    </div>
                     <div class="threat-stage-copy">
                         <div class="eyebrow">Guardian</div>
                         <h3>Live threat watch</h3>
@@ -1143,8 +1157,12 @@
         const saveAlertSettingsButton = document.getElementById("save-alert-settings");
         const subscriptionSummary = document.getElementById("subscription-summary");
         const subscriptionTierChip = document.getElementById("subscription-tier-chip");
+        const subscriptionStatePill = document.getElementById("subscription-state-pill");
+        const subscriptionStateTitle = document.getElementById("subscription-state-title");
+        const subscriptionStateCopy = document.getElementById("subscription-state-copy");
         const setTierFreeButton = document.getElementById("set-tier-free");
         const setTierPremiumButton = document.getElementById("set-tier-premium");
+        const guardianStageLock = document.getElementById("guardian-stage-lock");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
             disabled: document.querySelector('[data-stat="disabled"]'),
@@ -1614,6 +1632,7 @@
             const durationInput = card.querySelector("[data-defense-duration]");
             const saveButton = card.querySelector("[data-defense-save]");
             const releaseButton = card.querySelector("[data-defense-release]");
+            const premiumLock = card.querySelector("[data-premium-lock]");
 
             if (toggle) {
                 toggle.checked = Boolean(defense.enabled);
@@ -1622,6 +1641,7 @@
             card.dataset.enabled = defense.enabled ? "true" : "false";
             card.dataset.durationMinutes = defense.duration_minutes ?? "";
             card.dataset.locked = defense.locked ? "true" : "false";
+            card.classList.toggle("is-locked-card", Boolean(defense.locked));
 
             if (status) {
                 status.textContent = defense.status_label;
@@ -1640,6 +1660,9 @@
             if (releaseButton) {
                 releaseButton.disabled = Boolean(defense.locked);
             }
+            if (premiumLock) {
+                premiumLock.classList.toggle("is-hidden", !defense.locked);
+            }
 
             if (card.dataset.defenseName === "lockdown") {
                 const summary = card.querySelector("[data-lockdown-role-summary]");
@@ -1654,17 +1677,35 @@
 
         function syncSubscriptionSummary(subscription) {
             if (!subscription) return;
+            const premiumOn = Boolean(subscription.is_premium);
             if (subscriptionSummary) {
                 subscriptionSummary.textContent = `${subscription.guild_name || "{{ selected_guild.name }}"} is currently on the ${subscription.label} tier. Premium unlocks Guardian, advanced ticket tools, analytics, richer automation, config tools, and advanced giveaway rules.`;
             }
             if (subscriptionTierChip) {
                 subscriptionTierChip.textContent = `${subscription.label} tier`;
             }
+            if (subscriptionStatePill) {
+                subscriptionStatePill.classList.toggle("is-premium", premiumOn);
+                subscriptionStatePill.classList.toggle("is-free", !premiumOn);
+            }
+            if (subscriptionStateTitle) {
+                subscriptionStateTitle.textContent = premiumOn ? "Premium is active" : "Free is active";
+            }
+            if (subscriptionStateCopy) {
+                subscriptionStateCopy.textContent = premiumOn
+                    ? "Guardian and advanced tools are unlocked for this server."
+                    : "Guardian and advanced tools stay locked until Premium is turned on.";
+            }
             if (setTierFreeButton) {
-                setTierFreeButton.classList.toggle("is-active-toggle", !subscription.is_premium);
+                setTierFreeButton.classList.toggle("is-active-toggle", !premiumOn);
+                setTierFreeButton.setAttribute("aria-pressed", String(!premiumOn));
             }
             if (setTierPremiumButton) {
-                setTierPremiumButton.classList.toggle("is-active-toggle", Boolean(subscription.is_premium));
+                setTierPremiumButton.classList.toggle("is-active-toggle", premiumOn);
+                setTierPremiumButton.setAttribute("aria-pressed", String(premiumOn));
+            }
+            if (guardianStageLock) {
+                guardianStageLock.classList.toggle("is-hidden", premiumOn);
             }
         }
 
@@ -2192,7 +2233,7 @@
                 const result = await updateSubscriptionTier("free");
                 syncSubscriptionSummary(result);
                 await refreshDefenseSnapshot();
-                showToast("Server switched to the Free tier.");
+                showToast(`${result.guild_name || "This server"} is now on the Free tier. Guardian is locked.`, "success");
             } catch {}
         });
 
@@ -2201,7 +2242,7 @@
                 const result = await updateSubscriptionTier("premium");
                 syncSubscriptionSummary(result);
                 await refreshDefenseSnapshot();
-                showToast("Server switched to the Premium tier.");
+                showToast(`${result.guild_name || "This server"} is now on the Premium tier. Guardian is unlocked.`, "success");
             } catch {}
         });
         }

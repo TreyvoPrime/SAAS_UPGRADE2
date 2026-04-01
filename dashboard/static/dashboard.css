@@ -129,6 +129,34 @@ button {
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
 }
 
+.subscription-state-pill {
+    display: grid;
+    gap: 4px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.subscription-state-pill strong {
+    font-size: 0.98rem;
+}
+
+.subscription-state-pill span {
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.subscription-state-pill.is-free {
+    border-color: rgba(255, 191, 107, 0.22);
+    background: linear-gradient(135deg, rgba(255, 191, 107, 0.1), rgba(255, 255, 255, 0.03));
+}
+
+.subscription-state-pill.is-premium {
+    border-color: rgba(255, 119, 200, 0.24);
+    background: linear-gradient(135deg, rgba(255, 119, 200, 0.14), rgba(111, 124, 255, 0.12));
+}
+
 .auth-stage {
     min-height: calc(100vh - 44px);
     display: grid;
@@ -956,6 +984,7 @@ button {
 }
 
 .threat-stage {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1.1fr) minmax(280px, 0.9fr);
     gap: 18px;
@@ -967,6 +996,40 @@ button {
         radial-gradient(circle at 100% 100%, rgba(111, 124, 255, 0.12), transparent 20rem),
         linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
         rgba(255, 255, 255, 0.03);
+}
+
+.guardian-stage-lock,
+.premium-card-lock {
+    position: absolute;
+    inset: 10px;
+    z-index: 2;
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    gap: 8px;
+    padding: 18px;
+    border-radius: 22px;
+    border: 1px solid rgba(255, 191, 107, 0.22);
+    background: linear-gradient(180deg, rgba(11, 7, 20, 0.84), rgba(20, 12, 33, 0.92));
+    backdrop-filter: blur(6px);
+}
+
+.guardian-stage-lock strong,
+.premium-card-lock strong {
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+}
+
+.guardian-stage-lock span,
+.premium-card-lock span {
+    max-width: 42ch;
+    color: var(--muted-strong);
+    line-height: 1.5;
+}
+
+.guardian-stage-lock.is-hidden,
+.premium-card-lock.is-hidden {
+    display: none;
 }
 
 .threat-stage-copy,
@@ -1159,6 +1222,7 @@ button {
 
 .defense-card,
 .greeting-card {
+    position: relative;
     display: grid;
     gap: 14px;
     padding: 18px;
@@ -1167,6 +1231,10 @@ button {
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
         rgba(255, 255, 255, 0.03);
+}
+
+.defense-card.is-locked-card {
+    border-color: rgba(255, 191, 107, 0.18);
 }
 
 .greetings-grid {
@@ -1964,6 +2032,11 @@ time {
 
 .toast.error {
     border-color: rgba(255, 123, 149, 0.3);
+}
+
+.toast strong {
+    display: block;
+    margin-bottom: 4px;
 }
 
 @media (max-width: 1340px) {
