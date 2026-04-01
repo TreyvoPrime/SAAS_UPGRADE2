@@ -1192,6 +1192,20 @@
             }, 2800);
         }
 
+        let dashboardSessionExpired = false;
+
+        function handleUnauthorizedResponse(response) {
+            if (response.status !== 401 || dashboardSessionExpired) {
+                return response.status === 401;
+            }
+            dashboardSessionExpired = true;
+            showToast("Your dashboard session expired. Sign in again to keep managing this server.", "error");
+            setTimeout(() => {
+                window.location.href = "/";
+            }, 700);
+            return true;
+        }
+
         function parseRoleIds(card) {
             return (card.dataset.roleIds || "").split(",").filter(Boolean);
         }
@@ -1422,9 +1436,14 @@
         async function updateSubscriptionTier(tier) {
             const response = await fetch(`/api/guilds/${guildId}/subscription`, {
                 method: "POST",
+                credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ tier })
             });
+
+            if (handleUnauthorizedResponse(response)) {
+                throw new Error("Dashboard session expired");
+            }
 
             if (!response.ok) {
                 let message = "Subscription update failed";
@@ -2181,7 +2200,10 @@
         });
 
         async function refreshLogs() {
-            const response = await fetch(`/api/guilds/${guildId}/logs`);
+            const response = await fetch(`/api/guilds/${guildId}/logs`, {
+                credentials: "same-origin"
+            });
+            if (handleUnauthorizedResponse(response)) return;
             if (!response.ok) return;
             const data = await response.json();
             const container = document.getElementById("log-list");
@@ -2217,7 +2239,10 @@
 
         async function refreshDefenseSnapshot() {
             if (!document.body.classList.contains("dashboard-view-defense")) return;
-            const response = await fetch(`/api/guilds/${guildId}/defense-state`);
+            const response = await fetch(`/api/guilds/${guildId}/defense-state`, {
+                credentials: "same-origin"
+            });
+            if (handleUnauthorizedResponse(response)) return;
             if (!response.ok) return;
             const state = await response.json();
             syncDefenseSummary(state);
@@ -2225,8 +2250,9 @@
                 const updatedDefense = (state.cards || []).find((item) => item.name === card.dataset.defenseName);
                 if (updatedDefense) {
                     syncDefenseCard(card, updatedDefense);
-            }
-        });
+                }
+            });
+        }
 
         setTierFreeButton?.addEventListener("click", async () => {
             try {
@@ -2245,7 +2271,6 @@
                 showToast(`${result.guild_name || "This server"} is now on the Premium tier. Guardian is unlocked.`, "success");
             } catch {}
         });
-        }
 
         updateStats();
         updateSectionVisibility();
