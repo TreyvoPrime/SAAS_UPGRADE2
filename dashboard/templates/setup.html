@@ -53,12 +53,12 @@
             </section>
         </aside>
 
-        <section class="main-column">
+        <section class="main-column setup-main-column">
             <header class="page-head">
                 <div class="page-lead">
                     <div class="eyebrow">Setup Wizard</div>
                     <h2>Get {{ selected_guild.name }} ready in a few guided steps</h2>
-                    <p>Start with staff access and moderation, then move through welcomes, autoroles, support, and community tools. Everything here is focused on the most important setup first.</p>
+                    <p>Move through the important setup first, then finish with the extra community tools. Each screen only covers one area so it stays quick and easy to follow.</p>
                     <div class="page-meta-row">
                         <span class="module-chip">{{ selected_guild.member_count }} members</span>
                         <span class="module-chip">{{ roles|length }} roles</span>
@@ -71,42 +71,34 @@
             </header>
 
             <section class="surface setup-shell">
-                <div class="setup-progress" id="setup-progress">
-                    <button type="button" class="setup-step-pill is-active" data-setup-step-trigger="0">
-                        <span class="setup-step-index">1</span>
-                        <span>
-                            <strong>Moderation</strong>
-                            <small>Staff actions and command access</small>
-                        </span>
-                    </button>
-                    <button type="button" class="setup-step-pill" data-setup-step-trigger="1">
-                        <span class="setup-step-index">2</span>
-                        <span>
-                            <strong>Welcome</strong>
-                            <small>Join, leave, and first impressions</small>
-                        </span>
-                    </button>
-                    <button type="button" class="setup-step-pill" data-setup-step-trigger="2">
-                        <span class="setup-step-index">3</span>
-                        <span>
-                            <strong>Autoroles</strong>
-                            <small>Starter roles for new members</small>
-                        </span>
-                    </button>
-                    <button type="button" class="setup-step-pill" data-setup-step-trigger="3">
-                        <span class="setup-step-index">4</span>
-                        <span>
-                            <strong>Support</strong>
-                            <small>Ticket categories and helpers</small>
-                        </span>
-                    </button>
-                    <button type="button" class="setup-step-pill" data-setup-step-trigger="4">
-                        <span class="setup-step-index">5</span>
-                        <span>
-                            <strong>Community</strong>
-                            <small>Polls, giveaways, reminders, and feeds</small>
-                        </span>
-                    </button>
+                <div class="setup-progress-strip">
+                    <div class="setup-progress-copy">
+                        <div class="eyebrow">Server setup</div>
+                        <strong id="setup-progress-title">Step 1 of 5</strong>
+                        <span id="setup-progress-label">Moderation</span>
+                    </div>
+                    <div class="setup-progress" id="setup-progress" aria-label="Setup progress">
+                        <button type="button" class="setup-step-pill is-active" data-setup-step-trigger="0" aria-label="Go to moderation setup">
+                            <span class="setup-step-index">1</span>
+                            <span class="setup-step-text">Moderation</span>
+                        </button>
+                        <button type="button" class="setup-step-pill" data-setup-step-trigger="1" aria-label="Go to welcome setup">
+                            <span class="setup-step-index">2</span>
+                            <span class="setup-step-text">Welcome</span>
+                        </button>
+                        <button type="button" class="setup-step-pill" data-setup-step-trigger="2" aria-label="Go to autorole setup">
+                            <span class="setup-step-index">3</span>
+                            <span class="setup-step-text">Autoroles</span>
+                        </button>
+                        <button type="button" class="setup-step-pill" data-setup-step-trigger="3" aria-label="Go to support setup">
+                            <span class="setup-step-index">4</span>
+                            <span class="setup-step-text">Support</span>
+                        </button>
+                        <button type="button" class="setup-step-pill" data-setup-step-trigger="4" aria-label="Go to community setup">
+                            <span class="setup-step-index">5</span>
+                            <span class="setup-step-text">Community</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="setup-panels">
@@ -115,7 +107,7 @@
                             <div>
                                 <div class="eyebrow">Step 1</div>
                                 <h3>Set up moderation first</h3>
-                                <p>Choose how staff actions should behave and who should be trusted with your moderation tools. Leave the role list empty if you want every member to use those commands.</p>
+                                <p>Pick how staff actions should behave, then choose who should have access to the moderation side of the bot.</p>
                             </div>
                             <div class="setup-summary-card">
                                 <strong>Current moderation access</strong>
@@ -126,7 +118,7 @@
                         <div class="setup-grid setup-grid-wide">
                             <label class="toggle moderation-toggle">
                                 <input id="wizard-moderation-confirmation" type="checkbox" {% if moderation_settings.confirmation_enabled %}checked{% endif %}>
-                                <span>Ask staff for a final confirmation before warnings, timeouts, kicks, and bans</span>
+                                <span>Show a final confirmation before warnings, timeouts, kicks, and bans</span>
                             </label>
 
                             <label class="search-shell">
@@ -139,7 +131,7 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can use moderation commands</h4>
-                                    <p>These roles will be able to use warn, timeout, ban, purge, role tools, history, and staff notes.</p>
+                                    <p>These roles can use warn, timeout, ban, purge, role tools, history, and staff notes.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
                                     <input id="wizard-moderation-allow-all" type="checkbox" {% if setup_summary.moderation.allow_all %}checked{% endif %}>
@@ -162,7 +154,7 @@
                             <div>
                                 <div class="eyebrow">Step 2</div>
                                 <h3>Shape the join and leave experience</h3>
-                                <p>Pick the right channels and write the messages new members and departing members should see. Use placeholders like <code>{user}</code>, <code>{server}</code>, and <code>{membercount}</code>.</p>
+                                <p>Pick the right channels and write the messages people should see when they join or leave. Use placeholders like <code>{user}</code>, <code>{server}</code>, and <code>{membercount}</code>.</p>
                             </div>
                             <div class="setup-summary-card">
                                 <strong>Welcome channel</strong>
@@ -203,7 +195,7 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Join DM guide</h4>
-                                    <p>Send a direct welcome message that helps new members understand where to start.</p>
+                                    <p>Send a short direct message that helps new members know what to do next.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
                                     <input id="wizard-join-dm-enabled" type="checkbox" {% if greetings_summary.join_dm.enabled %}checked{% endif %}>
@@ -222,7 +214,7 @@
                             <div>
                                 <div class="eyebrow">Step 3</div>
                                 <h3>Pick roles new members should receive automatically</h3>
-                                <p>Choose the starter roles that should be added when someone joins. This is a good place for community, announcement, or onboarding roles.</p>
+                                <p>Choose the starter roles that should be added as soon as someone joins your server.</p>
                             </div>
                             <div class="setup-summary-card">
                                 <strong>Autoroles</strong>
@@ -234,7 +226,7 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Autoroles for new members</h4>
-                                    <p>Members will receive every checked role when they join, as long as the bot can manage that role.</p>
+                                    <p>Members will receive every checked role when they join, as long as the bot can manage it.</p>
                                 </div>
                             </div>
                             <div class="setup-checklist" id="wizard-autoroles">
@@ -253,7 +245,7 @@
                             <div>
                                 <div class="eyebrow">Step 4</div>
                                 <h3>Get support set up for members</h3>
-                                <p>Pick the staff roles that should manage support tools and create a clean ticket issue list for regular server help.</p>
+                                <p>Choose who should manage tickets and set the issue list members will pick from.</p>
                             </div>
                             <div class="setup-summary-card">
                                 <strong>Support access</strong>
@@ -265,7 +257,7 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can manage support commands</h4>
-                                    <p>These roles can adjust ticket issues, claim tickets, set ticket priority, and handle ticket close tools.</p>
+                                    <p>These roles can manage ticket issues, claims, priority, and close actions.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
                                     <input id="wizard-support-allow-all" type="checkbox" {% if setup_summary.support.allow_all %}checked{% endif %}>
@@ -294,7 +286,7 @@
                             <div>
                                 <div class="eyebrow">Step 5</div>
                                 <h3>Set community tools to the right access level</h3>
-                                <p>Choose whether polls, giveaways, autofeed, and reminders should be open to everyone or limited to certain staff or event roles.</p>
+                                <p>Choose whether polls, giveaways, autofeed, and reminders should be open to everyone or limited to trusted roles.</p>
                             </div>
                             <div class="setup-summary-card">
                                 <strong>Community tool access</strong>
@@ -306,7 +298,7 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can use community management commands</h4>
-                                    <p>This covers polls, giveaways, autofeed, and reminders so you can keep event tools in the right hands.</p>
+                                    <p>This covers polls, giveaways, autofeed, and reminders.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
                                     <input id="wizard-community-allow-all" type="checkbox" {% if setup_summary.community.allow_all %}checked{% endif %}>
@@ -325,8 +317,8 @@
 
                         <div class="setup-review">
                             <div class="setup-summary-card">
-                                <strong>Almost done</strong>
-                                <span>Finish setup to save your first moderation, onboarding, support, and community settings all at once.</span>
+                                <strong>Ready to finish</strong>
+                                <span>Save these settings and jump straight into the full dashboard.</span>
                             </div>
                         </div>
                     </section>
@@ -340,27 +332,6 @@
                 </footer>
             </section>
         </section>
-
-        <aside class="activity-column surface">
-            <div class="log-top">
-                <div>
-                    <div class="eyebrow">Quick setup guide</div>
-                    <h3>What this will handle</h3>
-                </div>
-            </div>
-            <div class="notice-card compact">
-                <strong>Priority first</strong>
-                <p>Moderation and join flow come first so the server feels safe and welcoming right away.</p>
-            </div>
-            <div class="notice-card compact">
-                <strong>Role-based access</strong>
-                <p>Choose trusted roles for moderation, support, and community tools, or leave access open to everyone.</p>
-            </div>
-            <div class="notice-card compact">
-                <strong>One save at the end</strong>
-                <p>The wizard bundles everything together so you can review the whole setup before you finish.</p>
-            </div>
-        </aside>
     </main>
 
     <script>
@@ -372,6 +343,9 @@
         const nextButton = document.getElementById("setup-next-button");
         const finishButton = document.getElementById("setup-finish-button");
         const footerCopy = document.getElementById("setup-footer-copy");
+        const progressTitle = document.getElementById("setup-progress-title");
+        const progressLabel = document.getElementById("setup-progress-label");
+        const stepLabels = ["Moderation", "Welcome", "Autoroles", "Support", "Community"];
         let currentStep = 0;
 
         function showToast(message, tone = "success") {
@@ -408,6 +382,12 @@
             nextButton.hidden = currentStep === panels.length - 1;
             finishButton.hidden = currentStep !== panels.length - 1;
             footerCopy.textContent = `Step ${currentStep + 1} of ${panels.length}`;
+            if (progressTitle) {
+                progressTitle.textContent = `Step ${currentStep + 1} of ${panels.length}`;
+            }
+            if (progressLabel) {
+                progressLabel.textContent = stepLabels[currentStep] || "";
+            }
         }
 
         function checkedRoleIds(groupName, allowAllToggleId) {

@@ -606,28 +606,65 @@ button {
 
 .setup-shell {
     display: grid;
-    gap: 18px;
+    gap: 16px;
     padding: 22px;
     border-radius: 28px;
+}
+
+.dashboard-view-setup .dashboard-shell {
+    grid-template-columns: 280px minmax(0, 980px);
+}
+
+.setup-main-column {
+    max-width: 980px;
+}
+
+.setup-progress-strip {
+    display: grid;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.setup-progress-copy {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.setup-progress-copy strong {
+    color: var(--text);
+    font-family: "Space Grotesk", "Instrument Sans", sans-serif;
+    font-size: 1.06rem;
+}
+
+.setup-progress-copy span {
+    color: var(--muted);
+    font-size: 0.94rem;
 }
 
 .setup-progress {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 12px;
+    gap: 10px;
 }
 
 .setup-step-pill {
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    gap: 10px;
     width: 100%;
-    min-height: 74px;
-    padding: 14px 16px;
+    min-height: 52px;
+    padding: 0 12px;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 22px;
+    border-radius: 999px;
     background: rgba(255, 255, 255, 0.03);
-    text-align: left;
+    text-align: center;
     cursor: pointer;
     color: var(--muted-strong);
     transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
@@ -648,21 +685,21 @@ button {
     font-family: "Space Grotesk", "Instrument Sans", sans-serif;
 }
 
-.setup-step-pill small {
-    display: block;
-    margin-top: 4px;
-    color: var(--muted);
-    font-size: 0.84rem;
-    line-height: 1.35;
+.setup-step-text {
+    color: var(--muted-strong);
+    font-size: 0.9rem;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .setup-step-index {
-    width: 34px;
-    height: 34px;
-    border-radius: 12px;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
     display: grid;
     place-items: center;
-    flex: 0 0 34px;
+    flex: 0 0 26px;
+    font-size: 0.8rem;
     font-weight: 700;
     color: var(--text);
     background: rgba(255, 255, 255, 0.08);
@@ -726,6 +763,7 @@ button {
 }
 
 .setup-summary-card strong {
+    color: var(--text);
     font-size: 0.95rem;
 }
 
@@ -743,7 +781,7 @@ button {
 .setup-role-group {
     display: grid;
     gap: 14px;
-    padding: 18px;
+    padding: 16px;
     border-radius: 24px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.025);
@@ -756,23 +794,33 @@ button {
 .setup-checklist {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: 10px;
+    max-height: 260px;
+    overflow: auto;
+    padding-right: 4px;
 }
 
 .role-option {
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 46px;
-    padding: 0 14px;
+    min-height: 42px;
+    padding: 0 12px;
     border-radius: 18px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.035);
     color: var(--muted-strong);
+    line-height: 1.35;
 }
 
 .role-option input {
     accent-color: var(--pink);
+}
+
+.role-option span,
+.toggle span,
+.search-shell span {
+    color: var(--muted-strong);
 }
 
 .setup-subpanel {
@@ -799,6 +847,19 @@ button {
     padding: 2px 8px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+}
+
+.dashboard-view-setup .page-head h2,
+.dashboard-view-setup .setup-panel-head h3,
+.dashboard-view-setup .setup-role-head h4,
+.dashboard-view-setup .setup-summary-card strong,
+.dashboard-view-setup .setup-progress-copy strong {
+    color: var(--text);
+}
+
+.dashboard-view-setup .setup-step-pill.is-active .setup-step-text,
+.dashboard-view-setup .setup-step-pill:hover .setup-step-text {
     color: var(--text);
 }
 
@@ -1862,6 +1923,10 @@ time {
         grid-template-columns: 260px minmax(0, 1fr);
     }
 
+    .dashboard-view-setup .dashboard-shell {
+        grid-template-columns: 260px minmax(0, 1fr);
+    }
+
     .activity-column {
         grid-column: 1 / -1;
         position: static;
@@ -1878,7 +1943,6 @@ time {
     .servers-metric-grid,
     .defense-grid,
     .threat-stage,
-    .setup-progress,
     .setup-grid,
     .setup-checklist {
         grid-template-columns: 1fr;
@@ -1897,6 +1961,12 @@ time {
         overflow-x: auto;
         flex-wrap: nowrap;
         padding-bottom: 10px;
+    }
+
+    .setup-progress {
+        grid-template-columns: repeat(5, minmax(110px, 1fr));
+        overflow-x: auto;
+        padding-bottom: 4px;
     }
 
     .view-pill {
@@ -2013,6 +2083,14 @@ time {
     .setup-summary-card {
         min-width: 0;
         width: 100%;
+    }
+
+    .setup-progress-copy {
+        align-items: flex-start;
+    }
+
+    .setup-step-pill {
+        justify-content: flex-start;
     }
 
     .setup-footer-copy {
