@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ selected_guild.name }} Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/dashboard.css">
 </head>
 <body class="shell dashboard-view-{{ current_view|default('commands') }}">
@@ -29,13 +26,16 @@
                 </div>
             </div>
 
-            <section class="sidebar-quicklinks">
-                <div class="eyebrow">Quick links</div>
-                <nav class="sidebar-nav">
-                    <a class="nav-link" href="/servers">All servers</a>
-                    <a class="nav-link" href="/logout">Log out</a>
-                </nav>
-            </section>
+            <nav class="sidebar-nav">
+                <a class="nav-link {% if current_view == 'commands' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}">Command Control</a>
+                <a class="nav-link {% if current_view == 'defense' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense">ServerGuard</a>
+                <a class="nav-link {% if current_view == 'greetings' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/greetings">Welcome / Leave</a>
+                <a class="nav-link {% if current_view == 'support' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/support">Support</a>
+                <a class="nav-link {% if current_view == 'autofeed' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/autofeed">Autofeed</a>
+                <a class="nav-link {% if current_view == 'giveaways' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/giveaways">Giveaways</a>
+                <a class="nav-link" href="/servers">All Servers</a>
+                <a class="nav-link" href="/logout">Log Out</a>
+            </nav>
 
             <section class="server-switcher">
                 <div class="eyebrow">Servers</div>
@@ -53,35 +53,21 @@
 
         <section class="main-column">
             <header class="page-head">
-                <div class="page-lead">
-                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% elif current_view == 'support' %}Support{% elif current_view == 'autofeed' %}Autofeed{% elif current_view == 'giveaways' %}Giveaways{% else %}Command Control{% endif %}</div>
-                    <h2>{% if current_view == 'defense' %}Protect your server{% elif current_view == 'greetings' %}Welcome new members well{% elif current_view == 'support' %}Keep support easy to manage{% elif current_view == 'autofeed' %}Keep repeat posts on schedule{% elif current_view == 'giveaways' %}Run cleaner giveaways{% else %}Choose what members can use{% endif %}</h2>
-                    <p>{% if current_view == 'defense' %}Turn protections on fast, tune the rules, and keep the right people talking when the server needs extra control.{% elif current_view == 'greetings' %}Pick the right channels, write your own welcome copy, and keep join and leave messages feeling like your community.{% elif current_view == 'support' %}Shape the ticket flow around your server, with issue types that make sense for your members and staff.{% elif current_view == 'autofeed' %}Review repeating posts, keep key channels updated, and manage the feed schedule in one place.{% elif current_view == 'giveaways' %}See what is live, what ended recently, and the quickest ways for staff to keep events moving.{% else %}Turn commands on or off, choose who can use them, and keep access easy to manage without digging through menus.{% endif %}</p>
-                    <div class="page-meta-row">
-                        <span class="module-chip">{{ selected_guild.member_count }} members</span>
-                        <span class="module-chip">{{ roles|length }} roles</span>
-                        <span class="module-chip">{% if current_view == 'commands' %}{{ stats.commands }} commands{% else %}{{ selected_guild.name }}{% endif %}</span>
-                    </div>
+                <div>
+                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% elif current_view == 'support' %}Support{% elif current_view == 'autofeed' %}Autofeed{% elif current_view == 'giveaways' %}Giveaways{% else %}Guild Operations{% endif %}</div>
+                    <h2>{% if current_view == 'defense' %}Server defense controls{% elif current_view == 'greetings' %}Greeting flows and channel setup{% elif current_view == 'support' %}Support ticket intake{% elif current_view == 'autofeed' %}Repeating channel feed control{% elif current_view == 'giveaways' %}Community giveaways and winners{% else %}Commands and access{% endif %}</h2>
+                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% elif current_view == 'greetings' %}Set the welcome and leave channels, write custom messages, and use placeholders that feel personal instead of generic.{% elif current_view == 'support' %}Decide what kinds of help members can request, keep ticket intake clean, and shape the support flow around your server instead of a generic bot preset.{% elif current_view == 'autofeed' %}Set up repeating update messages for channels that need steady reminders, announcements, or routine prompts without manual reposting.{% elif current_view == 'giveaways' %}Keep a clean view of live giveaways, recent winners, and the commands staff should use when it is time to launch, end, or reroll one.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
                 </div>
                 <div class="page-actions">
                     <a class="ghost-button" href="/servers">View all servers</a>
                 </div>
             </header>
 
-            <nav class="view-switcher" aria-label="Dashboard sections">
-                <a class="view-pill {% if current_view == 'commands' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}">Commands</a>
-                <a class="view-pill {% if current_view == 'defense' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense">ServerGuard</a>
-                <a class="view-pill {% if current_view == 'greetings' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/greetings">Welcome / Leave</a>
-                <a class="view-pill {% if current_view == 'support' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/support">Support</a>
-                <a class="view-pill {% if current_view == 'autofeed' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/autofeed">Autofeed</a>
-                <a class="view-pill {% if current_view == 'giveaways' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/giveaways">Giveaways</a>
-            </nav>
-
             <section class="surface dashboard-access-panel">
                 <div>
                     <div class="eyebrow">Dashboard access</div>
-                    <h3>Who can make changes here</h3>
-                    <p>Owners and members with Manage Server always have access. Add trusted staff roles if you want more people to manage settings.</p>
+                    <h3>Who can edit this dashboard</h3>
+                    <p>Owners and members with Manage Server can always edit here. Add trusted staff roles below if you want to delegate dashboard access without giving full server management.</p>
                 </div>
                 <div class="dashboard-access-actions">
                     <div class="dashboard-access-summary" id="dashboard-access-summary">
@@ -104,8 +90,8 @@
                 <div class="workspace-topline defense-topline">
                     <div>
                         <div class="eyebrow">ServerGuard</div>
-                        <h3>Protection controls</h3>
-                        <p>Turn the right protections on, adjust key limits, and keep the response simple when the server needs it.</p>
+                        <h3>Response controls</h3>
+                        <p>Arm protections quickly, tune timers without digging, and decide who can still talk during a lockdown from one cleaner response surface.</p>
                     </div>
                     <div class="section-summary">
                         <span data-defense-summary="active">{{ defense_summary.active_count }} active</span>
@@ -117,9 +103,9 @@
 
                 <section class="surface command-settings-panel defense-settings-panel">
                     <div>
-                        <div class="eyebrow">Cleanup</div>
-                        <h3>Purge limit</h3>
-                        <p>Choose the largest cleanup staff can run at once.</p>
+                        <div class="eyebrow">ServerGuard</div>
+                        <h3>How much cleanup staff can do at once</h3>
+                        <p>Set the biggest cleanup pass moderators can run in one go. Keep it tighter for careful cleanup, or raise it when your team needs to clear larger waves quickly.</p>
                     </div>
                     <div class="command-settings-actions">
                         <label class="search-shell compact-setting-shell">
@@ -142,8 +128,8 @@
                 <section class="surface command-settings-panel defense-settings-panel">
                     <div>
                         <div class="eyebrow">Moderation</div>
-                        <h3>Action flow</h3>
-                        <p>Choose whether staff gets a final check before actions go through, and set the default timeout length.</p>
+                        <h3>How moderation actions should behave</h3>
+                        <p>Decide whether staff should get a final safety check before major actions go through, and choose the timeout length the team falls back to when they want the quick default.</p>
                     </div>
                     <div class="command-settings-actions">
                         <label class="toggle moderation-toggle">
@@ -152,7 +138,7 @@
                                 type="checkbox"
                                 {% if moderation_settings.confirmation_enabled %}checked{% endif %}
                             >
-                            <span>Ask for confirmation before warnings, timeouts, kicks, and bans</span>
+                            <span>Ask for a final check before warnings, timeouts, kicks, and bans</span>
                         </label>
                         <label class="search-shell compact-setting-shell">
                             <span>Default timeout length in minutes</span>
@@ -250,7 +236,7 @@
                     <div>
                         <div class="eyebrow">AutoFilter</div>
                         <h3>Blocked words and phrases</h3>
-                        <p>Add words or phrases you never want in chat. Members get three warnings before a one-hour timeout.</p>
+                        <p>Keep a live list of words or phrases that should never land in chat. Members get three warnings, and after that AutoFilter applies a one-hour timeout automatically.</p>
                     </div>
                     <div class="command-settings-actions">
                         <label class="search-shell">
@@ -265,7 +251,7 @@
                 <section class="surface threat-stage">
                     <div class="threat-stage-copy">
                         <div class="eyebrow">Guardian</div>
-                        <h3>Threat level</h3>
+                        <h3>Live threat watch</h3>
                         <p id="threat-status-copy">{{ defense_summary.threat.status_copy }}</p>
                     </div>
                     <div class="threat-stage-meter">
@@ -319,8 +305,8 @@
                 <section class="surface command-settings-panel defense-settings-panel case-viewer-panel">
                     <div>
                         <div class="eyebrow">Moderation Cases</div>
-                        <h3>Recent cases</h3>
-                        <p>Review recent warns, timeouts, kicks, and bans without leaving ServerGuard.</p>
+                        <h3>Recent case history</h3>
+                        <p>Every warn, timeout, kick, and ban now creates a case ID. Review the latest actions, reasons, and notes here without leaving ServerGuard.</p>
                     </div>
                     <div class="dashboard-access-summary">Showing {{ case_summary.open_count }} recent cases for this server.</div>
                 </section>
@@ -385,8 +371,8 @@
                 <div class="workspace-topline greetings-topline">
                     <div>
                         <div class="eyebrow">Welcome / Leave</div>
-                        <h3>Join and leave messages</h3>
-                        <p>Pick the channels and write the copy members should see when people join or leave.</p>
+                        <h3>Custom join and exit messaging</h3>
+                        <p>Pick the channels, write custom copy, and use placeholders so the bot sounds like your server instead of a template.</p>
                     </div>
                     <div class="placeholder-strip">
                         {% for placeholder in greetings_summary.placeholders %}
@@ -404,7 +390,7 @@
                         <div class="greeting-card-head">
                             <div>
                                 <h4>Welcome message</h4>
-                                <p>Choose where new members are greeted and what they should see.</p>
+                                <p>Choose where new members are greeted and write the custom message they should see.</p>
                             </div>
                             <span class="defense-status-pill {% if not greetings_summary.welcome.enabled %}is-muted{% endif %}" data-greeting-status="welcome">
                                 {% if greetings_summary.welcome.enabled %}Active{% else %}Not configured{% endif %}
@@ -437,7 +423,7 @@
                         <div class="greeting-card-head">
                             <div>
                                 <h4>Leave message</h4>
-                                <p>Choose where leave notices go and what the server should see when someone leaves.</p>
+                                <p>Choose where leave notices go and write the message the server should see when someone exits.</p>
                             </div>
                             <span class="defense-status-pill {% if not greetings_summary.leave.enabled %}is-muted{% endif %}" data-greeting-status="leave">
                                 {% if greetings_summary.leave.enabled %}Active{% else %}Not configured{% endif %}
@@ -470,14 +456,14 @@
                         <div class="greeting-card-head">
                             <div>
                                 <h4>Join guide direct message</h4>
-                                <p>New members can also get a direct message guide when they join.</p>
+                                <p>New members can also receive a welcome guide in DMs with the same placeholder system.</p>
                             </div>
                             <span class="defense-status-pill {% if not greetings_summary.join_dm.enabled %}is-muted{% endif %}">
                                 {% if greetings_summary.join_dm.enabled %}Active{% else %}Off{% endif %}
                             </span>
                         </div>
                         <div class="role-summary">{{ greetings_summary.join_dm.message }}</div>
-                        <div class="dashboard-access-summary">Turn this on with `/setjoindm true`, then come back here whenever you want to update the wording.</div>
+                        <div class="dashboard-access-summary">Use `/setjoindm true` to turn this on, then edit the guide text in the dashboard later if you want to personalize it even more.</div>
                     </article>
                 </div>
             </section>
@@ -488,8 +474,8 @@
                 <div class="workspace-topline greetings-topline">
                     <div>
                         <div class="eyebrow">Support</div>
-                        <h3>Ticket categories</h3>
-                        <p>Give members issue types that fit your server so support requests start in the right place.</p>
+                        <h3>Ticket categories members can choose</h3>
+                        <p>Start with the common server-help reasons, then add or trim categories so `/ticket` feels natural for your community and support team.</p>
                     </div>
                     <div class="placeholder-strip">
                         <span class="module-chip">{{ support_summary.issue_count }} issue types</span>
@@ -506,7 +492,7 @@
                         <div class="greeting-card-head">
                             <div>
                                 <h4>Ticket issue picker</h4>
-                                <p>Members see these options when they use `/ticket`.</p>
+                                <p>Members see these options when they use `/ticket`. Keep them clear, short, and focused on normal server help.</p>
                             </div>
                             <span class="defense-status-pill" id="support-issue-count">{{ support_summary.issue_count }} live</span>
                         </div>
@@ -537,13 +523,13 @@
                         <div class="greeting-card-head">
                             <div>
                                 <h4>Quick staff setup</h4>
-                                <p>Staff can also manage support quickly from Discord when they need to move fast.</p>
+                                <p>Staff can also manage the issue list directly in Discord when they need fast changes without opening the dashboard.</p>
                             </div>
                             <span class="defense-status-pill is-muted">In Discord</span>
                         </div>
                         <div class="role-summary">Use `/ticketissue add`, `/ticketissue remove`, and `/ticketissue list` to manage these options from inside the server.</div>
                         <div class="role-summary">Use `/ticketclaim`, `/ticketpriority`, `/tickettranscript`, and `/closeticket` to manage live tickets without leaving Discord.</div>
-                        <div class="dashboard-access-summary">Staff can claim tickets, raise priority, export transcripts, and close with a reason.</div>
+                        <div class="dashboard-access-summary">Open tickets keep the same private channel flow, but staff can now claim them, raise priority, export transcripts, and close with a reason.</div>
                         {% if support_summary.active_tickets %}
                         <div class="support-issue-list">
                             {% for ticket in support_summary.active_tickets %}
@@ -567,8 +553,8 @@
                 <div class="workspace-topline greetings-topline">
                     <div>
                         <div class="eyebrow">Giveaways</div>
-                        <h3>Live giveaways</h3>
-                        <p>Keep an eye on active giveaways, recent winners, and the staff actions you use most often.</p>
+                        <h3>Live giveaways and recent winners</h3>
+                        <p>Run giveaways from Discord, then use this page to keep an eye on active drops, entry counts, and the last rounds that wrapped up.</p>
                     </div>
                     <div class="placeholder-strip">
                         <span class="module-chip">{{ giveaways_summary.active_count }} active</span>
@@ -630,7 +616,7 @@
                         <div class="role-summary">/giveaway end - End a giveaway whenever you want</div>
                         <div class="role-summary">/giveaway list - View all active and past giveaways</div>
                         <div class="role-summary">/giveaway reroll - Pick a new winner instantly</div>
-                        <div class="dashboard-access-summary">Giveaways can require a role before entry and give bonus entries to selected roles.</div>
+                        <div class="dashboard-access-summary">Giveaways can now require a role before entry and award bonus entries to special roles, so promo drops and perk-based events feel much more intentional.</div>
                         <div class="support-issue-list">
                             {% for giveaway in giveaways_summary.recent %}
                             <div class="support-issue-item giveaway-item">
@@ -658,8 +644,8 @@
                 <div class="workspace-topline greetings-topline">
                     <div>
                         <div class="eyebrow">Autofeed</div>
-                        <h3>Repeating channel posts</h3>
-                        <p>Keep recurring announcements, reminders, and routine prompts easy to manage.</p>
+                        <h3>Repeating channel messages</h3>
+                        <p>Create recurring feed posts from Discord, choose exactly where they go, and keep a clean overview of what is currently running.</p>
                     </div>
                     <div class="placeholder-strip">
                         <span class="module-chip">{{ autofeed_summary.count }} live</span>
@@ -745,11 +731,11 @@
                 <div class="workspace-topline">
                     <div>
                         <div class="eyebrow">Modules</div>
-                        <h3>Find the command you need</h3>
+                        <h3>Compact command routing</h3>
                     </div>
                     <label class="search-shell">
                         <span>Search</span>
-                        <input id="command-search" class="search-input" type="search" placeholder="Search commands or modules">
+                        <input id="command-search" class="search-input" type="search" placeholder="Search commands, modules, or tiers">
                     </label>
                 </div>
 
@@ -820,15 +806,15 @@
                                         {% if command.allowed_role_names %}
                                             {{ command.allowed_role_names|join(", ") }}
                                         {% else %}
-                                            Anyone who already passes the normal Discord permission check
+                                            All roles that already pass native Discord checks
                                         {% endif %}
                                     </div>
                                     <div class="command-actions">
                                         <button type="button" class="ghost-button compact-button" data-role-editor data-command-name="{{ command.name }}">
-                                            Choose roles
+                                            Edit roles
                                         </button>
                                         <button type="button" class="ghost-button compact-button" data-clear-roles data-command-name="{{ command.name }}">
-                                            Allow everyone
+                                            Allow all
                                         </button>
                                     </div>
                                 </div>
@@ -846,8 +832,8 @@
             <section class="surface activity-surface">
                 <div class="section-head tight">
                     <div>
-                        <div class="eyebrow">Activity</div>
-                        <h3>Recent server activity</h3>
+                        <div class="eyebrow">Live activity</div>
+                        <h3>Server log</h3>
                     </div>
                 </div>
                 <div class="log-list" id="log-list">
