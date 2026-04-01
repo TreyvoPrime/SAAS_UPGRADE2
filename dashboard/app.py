@@ -57,6 +57,7 @@ class GreetingConfigPayload(BaseModel):
 
 class SupportSettingsPayload(BaseModel):
     issue_types: list[str] = Field(default_factory=list, max_length=20)
+    command_channel_id: int | str | None = None
 
 
 class PurgeSettingsPayload(BaseModel):
@@ -85,6 +86,7 @@ class SetupWizardPayload(BaseModel):
     join_dm_enabled: bool = False
     join_dm_message: str | None = Field(default=None, max_length=1500)
     support_issue_types: list[str] = Field(default_factory=list, max_length=20)
+    support_command_channel_id: int | str | None = None
 
 
 def resolve_dashboard_host() -> str:
@@ -502,20 +504,30 @@ def create_dashboard_app(bot) -> FastAPI:
                 "issue_count": 0,
                 "support_category_id": None,
                 "support_category_name": "Not configured yet",
+                "support_command_channel_id": None,
+                "support_command_channel_name": "Any channel",
             }
 
         category_id = ticket_store.get_support_category_id(guild_id)
+        command_channel_id = ticket_store.get_support_command_channel_id(guild_id)
         guild = bot.get_guild(guild_id)
         category_name = "Not configured yet"
+        command_channel_name = "Any channel"
         if guild is not None and category_id:
             category = guild.get_channel(category_id)
             if category is not None:
                 category_name = getattr(category, "name", "Configured")
+        if guild is not None and command_channel_id:
+            command_channel = guild.get_channel(command_channel_id)
+            if command_channel is not None:
+                command_channel_name = getattr(command_channel, "mention", f"#{getattr(command_channel, 'name', 'configured-channel')}")
         return {
             "issue_types": ticket_store.get_issue_types(guild_id),
             "issue_count": len(ticket_store.get_issue_types(guild_id)),
             "support_category_id": category_id,
             "support_category_name": category_name,
+            "support_command_channel_id": command_channel_id,
+            "support_command_channel_name": command_channel_name,
             "active_tickets": ticket_store.list_tickets(guild_id, status="open", limit=10),
         }
 
@@ -1319,18 +1331,29 @@ def create_dashboard_app(bot) -> FastAPI:
         if ticket_store is None:
             raise HTTPException(status_code=503, detail="Support settings are not available")
 
+        valid_channel_ids = {channel["id"] for channel in guild_text_channels(guild_id)}
+        try:
+            requested_channel_id = int(payload.command_channel_id) if payload.command_channel_id not in (None, "") else None
+        except (TypeError, ValueError):
+            requested_channel_id = None
+        command_channel_id = requested_channel_id if requested_channel_id in valid_channel_ids else None
+
         cleaned_issue_types = [
             str(issue_type).strip()
             for issue_type in payload.issue_types
             if str(issue_type).strip()
         ]
         updated_issue_types = ticket_store.set_issue_types(guild_id, cleaned_issue_types)
+        ticket_store.set_support_command_channel_id(guild_id, command_channel_id)
         await log_dashboard_event(
             request,
             guild_id,
             title="Dashboard Support Intake Updated",
             description="Updated the support issue list used by /ticket.",
-            fields=[("Issue Types", ", ".join(updated_issue_types), False)],
+            fields=[
+                ("Issue Types", ", ".join(updated_issue_types), False),
+                ("Ticket Command Channel", next((channel["label"] for channel in guild_text_channels(guild_id) if channel["id"] == command_channel_id), "Any channel"), False),
+            ],
         )
         return JSONResponse(support_dashboard_summary(guild_id))
 
@@ -1459,6 +1482,7 @@ def create_dashboard_app(bot) -> FastAPI:
             ]
             if cleaned_issue_types:
                 ticket_store.set_issue_types(guild_id, cleaned_issue_types)
+            ticket_store.set_support_command_channel_id(guild_id, clean_channel_id(payload.support_command_channel_id))
 
         bot.access_manager.controls.set_setup_wizard_completed(guild_id, True)
 
@@ -1483,6 +1507,7 @@ def create_dashboard_app(bot) -> FastAPI:
                     else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in support_role_ids) or "No roles selected"),
                     False,
                 ),
+                ("Support Command Channel", next((channel["label"] for channel in guild_text_channels(guild_id) if channel["id"] == clean_channel_id(payload.support_command_channel_id)), "Any channel"), False),
                 (
                     "Community Roles",
                     "Allow everyone"

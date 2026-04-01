@@ -50,6 +50,7 @@ def build_command_catalog(bot: discord.Client) -> list[dict]:
         "modules.giveaway": "Giveaways",
         "modules.lock": "ServerGuard",
         "modules.membercount": "Member Count",
+        "modules.nickname": "Role Tools",
         "modules.poll": "Polls",
         "modules.profile": "Profile",
         "modules.purge": "ServerGuard",

@@ -279,6 +279,15 @@
                             <textarea id="wizard-support-issues" class="search-input greeting-textarea" rows="7" placeholder="One issue type per line">{% for issue in support_summary.issue_types %}{{ issue }}{% if not loop.last %}
 {% endif %}{% endfor %}</textarea>
                         </label>
+                        <label class="search-shell">
+                            <span>Where members can run /ticket</span>
+                            <select id="wizard-support-command-channel" class="search-input">
+                                <option value="">Any channel</option>
+                                {% for channel in text_channels %}
+                                <option value="{{ channel.id }}" {% if support_summary.support_command_channel_id == channel.id %}selected{% endif %}>{{ channel.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
                     </section>
 
                     <section class="setup-panel" data-setup-step="4">
@@ -423,6 +432,7 @@
                 join_dm_enabled: Boolean(document.getElementById("wizard-join-dm-enabled")?.checked),
                 join_dm_message: document.getElementById("wizard-join-dm-message")?.value || "",
                 support_issue_types: cleanIssueTypes(),
+                support_command_channel_id: document.getElementById("wizard-support-command-channel")?.value || null,
             };
         }
 

@@ -88,6 +88,9 @@ class Support(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def _require_support_command_manager(self, interaction: discord.Interaction) -> discord.Member | None:
+        return await self._require_support_editor(interaction)
+
     async def _log_support_event(
         self,
         guild: discord.Guild,
@@ -394,6 +397,16 @@ class Support(commands.Cog):
             await interaction.response.send_message("Ticket support is unavailable right now.", ephemeral=True)
             return
 
+        allowed_channel_id = ticket_store.get_support_command_channel_id(interaction.guild.id)
+        if allowed_channel_id and getattr(interaction.channel, "id", None) != allowed_channel_id:
+            allowed_channel = interaction.guild.get_channel(allowed_channel_id)
+            channel_label = allowed_channel.mention if allowed_channel is not None else "the configured support channel"
+            await interaction.response.send_message(
+                f"Use `/ticket` in {channel_label}.",
+                ephemeral=True,
+            )
+            return
+
         available_issue_types = self._issue_types(interaction.guild.id)
         selected_issue_type = self._match_issue_type(issue_type, available_issue_types)
         if selected_issue_type is None:
@@ -512,6 +525,36 @@ class Support(commands.Cog):
 
         await interaction.followup.send(
             f"Your support ticket is ready: {ticket_channel.mention}",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="setsupportchannel", description="Choose where members can use /ticket")
+    @app_commands.describe(channel="The channel members should use for the /ticket command")
+    async def setsupportchannel(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel | None = None,
+    ) -> None:
+        member = await self._require_support_command_manager(interaction)
+        if member is None or interaction.guild is None:
+            return
+
+        ticket_store = getattr(self.bot, "ticket_store", None)
+        if ticket_store is None:
+            await interaction.response.send_message("Ticket support is unavailable right now.", ephemeral=True)
+            return
+
+        ticket_store.set_support_command_channel_id(interaction.guild.id, channel.id if channel else None)
+        await self._log_support_event(
+            interaction.guild,
+            title="Support Command Channel Updated",
+            description="Updated where members can use /ticket.",
+            user_name=str(interaction.user),
+            channel_name=channel.name if channel is not None else "Any channel",
+            fields=[("Ticket Command Channel", channel.mention if channel is not None else "Any channel", False)],
+        )
+        await interaction.response.send_message(
+            f"Members can now use `/ticket` in {channel.mention}." if channel is not None else "Members can now use `/ticket` in any channel.",
             ephemeral=True,
         )
 

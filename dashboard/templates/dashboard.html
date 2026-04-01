@@ -498,6 +498,7 @@
                     <div class="placeholder-strip">
                         <span class="module-chip">{{ support_summary.issue_count }} issue types</span>
                         <span class="module-chip">{{ support_summary.support_category_name }}</span>
+                        <span class="module-chip">{{ support_summary.support_command_channel_name }}</span>
                     </div>
                 </div>
 
@@ -526,7 +527,16 @@
                             <span>Add a new support issue</span>
                             <input class="search-input" id="support-issue-input" type="text" maxlength="80" placeholder="Example: Staff application question">
                         </label>
-                        <div class="dashboard-access-summary" id="support-issue-summary">Members can currently pick {{ support_summary.issue_count }} ticket issues in this server.</div>
+                        <label class="search-shell">
+                            <span>Where members can run /ticket</span>
+                            <select class="search-input" id="support-command-channel-input">
+                                <option value="">Any channel</option>
+                                {% for channel in text_channels %}
+                                <option value="{{ channel.id }}" {% if support_summary.support_command_channel_id == channel.id %}selected{% endif %}>{{ channel.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <div class="dashboard-access-summary" id="support-issue-summary">Members can currently pick {{ support_summary.issue_count }} ticket issues in this server. /ticket runs in {{ support_summary.support_command_channel_name }}.</div>
                         <div class="defense-actions">
                             <button type="button" class="ghost-button compact-button" id="remove-support-issues">Remove selected</button>
                             <button type="button" class="primary-button compact-button" id="add-support-issue">Add issue</button>
@@ -1010,6 +1020,7 @@
         const supportIssueInput = document.getElementById("support-issue-input");
         const supportIssueSummary = document.getElementById("support-issue-summary");
         const supportIssueCount = document.getElementById("support-issue-count");
+        const supportCommandChannelInput = document.getElementById("support-command-channel-input");
         const addSupportIssueButton = document.getElementById("add-support-issue");
         const removeSupportIssuesButton = document.getElementById("remove-support-issues");
         const statItems = {
@@ -1209,7 +1220,10 @@
             const response = await fetch(`/api/guilds/${guildId}/support-settings`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ issue_types: issueTypes })
+                body: JSON.stringify({
+                    issue_types: issueTypes,
+                    command_channel_id: supportCommandChannelInput?.value || null
+                })
             });
 
             if (!response.ok) {
@@ -1503,7 +1517,8 @@
                 </label>
             `).join("");
             if (supportIssueSummary) {
-                supportIssueSummary.textContent = `Members can currently pick ${issueTypes.length} ticket issues in this server.`;
+                const supportChannelLabel = supportCommandChannelInput?.selectedOptions?.[0]?.textContent || "Any channel";
+                supportIssueSummary.textContent = `Members can currently pick ${issueTypes.length} ticket issues in this server. /ticket runs in ${supportChannelLabel}.`;
             }
             if (supportIssueCount) {
                 supportIssueCount.textContent = `${issueTypes.length} live`;
@@ -1794,6 +1809,14 @@
                 const result = await updateSupportSettings(remaining);
                 renderSupportIssues(result.issue_types || []);
                 showToast("Support issue list updated.");
+            } catch {}
+        });
+
+        supportCommandChannelInput?.addEventListener("change", async () => {
+            try {
+                const result = await updateSupportSettings(supportIssueValues());
+                renderSupportIssues(result.issue_types || []);
+                showToast("Support command channel updated.");
             } catch {}
         });
 

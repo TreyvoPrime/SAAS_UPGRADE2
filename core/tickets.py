@@ -35,6 +35,7 @@ class TicketStore:
             self._data[key] = {
                 "counter": 0,
                 "support_category_id": None,
+                "support_command_channel_id": None,
                 "issue_types": list(DEFAULT_ISSUE_TYPES),
                 "open_by_user": {},
                 "tickets": {},
@@ -104,6 +105,16 @@ class TicketStore:
     def get_support_category_id(self, guild_id: int) -> int | None:
         guild_state = self._ensure_guild(guild_id)
         return self._coerce_int(guild_state.get("support_category_id"))
+
+    def get_support_command_channel_id(self, guild_id: int) -> int | None:
+        guild_state = self._ensure_guild(guild_id)
+        return self._coerce_int(guild_state.get("support_command_channel_id"))
+
+    def set_support_command_channel_id(self, guild_id: int, channel_id: int | None) -> int | None:
+        guild_state = self._ensure_guild(guild_id)
+        guild_state["support_command_channel_id"] = self._coerce_int(channel_id)
+        self._save()
+        return self._coerce_int(guild_state.get("support_command_channel_id"))
 
     def set_support_category_id(self, guild_id: int, category_id: int | None) -> int | None:
         guild_state = self._ensure_guild(guild_id)
