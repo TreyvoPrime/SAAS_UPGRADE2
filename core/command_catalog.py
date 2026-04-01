@@ -60,6 +60,7 @@ def build_command_catalog(bot: discord.Client) -> list[dict]:
         "modules.serverstats": "Server Stats",
         "modules.support": "Support",
         "modules.userinfo": "User Info",
+        "modules.wiki": "Fun",
         "modules.welcome": "Welcome / Leave",
         "modules.premium.customcomands": "Custom Commands",
     }
