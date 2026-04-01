@@ -510,6 +510,25 @@ def create_dashboard_app(bot) -> FastAPI:
             "recent_count": len(recent),
         }
 
+    def autofeed_dashboard_summary(guild_id: int) -> dict:
+        store = getattr(bot, "autofeed_store", None)
+        if store is None:
+            return {"feeds": [], "count": 0}
+
+        feeds = []
+        for item in store.list_feeds(guild_id):
+            feeds.append(
+                {
+                    "id": item["id"],
+                    "channel_id": item["channel_id"],
+                    "message": item["message"],
+                    "interval_minutes": item["interval_minutes"],
+                    "next_post_at": item.get("next_post_at"),
+                    "created_by_name": item.get("created_by_name", "Unknown"),
+                }
+            )
+        return {"feeds": feeds, "count": len(feeds)}
+
     def server_defense_summary(guild_id: int) -> dict:
         defense = bot.server_defense.get_dashboard_state(guild_id)
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
@@ -729,6 +748,7 @@ def create_dashboard_app(bot) -> FastAPI:
         greetings_summary = greetings_dashboard_summary(guild_id)
         support_summary = support_dashboard_summary(guild_id)
         giveaways_summary = giveaways_dashboard_summary(guild_id)
+        autofeed_summary = autofeed_dashboard_summary(guild_id)
         case_summary = case_dashboard_summary(guild_id)
         purge_settings = purge_settings_summary(guild_id)
         moderation_settings = moderation_settings_summary(guild_id)
@@ -766,6 +786,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "greetings_summary": greetings_summary,
                 "support_summary": support_summary,
                 "giveaways_summary": giveaways_summary,
+                "autofeed_summary": autofeed_summary,
                 "case_summary": case_summary,
                 "purge_settings": purge_settings,
                 "moderation_settings": moderation_settings,
@@ -865,6 +886,10 @@ def create_dashboard_app(bot) -> FastAPI:
     @app.get("/dashboard/{guild_id}/giveaways", response_class=HTMLResponse)
     async def giveaways_dashboard(request: Request, guild_id: int):
         return await render_dashboard_view(request, guild_id, "giveaways")
+
+    @app.get("/dashboard/{guild_id}/autofeed", response_class=HTMLResponse)
+    async def autofeed_dashboard(request: Request, guild_id: int):
+        return await render_dashboard_view(request, guild_id, "autofeed")
 
     @app.get("/api/guilds/{guild_id}/logs")
     async def guild_logs(request: Request, guild_id: int, limit: int = 80):

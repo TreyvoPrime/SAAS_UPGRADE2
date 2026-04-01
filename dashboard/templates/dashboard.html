@@ -31,6 +31,7 @@
                 <a class="nav-link {% if current_view == 'defense' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense">ServerGuard</a>
                 <a class="nav-link {% if current_view == 'greetings' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/greetings">Welcome / Leave</a>
                 <a class="nav-link {% if current_view == 'support' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/support">Support</a>
+                <a class="nav-link {% if current_view == 'autofeed' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/autofeed">Autofeed</a>
                 <a class="nav-link {% if current_view == 'giveaways' %}active{% endif %}" href="/dashboard/{{ selected_guild.id }}/giveaways">Giveaways</a>
                 <a class="nav-link" href="/servers">All Servers</a>
                 <a class="nav-link" href="/logout">Log Out</a>
@@ -40,7 +41,7 @@
                 <div class="eyebrow">Servers</div>
                 <div class="server-list">
                     {% for item in guilds %}
-                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}{% if current_view == 'defense' %}/dashboard/{{ item.id }}/defense{% elif current_view == 'greetings' %}/dashboard/{{ item.id }}/greetings{% elif current_view == 'support' %}/dashboard/{{ item.id }}/support{% elif current_view == 'giveaways' %}/dashboard/{{ item.id }}/giveaways{% else %}/dashboard/{{ item.id }}{% endif %}{% else %}{{ item.install_url }}{% endif %}">
+                    <a class="server-link {% if item.id == selected_guild.id and item.bot_installed %}is-current{% endif %}" href="{% if item.bot_installed %}{% if current_view == 'defense' %}/dashboard/{{ item.id }}/defense{% elif current_view == 'greetings' %}/dashboard/{{ item.id }}/greetings{% elif current_view == 'support' %}/dashboard/{{ item.id }}/support{% elif current_view == 'autofeed' %}/dashboard/{{ item.id }}/autofeed{% elif current_view == 'giveaways' %}/dashboard/{{ item.id }}/giveaways{% else %}/dashboard/{{ item.id }}{% endif %}{% else %}{{ item.install_url }}{% endif %}">
                         <img src="{{ item.icon_url }}" alt="{{ item.name }}">
                         <span>{{ item.name }}{% if not item.bot_installed %} - Add app{% endif %}</span>
                     </a>
@@ -53,9 +54,9 @@
         <section class="main-column">
             <header class="page-head">
                 <div>
-                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% elif current_view == 'support' %}Support{% elif current_view == 'giveaways' %}Giveaways{% else %}Guild Operations{% endif %}</div>
-                    <h2>{% if current_view == 'defense' %}Server defense controls{% elif current_view == 'greetings' %}Greeting flows and channel setup{% elif current_view == 'support' %}Support ticket intake{% elif current_view == 'giveaways' %}Community giveaways and winners{% else %}Commands and access{% endif %}</h2>
-                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% elif current_view == 'greetings' %}Set the welcome and leave channels, write custom messages, and use placeholders that feel personal instead of generic.{% elif current_view == 'support' %}Decide what kinds of help members can request, keep ticket intake clean, and shape the support flow around your server instead of a generic bot preset.{% elif current_view == 'giveaways' %}Keep a clean view of live giveaways, recent winners, and the commands staff should use when it is time to launch, end, or reroll one.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
+                    <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% elif current_view == 'support' %}Support{% elif current_view == 'autofeed' %}Autofeed{% elif current_view == 'giveaways' %}Giveaways{% else %}Guild Operations{% endif %}</div>
+                    <h2>{% if current_view == 'defense' %}Server defense controls{% elif current_view == 'greetings' %}Greeting flows and channel setup{% elif current_view == 'support' %}Support ticket intake{% elif current_view == 'autofeed' %}Repeating channel feed control{% elif current_view == 'giveaways' %}Community giveaways and winners{% else %}Commands and access{% endif %}</h2>
+                    <p>{% if current_view == 'defense' %}Arm the defensive stack fast, tune timers, and decide which roles can still speak during a lockdown from one focused control surface.{% elif current_view == 'greetings' %}Set the welcome and leave channels, write custom messages, and use placeholders that feel personal instead of generic.{% elif current_view == 'support' %}Decide what kinds of help members can request, keep ticket intake clean, and shape the support flow around your server instead of a generic bot preset.{% elif current_view == 'autofeed' %}Set up repeating update messages for channels that need steady reminders, announcements, or routine prompts without manual reposting.{% elif current_view == 'giveaways' %}Keep a clean view of live giveaways, recent winners, and the commands staff should use when it is time to launch, end, or reroll one.{% else %}Switch modules like a bot dashboard, not a spreadsheet. Open one command area at a time, then set role access only where you need it.{% endif %}</p>
                 </div>
                 <div class="page-actions">
                     <a class="ghost-button" href="/servers">View all servers</a>
@@ -560,6 +561,71 @@
                             </div>
                             {% endif %}
                         </div>
+                    </article>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if current_view == 'autofeed' %}
+            <section class="surface greetings-workspace support-workspace">
+                <div class="workspace-topline greetings-topline">
+                    <div>
+                        <div class="eyebrow">Autofeed</div>
+                        <h3>Repeating channel messages</h3>
+                        <p>Create recurring feed posts from Discord, choose exactly where they go, and keep a clean overview of what is currently running.</p>
+                    </div>
+                    <div class="placeholder-strip">
+                        <span class="module-chip">{{ autofeed_summary.count }} live</span>
+                    </div>
+                </div>
+
+                <div class="greetings-grid support-grid">
+                    <article class="greeting-card support-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Autofeed</span>
+                            <span class="module-chip">Live feeds</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Active feed loops</h4>
+                                <p>These messages are currently set to repost on a repeating schedule.</p>
+                            </div>
+                            <span class="defense-status-pill">{{ autofeed_summary.count }} live</span>
+                        </div>
+                        <div class="support-issue-list">
+                            {% for feed in autofeed_summary.feeds %}
+                            <div class="support-issue-item giveaway-item">
+                                <div class="giveaway-item-copy">
+                                    <strong>#{{ feed.id }} · <#{{ feed.channel_id }}></strong>
+                                    <span>Every {{ feed.interval_minutes }} minutes</span>
+                                    <p>{{ feed.message }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% if not autofeed_summary.feeds %}
+                            <div class="notice-card compact">
+                                <strong>No autofeeds running</strong>
+                                <p>Use `/autofeed create` in Discord to pick the channel, message, and posting interval.</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </article>
+
+                    <article class="greeting-card support-card">
+                        <div class="command-flags">
+                            <span class="tier tier-free">Autofeed</span>
+                            <span class="module-chip">Staff commands</span>
+                        </div>
+                        <div class="greeting-card-head">
+                            <div>
+                                <h4>Staff Commands</h4>
+                                <p>Quick autofeed controls your team can run directly from Discord.</p>
+                            </div>
+                            <span class="defense-status-pill is-muted">In Discord</span>
+                        </div>
+                        <div class="role-summary">/autofeed create - Choose a channel, write the feed message, and set how often it should repeat</div>
+                        <div class="role-summary">/autofeed list - Review every active autofeed in the server</div>
+                        <div class="role-summary">/autofeed delete - Stop a feed loop by its autofeed ID</div>
                     </article>
                 </div>
             </section>

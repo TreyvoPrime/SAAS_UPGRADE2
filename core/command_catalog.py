@@ -42,6 +42,7 @@ def build_command_catalog(bot: discord.Client) -> list[dict]:
     module_label_map = {
         "modules.afk": "AFK",
         "modules.alert": "Alert",
+        "modules.autofeed": "Autofeed",
         "modules.auditlog": "Audit Log",
         "modules.autoresponder": "Autoresponder",
         "modules.colors": "Colors",

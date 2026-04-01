@@ -1,0 +1,189 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, timezone
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+from core.autofeed import AutoFeedStore, from_iso
+
+
+def _format_minutes(total_minutes: int) -> str:
+    days, remainder = divmod(int(total_minutes), 1440)
+    hours, minutes = divmod(remainder, 60)
+    parts: list[str] = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes or not parts:
+        parts.append(f"{minutes}m")
+    return " ".join(parts)
+
+
+class AutoFeedCog(commands.Cog):
+    autofeed = app_commands.Group(
+        name="autofeed",
+        description="Create and manage repeating auto-feed messages",
+    )
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.store: AutoFeedStore = bot.autofeed_store
+        self._loop_task: asyncio.Task | None = None
+
+    async def cog_load(self) -> None:
+        if self._loop_task is None:
+            self._loop_task = asyncio.create_task(self._autofeed_loop(), name="autofeed-loop")
+
+    def cog_unload(self) -> None:
+        if self._loop_task:
+            self._loop_task.cancel()
+            self._loop_task = None
+
+    async def _require_staff(self, interaction: discord.Interaction) -> discord.Member | None:
+        if interaction.guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return None
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("I couldn't verify your server permissions.", ephemeral=True)
+            return None
+        if not (
+            interaction.user.guild_permissions.manage_guild
+            or interaction.user.guild_permissions.manage_messages
+            or interaction.user.guild_permissions.administrator
+        ):
+            await interaction.response.send_message("You need Manage Server, Manage Messages, or Administrator to manage autofeeds.", ephemeral=True)
+            return None
+        return interaction.user
+
+    async def _log_event(
+        self,
+        guild: discord.Guild,
+        *,
+        title: str,
+        description: str,
+        user_name: str | None = None,
+        channel_name: str | None = None,
+        fields: list[tuple[str, str, bool]] | None = None,
+    ) -> None:
+        audit_cog = self.bot.get_cog("AuditLogCog")
+        if audit_cog is not None and hasattr(audit_cog, "emit_external_event"):
+            await audit_cog.emit_external_event(
+                guild.id,
+                title=title,
+                description=description,
+                status="event",
+                color=discord.Color.teal(),
+                user_name=user_name,
+                channel_name=channel_name,
+                fields=fields,
+            )
+
+    async def _autofeed_loop(self) -> None:
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            try:
+                await self._post_due_feeds()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                pass
+            await asyncio.sleep(30)
+
+    async def _post_due_feeds(self) -> None:
+        now = datetime.now(timezone.utc)
+        for feed in self.store.all_enabled():
+            next_post_at = from_iso(feed.get("next_post_at"))
+            if next_post_at is None or next_post_at > now:
+                continue
+            guild = self.bot.get_guild(int(feed["guild_id"]))
+            if guild is None:
+                continue
+            channel = guild.get_channel(int(feed["channel_id"]))
+            if not isinstance(channel, discord.TextChannel):
+                continue
+            try:
+                await channel.send(feed["message"])
+            except Exception:
+                continue
+            self.store.update_after_post(int(feed["guild_id"]), int(feed["id"]))
+
+    @autofeed.command(name="create", description="Create a repeating auto-feed in a channel")
+    @app_commands.describe(
+        channel="Where the auto-feed should post",
+        message="The message that should repeat",
+        days="Days between posts",
+        hours="Hours between posts",
+        minutes="Minutes between posts",
+    )
+    async def autofeed_create(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        message: app_commands.Range[str, 1, 1800],
+        days: app_commands.Range[int, 0, 30] = 0,
+        hours: app_commands.Range[int, 0, 23] = 0,
+        minutes: app_commands.Range[int, 0, 59] = 0,
+    ):
+        staff = await self._require_staff(interaction)
+        if staff is None or interaction.guild is None:
+            return
+        total_minutes = days * 1440 + hours * 60 + minutes
+        if total_minutes <= 0:
+            await interaction.response.send_message("Set at least one time value so the autofeed knows how often to post.", ephemeral=True)
+            return
+        record = self.store.create_feed(
+            interaction.guild.id,
+            channel_id=channel.id,
+            created_by_id=interaction.user.id,
+            created_by_name=str(interaction.user),
+            message=message,
+            interval_minutes=total_minutes,
+        )
+        next_post_at = from_iso(record.get("next_post_at"))
+        await interaction.response.send_message(
+            f"Autofeed #{record['id']} is live in {channel.mention}. It will post every {_format_minutes(total_minutes)} and next send at <t:{int(next_post_at.timestamp())}:F>.",
+            ephemeral=True,
+        )
+        await self._log_event(
+            interaction.guild,
+            title="Autofeed Created",
+            description=f"Autofeed #{record['id']} will post in {channel.mention}.",
+            user_name=str(interaction.user),
+            channel_name=channel.name,
+            fields=[
+                ("Interval", _format_minutes(total_minutes), True),
+                ("Message", message[:200], False),
+            ],
+        )
+
+    @autofeed.command(name="list", description="View the active autofeeds in this server")
+    async def autofeed_list(self, interaction: discord.Interaction):
+        staff = await self._require_staff(interaction)
+        if staff is None or interaction.guild is None:
+            return
+        items = self.store.list_feeds(interaction.guild.id)
+        embed = discord.Embed(title="Autofeeds", color=discord.Color.teal())
+        embed.description = "\n\n".join(
+            f"**#{item['id']}** in <#{item['channel_id']}> every {_format_minutes(item['interval_minutes'])}\nNext post: <t:{int((from_iso(item['next_post_at']) or datetime.now(timezone.utc)).timestamp())}:F>"
+            for item in items[:10]
+        ) or "No autofeeds are running in this server yet."
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @autofeed.command(name="delete", description="Delete one of the server's autofeeds")
+    async def autofeed_delete(self, interaction: discord.Interaction, autofeed_id: app_commands.Range[int, 1, 1000000]):
+        staff = await self._require_staff(interaction)
+        if staff is None or interaction.guild is None:
+            return
+        removed = self.store.delete_feed(interaction.guild.id, int(autofeed_id))
+        if not removed:
+            await interaction.response.send_message("I couldn't find that autofeed in this server.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"Autofeed #{autofeed_id} has been deleted.", ephemeral=True)
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(AutoFeedCog(bot))

@@ -8,6 +8,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 
 from core.access import CommandAccessManager
+from core.autofeed import AutoFeedStore
 from core.cases import ModerationCaseStore
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
@@ -49,6 +50,7 @@ class ServerCoreBot(commands.Bot):
 
         self.command_controls = CommandControlStore()
         self.command_logs = CommandLogStore()
+        self.autofeed_store = AutoFeedStore()
         self.case_store = ModerationCaseStore()
         self.access_manager = CommandAccessManager(self.command_controls, self.command_logs)
         self.greetings_store = GreetingsStore()
