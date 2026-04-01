@@ -329,14 +329,21 @@ button {
 }
 
 .brand-mark {
-    width: 48px;
-    height: 48px;
-    border-radius: 16px;
+    width: 58px;
+    height: 58px;
+    border-radius: 18px;
+    overflow: hidden;
     display: grid;
     place-items: center;
-    background: linear-gradient(135deg, var(--pink), var(--blurple));
-    color: #170b27;
-    font-weight: 900;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brand-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .brand-lockup h1,
@@ -510,6 +517,7 @@ button {
     border: 1px solid transparent;
     transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
     text-align: center;
+    white-space: nowrap;
 }
 
 .view-pill:hover,
