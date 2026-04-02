@@ -1910,7 +1910,6 @@ def create_dashboard_app(bot) -> FastAPI:
         if tier != TIER_PREMIUM and hasattr(bot, "server_defense"):
             for feature_name, reason in (
                 ("antiraid", "Guardian requires Premium."),
-                ("linkblock", "Link Block requires Premium."),
                 ("lockdown", "Lockdown requires Premium."),
             ):
                 try:

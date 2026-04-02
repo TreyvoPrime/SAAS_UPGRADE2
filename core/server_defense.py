@@ -631,10 +631,9 @@ class ServerDefenseManager:
             lockdown_roles = item.get("allowed_role_ids", []) if feature == "lockdown" else []
             minutes_left = remaining_minutes(item)
             allowed_role_names = [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in lockdown_roles]
-            premium_locked = feature in {"antiraid", "linkblock", "lockdown"} and not guardian_available
+            premium_locked = feature in {"antiraid", "lockdown"} and not guardian_available
             premium_label = {
                 "antiraid": "Upgrade this server to unlock Guardian.",
-                "linkblock": "Upgrade this server to unlock Link Block.",
                 "lockdown": "Upgrade this server to unlock Lockdown.",
             }.get(feature)
             return {
@@ -1310,8 +1309,8 @@ class ServerDefenseManager:
         actor: discord.abc.User | None = None,
         reason: str | None = None,
     ) -> dict[str, Any]:
-        if feature in {"antiraid", "linkblock", "lockdown"} and not self._guardian_available(guild_id):
-            feature_name = {"antiraid": "Guardian", "linkblock": "Link Block", "lockdown": "Lockdown"}[feature]
+        if feature in {"antiraid", "lockdown"} and not self._guardian_available(guild_id):
+            feature_name = {"antiraid": "Guardian", "lockdown": "Lockdown"}[feature]
             raise PermissionError(f"{feature_name} is part of ServerCore Premium right now.")
         ends_at = utcnow() + timedelta(minutes=duration_minutes) if duration_minutes else None
 
@@ -1380,8 +1379,8 @@ class ServerDefenseManager:
         normalized = "mentionguard" if feature == "mentionblock" else feature
         if normalized not in DEFENSE_FEATURES:
             raise ValueError(f"Unknown defense feature: {feature}")
-        if normalized in {"antiraid", "linkblock", "lockdown"} and enabled and not self._guardian_available(guild_id):
-            feature_name = {"antiraid": "Guardian", "linkblock": "Link Block", "lockdown": "Lockdown"}[normalized]
+        if normalized in {"antiraid", "lockdown"} and enabled and not self._guardian_available(guild_id):
+            feature_name = {"antiraid": "Guardian", "lockdown": "Lockdown"}[normalized]
             raise PermissionError(f"{feature_name} is part of ServerCore Premium right now.")
         current = self.store.get_feature(guild_id, normalized)
         if enabled:

@@ -435,8 +435,6 @@ class ServerDefense(commands.Cog):
         interaction: discord.Interaction,
         duration_minutes: app_commands.Range[int, 1, MAX_DURATION_MINUTES] | None = None,
     ):
-        if not await self._require_premium_feature(interaction, "Link Block"):
-            return
         await self._enable_feature(
             interaction,
             "linkblock",
@@ -447,14 +445,10 @@ class ServerDefense(commands.Cog):
 
     @linkblock.command(name="disable", description="Turn off link blocking")
     async def linkblock_disable(self, interaction: discord.Interaction):
-        if not await self._require_premium_feature(interaction, "Link Block"):
-            return
         await self._disable_feature(interaction, "linkblock", "Link Block")
 
     @linkblock.command(name="status", description="View the current link block status")
     async def linkblock_status(self, interaction: discord.Interaction):
-        if not await self._require_premium_feature(interaction, "Link Block"):
-            return
         member = await self._require_admin(interaction)
         if member is None:
             return

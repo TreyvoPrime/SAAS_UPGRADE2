@@ -959,11 +959,7 @@
                                         </div>
                                         <h4>/{{ command.name }}{% if command.tier|lower == 'premium' %}<span class="inline-premium-tag">Premium</span>{% endif %}</h4>
                                     </div>
-                                    {% if command.tier|lower == 'premium' %}
-                                    <span class="defense-status-pill {% if subscription.is_premium %}{% else %}is-muted{% endif %}">
-                                        {% if subscription.is_premium %}Premium command{% else %}Premium only{% endif %}
-                                    </span>
-                                    {% else %}
+                                    {% if command.tier|lower != 'premium' %}
                                     <label class="toggle">
                                         <input
                                             type="checkbox"
