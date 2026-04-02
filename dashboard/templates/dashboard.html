@@ -278,7 +278,7 @@
                             <div class="defense-note">{{ defense.rate_label }}</div>
                             {% endif %}
                             {% if defense.name == 'antiraid' and defense.locked %}
-                            <div class="dashboard-access-note guardian-premium-note">Guardian is part of Premium on this server. Turn Premium on above to unlock live threat watching and automatic raid response.</div>
+                            <div class="dashboard-access-note guardian-premium-note">Locked on Free. Turn Premium on above to unlock live threat watch and Guardian response controls.</div>
                             {% endif %}
                             {% if defense.locked %}
                             <div class="dashboard-access-summary">{{ defense.remaining_premium_label }}</div>
@@ -295,7 +295,7 @@
                                 {% if defense.name == 'lockdown' %}
                                 <button type="button" class="ghost-button compact-button" data-defense-release data-defense-name="{{ defense.name }}">Unlock now</button>
                                 {% endif %}
-                                <button type="button" class="primary-button compact-button" data-defense-save data-defense-name="{{ defense.name }}" {% if defense.locked %}disabled{% endif %}>{% if defense.locked %}Premium only{% else %}Apply{% endif %}</button>
+                                <button type="button" class="primary-button compact-button" data-defense-save data-defense-name="{{ defense.name }}" {% if defense.locked %}disabled{% endif %}>{% if defense.locked %}Locked on Free{% else %}Apply{% endif %}</button>
                             </div>
                         </div>
                     </article>
@@ -337,12 +337,12 @@
                     <div class="threat-stage-copy">
                         <div class="eyebrow">Guardian</div>
                         <h3>Live threat watch</h3>
-                        <div class="guardian-preview-strip">
-                            {% if not subscription.is_premium %}
-                            <span class="module-chip guardian-preview-chip">Premium</span>
-                            <span class="guardian-preview-note">Guardian watches join spikes, spam bursts, and stacked defense pressure so staff can react before a raid spreads.</span>
-                            <span class="guardian-preview-note guardian-upgrade-note">Upgrade this server to unlock the live threat meter and Guardian response controls.</span>
-                            {% else %}
+                            <div class="guardian-preview-strip">
+                                {% if not subscription.is_premium %}
+                                <span class="tier tier-premium guardian-preview-chip">Premium</span>
+                                <span class="guardian-preview-note">Guardian watches join spikes, spam bursts, and stacked defense pressure so staff can react before a raid spreads.</span>
+                                <span class="guardian-preview-note guardian-upgrade-note">Locked on Free. Turn Premium on above to unlock the live threat meter and Guardian response controls.</span>
+                                {% else %}
                             <span class="module-chip guardian-preview-chip">Live</span>
                             <span class="guardian-preview-note">Guardian watches join spikes, spam bursts, and stacked defense pressure so staff can react before a raid spreads.</span>
                             {% endif %}
@@ -410,8 +410,8 @@
                     {% for case in case_summary.cases %}
                     <article class="command-card case-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
-                            <strong>Premium required</strong>
-                            <span>Unlock deeper case history, staff notes, and richer moderation context with Premium.</span>
+                            <strong>Premium feature</strong>
+                            <span>Locked on Free. Turn Premium on above to unlock this moderation workspace.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Case #{{ case.case_id }}</span>
@@ -447,8 +447,8 @@
                     {% if case_summary.recent_staff_notes %}
                     <article class="command-card case-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
-                            <strong>Premium required</strong>
-                            <span>Premium keeps private staff notes in one searchable moderation workspace.</span>
+                            <strong>Premium feature</strong>
+                            <span>Locked on Free. Turn Premium on above to unlock this moderation workspace.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Staff Notes</span>
@@ -656,8 +656,8 @@
 
                     <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
-                            <strong>Premium required</strong>
-                            <span>Claiming tickets, priority controls, transcripts, and richer support workflows unlock with Premium.</span>
+                            <strong>Premium feature</strong>
+                            <span>Locked on Free. Turn Premium on above to unlock this support workflow.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Support</span>
@@ -788,8 +788,8 @@
 
                     <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
-                            <strong>Premium required</strong>
-                            <span>Role requirements and bonus entries are part of the Premium giveaway toolkit.</span>
+                            <strong>Premium feature</strong>
+                            <span>Locked on Free. Turn Premium on above to unlock this giveaway workflow.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Giveaways</span>
@@ -876,8 +876,8 @@
 
                     <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
-                            <strong>Premium required</strong>
-                            <span>Editing, pausing, and resuming live feed loops unlock with Premium.</span>
+                            <strong>Premium feature</strong>
+                            <span>Locked on Free. Turn Premium on above to unlock this autofeed workflow.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Autofeed</span>
@@ -1005,9 +1005,9 @@
                                     <div class="command-actions">
                                         <span class="dashboard-access-note">
                                             {% if subscription.is_premium %}
-                                                This advanced command is included with Premium.
+                                                Included with Premium on this server.
                                             {% else %}
-                                                Turn Premium on above to unlock this command.
+                                                Locked on Free. Turn Premium on above to unlock it.
                                             {% endif %}
                                         </span>
                                     </div>
@@ -1663,12 +1663,12 @@
             }
             if (autofilterRemaining) {
                 autofilterRemaining.textContent = defense.locked
-                    ? (defense.remaining_premium_label || "Premium only")
+                    ? (defense.remaining_premium_label || "Locked on Free")
                     : defense.remaining_label;
             }
             if (saveAutofilterTermsButton) {
                 saveAutofilterTermsButton.disabled = Boolean(defense.locked);
-                saveAutofilterTermsButton.textContent = defense.locked ? "Premium only" : "Save AutoFilter";
+                saveAutofilterTermsButton.textContent = defense.locked ? "Locked on Free" : "Save AutoFilter";
             }
         }
 
@@ -1751,7 +1751,7 @@
                 status.textContent = defense.status_label;
             }
             if (remaining) {
-                remaining.textContent = defense.locked ? (defense.remaining_premium_label || "Premium only") : defense.remaining_label;
+                remaining.textContent = defense.locked ? (defense.remaining_premium_label || "Locked on Free") : defense.remaining_label;
             }
             if (durationInput) {
                 durationInput.value = defense.duration_minutes ?? "";
@@ -1759,7 +1759,7 @@
             }
             if (saveButton) {
                 saveButton.disabled = Boolean(defense.locked);
-                saveButton.textContent = defense.locked ? "Premium only" : "Apply";
+                saveButton.textContent = defense.locked ? "Locked on Free" : "Apply";
             }
             if (releaseButton) {
                 releaseButton.disabled = Boolean(defense.locked);

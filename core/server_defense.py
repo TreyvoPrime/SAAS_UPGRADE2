@@ -633,8 +633,8 @@ class ServerDefenseManager:
             allowed_role_names = [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in lockdown_roles]
             premium_locked = feature in {"antiraid", "lockdown"} and not guardian_available
             premium_label = {
-                "antiraid": "Upgrade this server to unlock Guardian.",
-                "lockdown": "Upgrade this server to unlock Lockdown.",
+                "antiraid": "Locked on Free. Turn Premium on above to unlock Guardian.",
+                "lockdown": "Locked on Free. Turn Premium on above to unlock Lockdown.",
             }.get(feature)
             return {
                 "name": feature,
@@ -645,7 +645,7 @@ class ServerDefenseManager:
                 "locked": premium_locked,
                 "duration_minutes": minutes_left,
                 "duration_label": "Runs until disabled" if not item.get("ends_at") else f"{minutes_left} minute timer",
-                "status_label": "Premium only" if premium_locked else ("Armed" if item.get("enabled") else "Offline"),
+                "status_label": "Locked on Free" if premium_locked else ("Armed" if item.get("enabled") else "Offline"),
                 "remaining_label": remaining_label(item),
                 "remaining_premium_label": premium_label if premium_locked else None,
                 "tone": "danger" if item.get("enabled") else "muted",

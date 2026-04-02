@@ -175,8 +175,8 @@ class FakeDefenseManager:
                     "enabled": bool(state.get("enabled")) and not locked,
                     "locked": locked,
                     "duration_label": "Until disabled",
-                    "status_label": "Premium only" if locked else ("Enabled" if state.get("enabled") else "Disabled"),
-                    "remaining_label": "Premium only" if locked else "No timer",
+                    "status_label": "Locked on Free" if locked else ("Enabled" if state.get("enabled") else "Disabled"),
+                    "remaining_label": "Locked on Free" if locked else "No timer",
                 }
             )
         return {
@@ -188,7 +188,7 @@ class FakeDefenseManager:
             "lockdown_role_count": 0,
             "autofilter_terms": [],
             "autofilter_timeout_minutes": 60,
-            "threat": {"level_label": "Premium required" if not self.controls.is_premium_enabled(guild_id) else "Offline"},
+            "threat": {"level_label": "Offline" if not self.controls.is_premium_enabled(guild_id) else "Offline"},
         }
 
     async def set_defense(self, guild_id: int, defense_name: str, *, enabled: bool, duration_minutes: int | None = None) -> dict:
