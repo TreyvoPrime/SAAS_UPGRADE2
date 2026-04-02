@@ -526,7 +526,7 @@ class ServerDefenseManager:
         level_key, level_label = self._score_level(score)
 
         if not guardian_available:
-            level_key, level_label = ("normal", "Premium required")
+            level_key, level_label = ("normal", "Offline")
         elif not self._is_active(antiraid_state):
             level_key, level_label = ("normal", "Offline")
 
