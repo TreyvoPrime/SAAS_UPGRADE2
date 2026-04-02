@@ -4431,15 +4431,14 @@ body,
     width: min(100%, 420px);
 }
 
-.help-grid {
+.help-stack {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 14px;
 }
 
-.help-module-card {
+.help-module-section {
     display: grid;
-    gap: 14px;
+    gap: 12px;
     padding: 16px;
     border-radius: 12px;
     background: #313239;
@@ -4457,28 +4456,34 @@ body,
     letter-spacing: -0.03em;
 }
 
-.help-command-list {
+.help-command-table {
     display: grid;
-    gap: 10px;
-}
-
-.help-command-row {
-    display: grid;
-    gap: 6px;
-    padding: 12px;
-    border-radius: 10px;
+    gap: 0;
     border: 1px solid rgba(164, 194, 168, 0.12);
-    background: #2d2f34;
+    border-radius: 10px;
+    overflow: hidden;
 }
 
-.help-command-top {
+.help-command-line {
+    display: grid;
+    padding: 12px;
+    background: #2d2f34;
+    border-bottom: 1px solid rgba(164, 194, 168, 0.1);
+    gap: 6px;
+}
+
+.help-command-line:last-child {
+    border-bottom: 0;
+}
+
+.help-command-name {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
 }
 
-.help-command-top strong {
+.help-command-name strong {
     min-width: 0;
     font-size: 0.92rem;
     line-height: 1.15;
@@ -4487,7 +4492,7 @@ body,
     white-space: nowrap;
 }
 
-.help-command-row p {
+.help-command-line p {
     margin: 0;
     color: var(--muted);
     font-size: 0.84rem;
@@ -4502,16 +4507,12 @@ body,
 
 @media (max-width: 760px) {
     .servers-brand-row,
-    .help-command-top {
+    .help-command-name {
         align-items: stretch;
         flex-direction: column;
     }
 
-    .help-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .help-command-top strong {
+    .help-command-name strong {
         white-space: normal;
     }
 }

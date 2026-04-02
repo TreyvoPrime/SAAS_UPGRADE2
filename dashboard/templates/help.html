@@ -55,9 +55,9 @@
             </label>
         </section>
 
-        <section class="help-grid" id="help-grid">
+        <section class="help-stack" id="help-grid">
             {% for section in sections %}
-            <article class="surface help-module-card" data-help-section data-name="{{ section.name|lower }}">
+            <article class="surface help-module-section" data-help-section data-name="{{ section.name|lower }}">
                 <header class="help-module-head">
                     <div>
                         <div class="command-flags">
@@ -71,10 +71,10 @@
                         <h2>{{ section.name }}</h2>
                     </div>
                 </header>
-                <div class="help-command-list">
+                <div class="help-command-table">
                     {% for command in section.commands %}
-                    <article class="help-command-row" data-help-command data-search="{{ command.search_blob }}">
-                        <div class="help-command-top">
+                    <article class="help-command-line" data-help-command data-search="{{ command.search_blob }}">
+                        <div class="help-command-name">
                             <strong>/{{ command.name }}</strong>
                             <span class="tier tier-{{ command.tier_slug }}">{{ command.tier }}</span>
                         </div>
