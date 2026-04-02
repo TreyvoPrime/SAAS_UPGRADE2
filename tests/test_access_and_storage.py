@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from core.access import CommandAccessManager
+from core.billing import BillingStore
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
 from core import storage
@@ -216,6 +217,8 @@ class CommandControlStoreSettingsTests(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.root = Path(self.tempdir.name)
         self.controls = CommandControlStore(self.root / "command_controls.json")
+        self.billing = BillingStore(self.root / "billing.json")
+        self.controls.attach_billing_store(self.billing)
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
@@ -261,6 +264,64 @@ class CommandControlStoreSettingsTests(unittest.TestCase):
         self.assertEqual(premium_tier, "premium")
         self.assertEqual(free_tier, "free")
         self.assertEqual(self.controls.get_purge_settings(1001)["limit"], self.controls.FREE_PURGE_LIMIT_CAP)
+
+    def test_billing_ready_assignment_controls_premium_access(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "STRIPE_SECRET_KEY": "sk_test_123",
+                "STRIPE_PREMIUM_PRICE_ID": "price_123",
+                "STRIPE_WEBHOOK_SECRET": "whsec_123",
+            },
+            clear=False,
+        ):
+            self.controls.set_subscription_tier(1001, "premium")
+            self.assertFalse(self.controls.is_premium_enabled(1001))
+
+            self.billing.upsert_subscription(5001, status="active", stripe_customer_id="cus_123", stripe_subscription_id="sub_123")
+            self.billing.assign_guild(1001, 5001)
+
+            self.assertTrue(self.controls.is_premium_enabled(1001))
+            self.billing.clear_subscription(5001)
+            self.assertFalse(self.controls.is_premium_enabled(1001))
+
+
+class BillingStoreTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        self.store = BillingStore(self.root / "billing.json")
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_subscription_and_guild_assignment_round_trip(self) -> None:
+        self.store.upsert_subscription(
+            5001,
+            stripe_customer_id="cus_123",
+            stripe_subscription_id="sub_123",
+            status="active",
+            current_period_end=1777777777,
+            cancel_at_period_end=False,
+            email="owner@example.com",
+        )
+        self.store.assign_guild(1001, 5001)
+
+        subscription = self.store.get_user_subscription(5001)
+        assignment = self.store.get_guild_assignment(1001)
+
+        self.assertTrue(subscription["is_active"])
+        self.assertEqual(subscription["stripe_customer_id"], "cus_123")
+        self.assertEqual(subscription["active_guild_ids"], [1001])
+        self.assertEqual(assignment["premium_user_id"], 5001)
+        self.assertTrue(assignment["is_active"])
+
+    def test_webhook_tracking_is_idempotent(self) -> None:
+        self.assertFalse(self.store.has_processed_webhook("evt_123"))
+        self.store.mark_webhook_processed("evt_123")
+        self.store.mark_webhook_processed("evt_123")
+        self.assertTrue(self.store.has_processed_webhook("evt_123"))
+        self.assertEqual(self.store.processed_webhook_ids(), ["evt_123"])
 
 class FakePsycopgCursor:
     def __init__(self, documents: dict[str, object]):

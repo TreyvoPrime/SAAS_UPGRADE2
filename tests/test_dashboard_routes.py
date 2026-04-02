@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from core.access import CommandAccessManager
 from core.autofeed import AutoFeedStore
+from core.billing import BillingStore
 from core.cases import ModerationCaseStore
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
@@ -40,6 +43,60 @@ class MockHTTPResponse:
                 request=self.request,
                 response=httpx.Response(self.status_code, request=self.request),
             )
+
+
+class FakeStripeCheckoutSessionAPI:
+    @staticmethod
+    def create(**kwargs):
+        return SimpleNamespace(id="cs_test_123", url="https://checkout.stripe.test/session")
+
+    @staticmethod
+    def retrieve(session_id, expand=None):
+        return {
+            "id": session_id,
+            "client_reference_id": "5001",
+            "customer": "cus_123",
+            "subscription": {
+                "id": "sub_123",
+                "customer": "cus_123",
+                "status": "active",
+                "current_period_end": 1777777777,
+                "cancel_at_period_end": False,
+            },
+            "customer_details": {"email": "owner@example.com"},
+        }
+
+
+class FakeStripePortalSessionAPI:
+    @staticmethod
+    def create(**kwargs):
+        return SimpleNamespace(url="https://billing.stripe.test/portal")
+
+
+class FakeStripeSubscriptionAPI:
+    @staticmethod
+    def retrieve(subscription_id):
+        return {
+            "id": subscription_id,
+            "customer": "cus_123",
+            "status": "active",
+            "current_period_end": 1777777777,
+            "cancel_at_period_end": False,
+        }
+
+
+class FakeStripeWebhook:
+    @staticmethod
+    def construct_event(payload, signature, secret):
+        return json.loads(payload.decode("utf-8"))
+
+
+class FakeStripeModule:
+    api_key = None
+    checkout = SimpleNamespace(Session=FakeStripeCheckoutSessionAPI)
+    billing_portal = SimpleNamespace(Session=FakeStripePortalSessionAPI)
+    Subscription = FakeStripeSubscriptionAPI
+    Webhook = FakeStripeWebhook
 
 
 class FakePermissions:
@@ -249,6 +306,8 @@ class FakeBot:
         self.user = SimpleNamespace(name="ServerCore", id=1487599032170975292)
         self.tree = SimpleNamespace(get_commands=lambda guild=None: [])
         self.command_controls = CommandControlStore(root / "command_controls.json")
+        self.billing_store = BillingStore(root / "billing.json")
+        self.command_controls.attach_billing_store(self.billing_store)
         self.command_logs = CommandLogStore(root / "command_logs.json")
         self.access_manager = CommandAccessManager(self.command_controls, self.command_logs)
         self.ticket_store = TicketStore(root / "tickets.json")
@@ -512,6 +571,147 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(free.status_code, 200)
         self.assertFalse(self.bot.command_controls.is_premium_enabled(self.bot.guild.id))
 
+    def test_billing_page_renders_for_authenticated_user(self) -> None:
+        self._authenticate()
+
+        response = self.client.get("/billing")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Premium follows your Discord account", response.text)
+        self.assertIn("$3.99/month", response.text)
+
+    def test_subscription_upgrade_requires_active_billing_when_stripe_ready(self) -> None:
+        self._authenticate()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "STRIPE_SECRET_KEY": "sk_test_123",
+                "STRIPE_PREMIUM_PRICE_ID": "price_123",
+                "STRIPE_WEBHOOK_SECRET": "whsec_123",
+            },
+            clear=False,
+        ):
+            blocked = self.client.post(
+                f"/api/guilds/{self.bot.guild.id}/subscription",
+                json={"tier": "premium"},
+                headers={"origin": "http://testserver"},
+            )
+
+            self.assertEqual(blocked.status_code, 402)
+            self.assertEqual(blocked.json()["billing_url"], "/billing")
+
+            self.bot.billing_store.upsert_subscription(
+                5001,
+                stripe_customer_id="cus_123",
+                stripe_subscription_id="sub_123",
+                status="active",
+            )
+            allowed = self.client.post(
+                f"/api/guilds/{self.bot.guild.id}/subscription",
+                json={"tier": "premium"},
+                headers={"origin": "http://testserver"},
+            )
+
+            self.assertEqual(allowed.status_code, 200)
+            self.assertTrue(self.bot.command_controls.is_premium_enabled(self.bot.guild.id))
+            self.assertEqual(self.bot.billing_store.get_guild_assignment(self.bot.guild.id)["premium_user_id"], 5001)
+
+    def test_billing_checkout_redirects_to_stripe(self) -> None:
+        self._authenticate()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "STRIPE_SECRET_KEY": "sk_test_123",
+                "STRIPE_PREMIUM_PRICE_ID": "price_123",
+                "STRIPE_WEBHOOK_SECRET": "whsec_123",
+            },
+            clear=False,
+        ):
+            with mock.patch.dict(sys.modules, {"stripe": FakeStripeModule}):
+                response = self.client.post(
+                    "/billing/checkout",
+                    headers={"origin": "http://testserver"},
+                    follow_redirects=False,
+                )
+
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "https://checkout.stripe.test/session")
+        self.assertEqual(self.bot.billing_store.get_user_subscription(5001)["last_checkout_session_id"], "cs_test_123")
+
+    def test_billing_checkout_sends_active_subscribers_to_portal(self) -> None:
+        self._authenticate()
+        self.bot.billing_store.upsert_subscription(
+            5001,
+            stripe_customer_id="cus_123",
+            stripe_subscription_id="sub_123",
+            status="active",
+        )
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "STRIPE_SECRET_KEY": "sk_test_123",
+                "STRIPE_PREMIUM_PRICE_ID": "price_123",
+                "STRIPE_WEBHOOK_SECRET": "whsec_123",
+            },
+            clear=False,
+        ):
+            with mock.patch.dict(sys.modules, {"stripe": FakeStripeModule}):
+                response = self.client.post(
+                    "/billing/checkout",
+                    headers={"origin": "http://testserver"},
+                    follow_redirects=False,
+                )
+
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "https://billing.stripe.test/portal")
+
+    def test_stripe_webhook_updates_subscription_state(self) -> None:
+        event = {
+            "id": "evt_123",
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": "cs_test_123",
+                    "mode": "subscription",
+                    "client_reference_id": "5001",
+                    "customer": "cus_123",
+                    "subscription": {
+                        "id": "sub_123",
+                        "customer": "cus_123",
+                        "status": "active",
+                        "current_period_end": 1777777777,
+                        "cancel_at_period_end": False,
+                    },
+                    "customer_details": {"email": "owner@example.com"},
+                }
+            },
+        }
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "STRIPE_SECRET_KEY": "sk_test_123",
+                "STRIPE_PREMIUM_PRICE_ID": "price_123",
+                "STRIPE_WEBHOOK_SECRET": "whsec_123",
+            },
+            clear=False,
+        ):
+            with mock.patch.dict(sys.modules, {"stripe": FakeStripeModule}):
+                response = self.client.post(
+                    "/stripe/webhook",
+                    content=json.dumps(event).encode("utf-8"),
+                    headers={"stripe-signature": "test-signature"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        subscription = self.bot.billing_store.get_user_subscription(5001)
+        self.assertTrue(subscription["is_active"])
+        self.assertEqual(subscription["stripe_customer_id"], "cus_123")
+        self.assertEqual(subscription["stripe_subscription_id"], "sub_123")
+
     def test_guardian_requires_premium_from_dashboard(self) -> None:
         self._authenticate()
         blocked = self.client.post(
@@ -557,8 +757,10 @@ class DashboardRouteTests(unittest.TestCase):
             json={"tier": "premium"},
             headers={"origin": "http://testserver"},
         )
-        searched = self.client.get(f"/api/guilds/{self.bot.guild.id}/logs?query=support&category=dashboard")
-        exported = self.client.get(f"/api/guilds/{self.bot.guild.id}/logs/export?category=dashboard")
+        _, get_patch = self._http_patches()
+        with get_patch:
+            searched = self.client.get(f"/api/guilds/{self.bot.guild.id}/logs?query=support&category=dashboard")
+            exported = self.client.get(f"/api/guilds/{self.bot.guild.id}/logs/export?category=dashboard")
 
         self.assertEqual(searched.status_code, 200)
         self.assertEqual(exported.status_code, 200)
@@ -585,8 +787,10 @@ class DashboardRouteTests(unittest.TestCase):
             json={"tier": "premium"},
             headers={"origin": "http://testserver"},
         )
-        listing = self.client.get(f"/api/guilds/{self.bot.guild.id}/cases?query=EditorUser")
-        exported = self.client.get(f"/api/guilds/{self.bot.guild.id}/cases/export?action=warn")
+        _, get_patch = self._http_patches()
+        with get_patch:
+            listing = self.client.get(f"/api/guilds/{self.bot.guild.id}/cases?query=EditorUser")
+            exported = self.client.get(f"/api/guilds/{self.bot.guild.id}/cases/export?action=warn")
 
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(exported.status_code, 200)

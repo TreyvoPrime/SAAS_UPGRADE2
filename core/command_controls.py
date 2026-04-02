@@ -29,6 +29,10 @@ class CommandControlStore:
     def __init__(self, path: str | Path = "dashboard_data/command_controls.json"):
         self.path = Path(path)
         self.data = read_json(self.path, {"guilds": {}})
+        self.billing_store = None
+
+    def attach_billing_store(self, billing_store) -> None:
+        self.billing_store = billing_store
 
     def save(self) -> None:
         write_json(self.path, self.data)
@@ -100,7 +104,11 @@ class CommandControlStore:
 
     def get_subscription_tier(self, guild_id: int) -> str:
         dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})
-        return normalize_tier(dashboard_bucket.get("subscription_tier", self.DEFAULT_SUBSCRIPTION_TIER))
+        stored_tier = normalize_tier(dashboard_bucket.get("subscription_tier", self.DEFAULT_SUBSCRIPTION_TIER))
+        billing_store = getattr(self, "billing_store", None)
+        if billing_store is not None and hasattr(billing_store, "billing_ready") and billing_store.billing_ready():
+            return TIER_PREMIUM if billing_store.guild_has_active_premium(guild_id) else TIER_FREE
+        return stored_tier
 
     def set_subscription_tier(self, guild_id: int, tier: str) -> str:
         dashboard_bucket = self._guild_bucket(guild_id).setdefault("dashboard", {"editor_role_ids": []})

@@ -20,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
+from core.billing import BillingStore, FREE_PREMIUM_COMPARISON_ROWS, PREMIUM_PRICE_DISPLAY
 from core.command_catalog import FREE_TIER, PREMIUM_TIER, build_command_catalog
 from core.greetings import (
     DEFAULT_JOIN_DM_MESSAGE,
@@ -277,9 +278,57 @@ def create_dashboard_app(bot) -> FastAPI:
     redirect_uri = os.getenv("DISCORD_REDIRECT_URI") or f"{dashboard_base_url}/auth/callback"
     install_permissions = os.getenv("DISCORD_INSTALL_PERMISSIONS", "8")
     session_store: DashboardSessionStore = app.state.dashboard_sessions
+    billing_store: BillingStore = getattr(bot, "billing_store", None) or BillingStore()
+    setattr(bot, "billing_store", billing_store)
+    if hasattr(bot, "command_controls") and hasattr(bot.command_controls, "attach_billing_store"):
+        bot.command_controls.attach_billing_store(billing_store)
 
     def oauth_ready() -> bool:
         return bool(discord_client_id and discord_client_secret)
+
+    def stripe_secret_key_value() -> str | None:
+        return os.getenv("STRIPE_SECRET_KEY")
+
+    def stripe_webhook_secret_value() -> str | None:
+        return os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    def stripe_premium_price_id_value() -> str | None:
+        return os.getenv("STRIPE_PREMIUM_PRICE_ID")
+
+    def stripe_checkout_ready() -> bool:
+        return bool(stripe_secret_key_value() and stripe_premium_price_id_value())
+
+    def stripe_billing_ready() -> bool:
+        return bool(stripe_secret_key_value() and stripe_premium_price_id_value() and stripe_webhook_secret_value())
+
+    def load_stripe_sdk():
+        try:
+            import stripe  # type: ignore
+        except ImportError as error:
+            raise HTTPException(status_code=503, detail="Stripe support is not installed on this deployment.") from error
+        secret_key = stripe_secret_key_value()
+        if not secret_key:
+            raise HTTPException(status_code=503, detail="Stripe billing is not configured on this deployment.")
+        stripe.api_key = secret_key
+        return stripe
+
+    def stripe_object_id(value) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            candidate = value.get("id")
+            return str(candidate) if candidate else None
+        candidate = getattr(value, "id", None)
+        return str(candidate) if candidate else None
+
+    def stripe_object_value(value, key: str, default=None):
+        if value is None:
+            return default
+        if isinstance(value, dict):
+            return value.get(key, default)
+        return getattr(value, key, default)
 
     def session_id(request: Request) -> str | None:
         return request.session.get("dashboard_session_id")
@@ -287,12 +336,32 @@ def create_dashboard_app(bot) -> FastAPI:
     def session_user(request: Request) -> dict | None:
         return session_store.get_user(session_id(request))
 
+    def session_user_id(request: Request) -> int | None:
+        user = session_user(request) or {}
+        raw_value = user.get("id")
+        if raw_value is None or not str(raw_value).isdigit():
+            return None
+        return int(str(raw_value))
+
     def session_access_token(request: Request) -> str | None:
         return session_store.get_access_token(session_id(request))
 
     def clear_session(request: Request) -> None:
         session_store.delete_session(session_id(request))
         request.session.clear()
+
+    def billing_summary(user_id: int | None) -> dict:
+        subscription = billing_store.get_user_subscription(user_id)
+        period_end = subscription.get("current_period_end")
+        return {
+            **subscription,
+            "billing_ready": stripe_billing_ready(),
+            "checkout_ready": stripe_checkout_ready(),
+            "price_display": PREMIUM_PRICE_DISPLAY,
+            "manage_billing_available": bool(subscription.get("stripe_customer_id")) and stripe_checkout_ready(),
+            "period_end_label": (period_end or "")[:10] if period_end else None,
+            "active_guild_count": len(subscription.get("active_guild_ids", [])),
+        }
 
     def _guild_icon_url(raw_guild: dict, live_guild) -> str:
         if live_guild and getattr(live_guild, "icon", None):
@@ -440,23 +509,166 @@ def create_dashboard_app(bot) -> FastAPI:
                 }
             )
 
+    def sync_subscription_record(
+        user_id: int,
+        *,
+        customer_id: str | None = None,
+        subscription_id: str | None = None,
+        status: str | None = None,
+        current_period_end: int | float | str | None = None,
+        cancel_at_period_end: bool | None = None,
+        email: str | None = None,
+    ) -> dict:
+        return billing_store.upsert_subscription(
+            user_id,
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=subscription_id,
+            status=status,
+            current_period_end=current_period_end,
+            cancel_at_period_end=cancel_at_period_end,
+            email=email,
+        )
+
+    def sync_subscription_from_object(
+        user_id: int,
+        subscription_object,
+        *,
+        customer_id: str | None = None,
+        email: str | None = None,
+    ) -> dict:
+        return sync_subscription_record(
+            user_id,
+            customer_id=customer_id or stripe_object_id(stripe_object_value(subscription_object, "customer")),
+            subscription_id=stripe_object_id(subscription_object),
+            status=stripe_object_value(subscription_object, "status"),
+            current_period_end=stripe_object_value(subscription_object, "current_period_end"),
+            cancel_at_period_end=bool(stripe_object_value(subscription_object, "cancel_at_period_end", False)),
+            email=email,
+        )
+
+    def sync_checkout_session_to_billing(checkout_session, *, expected_user_id: int | None = None) -> dict | None:
+        raw_user_id = (
+            stripe_object_value(checkout_session, "client_reference_id")
+            or (stripe_object_value(checkout_session, "metadata", {}) or {}).get("discord_user_id")
+        )
+        if raw_user_id is None or not str(raw_user_id).isdigit():
+            return None
+        user_id = int(str(raw_user_id))
+        if expected_user_id is not None and user_id != expected_user_id:
+            return None
+
+        customer_id = stripe_object_id(stripe_object_value(checkout_session, "customer"))
+        subscription_object = stripe_object_value(checkout_session, "subscription")
+        customer_details = stripe_object_value(checkout_session, "customer_details", {}) or {}
+        email = None
+        if isinstance(customer_details, dict):
+            email = customer_details.get("email")
+        else:
+            email = getattr(customer_details, "email", None)
+
+        billing_store.set_checkout_session(user_id, stripe_object_id(checkout_session))
+
+        if subscription_object is None:
+            return sync_subscription_record(user_id, customer_id=customer_id, email=email)
+
+        if isinstance(subscription_object, str):
+            stripe = load_stripe_sdk()
+            subscription_object = stripe.Subscription.retrieve(subscription_object)
+
+        return sync_subscription_from_object(user_id, subscription_object, customer_id=customer_id, email=email)
+
+    def sync_subscription_event_to_billing(subscription_object) -> dict | None:
+        customer_id = stripe_object_id(stripe_object_value(subscription_object, "customer"))
+        subscription_id = stripe_object_id(subscription_object)
+        metadata = stripe_object_value(subscription_object, "metadata", {}) or {}
+        raw_user_id = None
+        if isinstance(metadata, dict):
+            raw_user_id = metadata.get("discord_user_id")
+        else:
+            raw_user_id = getattr(metadata, "discord_user_id", None)
+
+        user_id = None
+        if raw_user_id is not None and str(raw_user_id).isdigit():
+            user_id = int(str(raw_user_id))
+        if user_id is None:
+            user_id = billing_store.find_user_id_by_customer_id(customer_id) or billing_store.find_user_id_by_subscription_id(subscription_id)
+        if user_id is None:
+            return None
+        return sync_subscription_from_object(user_id, subscription_object, customer_id=customer_id)
+
+    def sync_invoice_event_to_billing(invoice_object) -> dict | None:
+        subscription_id = stripe_object_id(stripe_object_value(invoice_object, "subscription"))
+        customer_id = stripe_object_id(stripe_object_value(invoice_object, "customer"))
+        user_id = billing_store.find_user_id_by_customer_id(customer_id) or billing_store.find_user_id_by_subscription_id(subscription_id)
+        if user_id is None:
+            return None
+
+        stripe = load_stripe_sdk()
+        if subscription_id:
+            subscription_object = stripe.Subscription.retrieve(subscription_id)
+            return sync_subscription_from_object(user_id, subscription_object, customer_id=customer_id)
+        return sync_subscription_record(user_id, customer_id=customer_id)
+
     def premium_enabled() -> bool:
         return any(command["tier"] == PREMIUM_TIER for command in build_command_catalog(bot))
 
-    def subscription_summary(guild_id: int) -> dict:
+    def subscription_summary(guild_id: int, viewer_user_id: int | None = None) -> dict:
         controls = bot.access_manager.controls
         tier = controls.get_subscription_tier(guild_id)
         is_premium = controls.is_premium_enabled(guild_id)
         guild = bot.get_guild(guild_id)
+        viewer_billing = billing_summary(viewer_user_id)
+        guild_assignment = billing_store.get_guild_assignment(guild_id)
+        guild_name = guild.name if guild is not None else "This server"
+        if viewer_billing["billing_ready"]:
+            if is_premium:
+                summary_copy = f"{guild_name} is on the Premium tier. Premium is linked to your Discord account and active here."
+            elif viewer_billing["is_active"]:
+                summary_copy = "Premium is active on your Discord account. Turn it on here whenever you want."
+            else:
+                summary_copy = "Premium belongs to your Discord account. Start Premium once, then turn it on in any server you manage."
+        else:
+            summary_copy = (
+                f"{guild_name} is currently on the {tier_label(tier)} tier. Premium unlocks Guardian, advanced ticket tools, "
+                "analytics, richer automation, config tools, and advanced giveaway rules."
+            )
+
+        if is_premium:
+            state_title = "Premium is active"
+            state_copy = "Guardian and advanced tools are unlocked for this server."
+        elif viewer_billing["is_active"]:
+            state_title = "Premium is ready"
+            state_copy = "Your Discord account has Premium. Turn it on here whenever you want to unlock Guardian and advanced tools."
+        elif viewer_billing["billing_ready"]:
+            state_title = "Free is active"
+            state_copy = "Start Premium on your Discord account, then come back here to turn it on for this server."
+        else:
+            state_title = "Free is active"
+            state_copy = "Guardian and advanced tools stay locked until Premium is turned on."
         return {
             "tier": tier,
             "label": tier_label(tier),
             "is_premium": is_premium,
-            "guild_name": guild.name if guild is not None else "This server",
+            "guild_name": guild_name,
             "guardian_locked": not is_premium,
             "feature_count": len(PREMIUM_FEATURES),
             "features": [{"key": key, "label": label} for key, label in PREMIUM_FEATURES.items()],
             "config_templates": controls.list_config_templates(guild_id),
+            "billing_ready": viewer_billing["billing_ready"],
+            "checkout_ready": viewer_billing["checkout_ready"],
+            "viewer_has_premium": viewer_billing["is_active"],
+            "viewer_status_label": viewer_billing["status_label"],
+            "viewer_subscription_status": viewer_billing["status"],
+            "viewer_period_end_label": viewer_billing["period_end_label"],
+            "viewer_active_guild_count": viewer_billing["active_guild_count"],
+            "viewer_can_manage_billing": viewer_billing["manage_billing_available"],
+            "assigned_user_id": guild_assignment["premium_user_id"],
+            "assigned_to_viewer": viewer_user_id is not None and guild_assignment["premium_user_id"] == viewer_user_id,
+            "summary_copy": summary_copy,
+            "state_title": state_title,
+            "state_copy": state_copy,
+            "billing_button_label": "Manage billing" if viewer_billing["manage_billing_available"] else "Premium plans",
+            "premium_button_label": "Use Premium" if viewer_billing["is_active"] or not viewer_billing["billing_ready"] else "Get Premium",
         }
 
     async def build_live_guild_entry(guild_id: int, user_id: int) -> dict | None:
@@ -497,7 +709,7 @@ def create_dashboard_app(bot) -> FastAPI:
             "initials": guild.name[:2].upper(),
             "member_count": guild.member_count or len(guild.members),
             "role_count": max(len(guild.roles) - 1, 0),
-            "premium_enabled": premium_enabled(),
+            "premium_enabled": bot.access_manager.controls.is_premium_enabled(guild.id),
             "bot_installed": True,
             "dashboard_url": f"/dashboard/{guild.id}",
             "install_url": build_install_url(guild.id),
@@ -528,7 +740,6 @@ def create_dashboard_app(bot) -> FastAPI:
         except Exception:
             return cached_guilds or []
 
-        premium_available = premium_enabled()
         user_id = int(user["id"])
         manageable_guilds: list[dict] = []
         for guild in discord_guilds:
@@ -554,7 +765,7 @@ def create_dashboard_app(bot) -> FastAPI:
                     "initials": guild["name"][:2].upper(),
                     "member_count": (bot_guild.member_count or len(bot_guild.members)) if bot_guild else None,
                     "role_count": max(len(bot_guild.roles) - 1, 0) if bot_guild else None,
-                    "premium_enabled": premium_available,
+                    "premium_enabled": bot.access_manager.controls.is_premium_enabled(guild_id),
                     "bot_installed": bot_guild is not None,
                     "dashboard_url": f"/dashboard/{guild_id}",
                     "install_url": build_install_url(guild_id),
@@ -1379,7 +1590,8 @@ def create_dashboard_app(bot) -> FastAPI:
         giveaways_summary = giveaways_dashboard_summary(guild_id)
         autofeed_summary = autofeed_dashboard_summary(guild_id)
         case_summary = case_dashboard_summary(guild_id)
-        subscription = subscription_summary(guild_id)
+        viewer_user_id = session_user_id(request)
+        subscription = subscription_summary(guild_id, viewer_user_id)
         analytics = analytics_summary(guild_id) if subscription["is_premium"] else None
         purge_settings = purge_settings_summary(guild_id)
         moderation_settings = moderation_settings_summary(guild_id)
@@ -1421,6 +1633,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "autofeed_summary": autofeed_summary,
                 "case_summary": case_summary,
                 "subscription": subscription,
+                "billing": billing_summary(viewer_user_id),
                 "analytics": analytics,
                 "purge_settings": purge_settings,
                 "moderation_settings": moderation_settings,
@@ -1441,7 +1654,8 @@ def create_dashboard_app(bot) -> FastAPI:
         support_summary = support_dashboard_summary(guild_id)
         moderation_settings = moderation_settings_summary(guild_id)
         setup_summary = setup_wizard_summary(guild_id)
-        subscription = subscription_summary(guild_id)
+        viewer_user_id = session_user_id(request)
+        subscription = subscription_summary(guild_id, viewer_user_id)
         return render_template(
             "setup.html",
             request,
@@ -1457,6 +1671,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "moderation_settings": moderation_settings,
                 "setup_summary": setup_summary,
                 "subscription": subscription,
+                "billing": billing_summary(viewer_user_id),
                 "current_view": "setup",
             },
         )
@@ -1488,6 +1703,7 @@ def create_dashboard_app(bot) -> FastAPI:
             return RedirectResponse(url="/", status_code=302)
         guilds = await load_user_guilds(request)
         premium_count = len([command for command in build_command_catalog(bot) if command["tier"] == PREMIUM_TIER])
+        viewer_user_id = session_user_id(request)
         return render_template(
             "guilds.html",
             request,
@@ -1496,6 +1712,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "user": user,
                 "guilds": guilds,
                 "premium_count": premium_count,
+                "billing": billing_summary(viewer_user_id),
             },
         )
 
@@ -1505,6 +1722,7 @@ def create_dashboard_app(bot) -> FastAPI:
         if user is None:
             return RedirectResponse(url="/", status_code=302)
         sections, stats = help_catalog_sections()
+        viewer_user_id = session_user_id(request)
         return render_template(
             "help.html",
             request,
@@ -1513,8 +1731,151 @@ def create_dashboard_app(bot) -> FastAPI:
                 "user": user,
                 "sections": sections,
                 "stats": stats,
+                "billing": billing_summary(viewer_user_id),
             },
         )
+
+    @app.get("/billing", response_class=HTMLResponse)
+    async def billing_page(
+        request: Request,
+        checkout: str | None = None,
+        session_id: str | None = None,
+    ):
+        user = session_user(request)
+        if user is None:
+            return RedirectResponse(url="/", status_code=302)
+
+        viewer_user_id = session_user_id(request)
+        notice = None
+        notice_tone = "info"
+        if checkout == "success" and session_id and viewer_user_id is not None and stripe_checkout_ready():
+            try:
+                stripe = load_stripe_sdk()
+                checkout_session = stripe.checkout.Session.retrieve(
+                    session_id,
+                    expand=["subscription"],
+                )
+                synced = sync_checkout_session_to_billing(checkout_session, expected_user_id=viewer_user_id)
+                if synced and synced.get("is_active"):
+                    notice = "Premium is active on your Discord account now. Open any server dashboard you manage and turn Premium on there."
+                    notice_tone = "success"
+                else:
+                    notice = "Checkout completed, but premium is still syncing. Refresh this page in a moment if it does not appear yet."
+                    notice_tone = "info"
+            except Exception:
+                notice = "Checkout finished, but the subscription is still syncing. Refresh in a moment if Premium does not appear yet."
+                notice_tone = "info"
+        elif checkout == "canceled":
+            notice = "Checkout was canceled. Your server settings were not changed."
+            notice_tone = "warning"
+
+        guilds = await load_user_guilds(request)
+        return render_template(
+            "billing.html",
+            request,
+            {
+                "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
+                "user": user,
+                "billing": billing_summary(viewer_user_id),
+                "comparison_rows": FREE_PREMIUM_COMPARISON_ROWS,
+                "premium_price_display": PREMIUM_PRICE_DISPLAY,
+                "guilds": guilds,
+                "notice": notice,
+                "notice_tone": notice_tone,
+            },
+        )
+
+    @app.post("/billing/checkout")
+    async def create_billing_checkout(request: Request):
+        await require_same_origin(request)
+        user = await require_user(request)
+        viewer_user_id = session_user_id(request)
+        if viewer_user_id is None:
+            raise HTTPException(status_code=401, detail="Login required")
+        if not stripe_billing_ready():
+            raise HTTPException(status_code=503, detail="Stripe billing is not configured yet.")
+
+        stripe = load_stripe_sdk()
+        subscription = billing_store.get_user_subscription(viewer_user_id)
+        if subscription.get("is_active") and subscription.get("stripe_customer_id"):
+            portal_session = stripe.billing_portal.Session.create(
+                customer=subscription["stripe_customer_id"],
+                return_url=f"{dashboard_base_url}/billing",
+            )
+            return RedirectResponse(url=str(portal_session.url), status_code=303)
+
+        checkout_session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": stripe_premium_price_id_value(), "quantity": 1}],
+            success_url=f"{dashboard_base_url}/billing?checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{dashboard_base_url}/billing?checkout=canceled",
+            client_reference_id=str(viewer_user_id),
+            metadata={"discord_user_id": str(viewer_user_id)},
+            subscription_data={"metadata": {"discord_user_id": str(viewer_user_id)}},
+            customer=subscription.get("stripe_customer_id") or None,
+            allow_promotion_codes=True,
+        )
+        billing_store.set_checkout_session(viewer_user_id, stripe_object_id(checkout_session))
+        return RedirectResponse(url=str(checkout_session.url), status_code=303)
+
+    @app.post("/billing/portal")
+    async def create_billing_portal(request: Request):
+        await require_same_origin(request)
+        viewer_user_id = session_user_id(request)
+        if viewer_user_id is None:
+            raise HTTPException(status_code=401, detail="Login required")
+        if not stripe_checkout_ready():
+            raise HTTPException(status_code=503, detail="Stripe billing is not configured yet.")
+
+        subscription = billing_store.get_user_subscription(viewer_user_id)
+        customer_id = subscription.get("stripe_customer_id")
+        if not customer_id:
+            raise HTTPException(status_code=409, detail="No Stripe customer record exists for this Discord account yet.")
+
+        stripe = load_stripe_sdk()
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=f"{dashboard_base_url}/billing",
+        )
+        return RedirectResponse(url=str(portal_session.url), status_code=303)
+
+    @app.post("/stripe/webhook")
+    async def stripe_webhook(request: Request):
+        webhook_secret = stripe_webhook_secret_value()
+        if not webhook_secret:
+            raise HTTPException(status_code=503, detail="Stripe webhook is not configured yet.")
+
+        stripe = load_stripe_sdk()
+        payload = await request.body()
+        signature = request.headers.get("stripe-signature")
+        try:
+            event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
+        except Exception as error:
+            raise HTTPException(status_code=400, detail="Invalid Stripe webhook payload.") from error
+
+        event_id = stripe_object_id(event)
+        if billing_store.has_processed_webhook(event_id):
+            return JSONResponse({"received": True, "duplicate": True})
+
+        event_type = stripe_object_value(event, "type")
+        event_data = stripe_object_value(event, "data")
+        event_object = None
+        if isinstance(event_data, dict):
+            event_object = event_data.get("object")
+        else:
+            event_object = getattr(event_data, "object", None)
+
+        if event_type == "checkout.session.completed":
+            session_mode = stripe_object_value(event_object, "mode")
+            if session_mode == "subscription":
+                sync_checkout_session_to_billing(event_object)
+        elif event_type in {"customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"}:
+            sync_subscription_event_to_billing(event_object)
+        elif event_type == "invoice.paid":
+            sync_invoice_event_to_billing(event_object)
+
+        billing_store.mark_webhook_processed(event_id)
+        return JSONResponse({"received": True})
 
     @app.get("/login")
     async def login(request: Request):
@@ -1716,7 +2077,7 @@ def create_dashboard_app(bot) -> FastAPI:
             title="Dashboard Config Imported",
             description="Imported a saved dashboard snapshot for this server.",
         )
-        return JSONResponse({"ok": True, "subscription": subscription_summary(guild_id)})
+        return JSONResponse({"ok": True, "subscription": subscription_summary(guild_id, session_user_id(request))})
 
     @app.post("/api/guilds/{guild_id}/config-template")
     async def save_config_template(request: Request, guild_id: int, payload: ConfigTemplatePayload):
@@ -1900,12 +2261,30 @@ def create_dashboard_app(bot) -> FastAPI:
     @app.get("/api/guilds/{guild_id}/subscription")
     async def get_subscription(request: Request, guild_id: int):
         await require_guild_access(request, guild_id)
-        return JSONResponse(subscription_summary(guild_id))
+        return JSONResponse(subscription_summary(guild_id, session_user_id(request)))
 
     @app.post("/api/guilds/{guild_id}/subscription")
     async def update_subscription(request: Request, guild_id: int, payload: SubscriptionTierPayload):
         await require_same_origin(request)
         await require_guild_access(request, guild_id)
+        viewer_user_id = session_user_id(request)
+        requested_tier = str(payload.tier or "").strip().lower()
+        if requested_tier == TIER_PREMIUM and stripe_billing_ready():
+            if viewer_user_id is None:
+                raise HTTPException(status_code=401, detail="Login required")
+            viewer_billing = billing_store.get_user_subscription(viewer_user_id)
+            if not viewer_billing["is_active"]:
+                return JSONResponse(
+                    status_code=402,
+                    content={
+                        "detail": "Premium billing is not active on this Discord account yet.",
+                        "billing_url": "/billing",
+                    },
+                )
+            billing_store.assign_guild(guild_id, viewer_user_id)
+        elif requested_tier != TIER_PREMIUM and stripe_billing_ready():
+            billing_store.unassign_guild(guild_id)
+
         tier = bot.access_manager.controls.set_subscription_tier(guild_id, payload.tier)
         if tier != TIER_PREMIUM and hasattr(bot, "server_defense"):
             for feature_name, reason in (
@@ -1923,10 +2302,11 @@ def create_dashboard_app(bot) -> FastAPI:
             request,
             guild_id,
             title="Dashboard Subscription Tier Updated",
-            description=f"Switched the testing tier for this server to {tier_label(tier)}.",
+            description=f"Switched this server to the {tier_label(tier)} tier.",
             fields=[("Tier", tier_label(tier), True)],
         )
-        return JSONResponse(subscription_summary(guild_id))
+        session_store.clear_cached_guilds(session_id(request))
+        return JSONResponse(subscription_summary(guild_id, viewer_user_id))
 
     @app.post("/api/guilds/{guild_id}/dashboard-access")
     async def update_dashboard_access(request: Request, guild_id: int, payload: DashboardAccessPayload):

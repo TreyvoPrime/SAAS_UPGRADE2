@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from core.access import CommandAccessManager
 from core.autofeed import AutoFeedStore
+from core.billing import BillingStore
 from core.cases import ModerationCaseStore
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
@@ -64,6 +65,8 @@ class ServerCoreBot(commands.Bot):
         intents.voice_states = True
 
         self.command_controls = CommandControlStore()
+        self.billing_store = BillingStore()
+        self.command_controls.attach_billing_store(self.billing_store)
         self.command_logs = CommandLogStore()
         self.autofeed_store = AutoFeedStore()
         self.case_store = ModerationCaseStore()
