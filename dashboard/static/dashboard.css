@@ -5148,3 +5148,73 @@ textarea.search-input {
         grid-template-columns: 1fr;
     }
 }
+
+/* Live activity feed final layout overrides */
+.activity-surface {
+    align-content: start;
+}
+
+.log-list {
+    display: grid;
+    grid-auto-rows: max-content;
+    align-content: start;
+    align-items: start;
+    gap: 10px;
+    min-width: 0;
+    overflow-x: hidden;
+}
+
+.log-list > * {
+    min-width: 0;
+}
+
+.log-row {
+    width: 100%;
+    display: grid;
+    grid-template-rows: auto auto auto;
+    align-content: start;
+    align-items: start;
+    gap: 8px;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.log-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.log-top strong {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.3;
+}
+
+.log-top span {
+    justify-self: end;
+    white-space: nowrap;
+}
+
+.log-row p {
+    display: block;
+    margin: 0;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: unset;
+    line-height: 1.45;
+}
+
+.log-row time {
+    display: block;
+    margin-top: 0;
+    line-height: 1.3;
+}
+
+.log-row-fresh {
+    border-color: rgba(135, 255, 101, 0.28);
+    background: #31362f;
+}

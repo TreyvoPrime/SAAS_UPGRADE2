@@ -2291,42 +2291,109 @@
             } catch {}
         });
 
-        async function refreshLogs() {
-            const response = await fetch(`/api/guilds/${guildId}/logs`, {
-                credentials: "same-origin"
-            });
-            if (handleUnauthorizedResponse(response)) return;
-            if (!response.ok) return;
-            const data = await response.json();
-            const container = document.getElementById("log-list");
-            if (!container || !Array.isArray(data.entries)) return;
-            if (!data.entries.length) {
-                container.innerHTML = `
-                    <div class="notice-card compact">
-                        <strong>No activity yet</strong>
-                        <p>Server activity, command usage, tickets, and dashboard changes will start appearing here once the bot is active.</p>
-                    </div>
-                `;
-                return;
-            }
+        const logList = document.getElementById("log-list");
+        let refreshLogsInFlight = false;
+        let logsHydrated = false;
 
-            container.innerHTML = data.entries.map((entry) => {
-                const title = entry.kind === "event" ? (entry.title || "Server Event") : `/${entry.command}`;
-                const badge = entry.kind === "event" ? "event" : String(entry.status || "").replaceAll("_", " ");
-                const summary = entry.kind === "event"
-                    ? (entry.summary || "Server activity recorded.")
-                    : `${entry.user_name || "Unknown user"}${entry.channel_name ? ` in ${entry.channel_name}` : ""}`;
-                return `
-                    <article class="log-row status-${entry.status}">
-                        <div class="log-top">
-                            <strong>${title}</strong>
-                            <span>${badge}</span>
+        function formatLogTimestamp(timestamp) {
+            if (!timestamp) return "Just now";
+            const parsed = new Date(timestamp);
+            if (Number.isNaN(parsed.getTime())) {
+                return String(timestamp);
+            }
+            return parsed.toLocaleString([], {
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+            });
+        }
+
+        function buildLogEntryKey(entry) {
+            return [
+                entry.timestamp || "",
+                entry.kind || "",
+                entry.title || "",
+                entry.command || "",
+                entry.summary || "",
+                entry.user_name || "",
+                entry.channel_name || "",
+            ].join("::");
+        }
+
+        function renderLogEntry(entry) {
+            const article = document.createElement("article");
+            const status = String(entry.status || "event");
+            const title = entry.kind === "event" ? (entry.title || "Server Event") : `/${entry.command}`;
+            const badge = entry.kind === "event" ? "event" : status.replaceAll("_", " ");
+            const summary = entry.kind === "event"
+                ? (entry.summary || "Server activity recorded.")
+                : `${entry.user_name || "Unknown user"}${entry.channel_name ? ` in ${entry.channel_name}` : ""}`;
+
+            article.className = `log-row status-${status}`;
+            article.dataset.logKey = buildLogEntryKey(entry);
+            article.innerHTML = `
+                <div class="log-top">
+                    <strong>${title}</strong>
+                    <span>${badge}</span>
+                </div>
+                <p>${summary}</p>
+                <time datetime="${entry.timestamp || ""}">${formatLogTimestamp(entry.timestamp)}</time>
+            `;
+            return article;
+        }
+
+        async function refreshLogs() {
+            if (!logList || refreshLogsInFlight) return;
+            refreshLogsInFlight = true;
+            try {
+                const response = await fetch(`/api/guilds/${guildId}/logs`, {
+                    credentials: "same-origin"
+                });
+                if (handleUnauthorizedResponse(response)) return;
+                if (!response.ok) return;
+                const data = await response.json();
+                if (!Array.isArray(data.entries)) return;
+
+                if (!data.entries.length) {
+                    logList.innerHTML = `
+                        <div class="notice-card compact">
+                            <strong>No activity yet</strong>
+                            <p>Server activity, command usage, tickets, and dashboard changes will start appearing here once the bot is active.</p>
                         </div>
-                        <p>${summary}</p>
-                        <time datetime="${entry.timestamp}">${entry.timestamp}</time>
-                    </article>
-                `;
-            }).join("");
+                    `;
+                    logsHydrated = true;
+                    return;
+                }
+
+                const existingKeys = new Set(
+                    Array.from(logList.querySelectorAll("[data-log-key]")).map((node) => node.dataset.logKey)
+                );
+                const incomingNodes = data.entries.map((entry) => renderLogEntry(entry));
+
+                if (!logsHydrated || logList.querySelector(".notice-card")) {
+                    logList.innerHTML = "";
+                    incomingNodes.forEach((node) => logList.appendChild(node));
+                    logsHydrated = true;
+                    return;
+                }
+
+                const freshNodes = incomingNodes.filter((node) => !existingKeys.has(node.dataset.logKey));
+                if (freshNodes.length) {
+                    freshNodes.reverse().forEach((node) => {
+                        node.classList.add("log-row-fresh");
+                        logList.prepend(node);
+                        requestAnimationFrame(() => node.classList.remove("log-row-fresh"));
+                    });
+                }
+
+                while (logList.children.length > Math.min(data.entries.length, 80)) {
+                    logList.lastElementChild?.remove();
+                }
+                logsHydrated = true;
+            } finally {
+                refreshLogsInFlight = false;
+            }
         }
 
         async function refreshDefenseSnapshot() {
