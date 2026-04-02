@@ -1357,7 +1357,6 @@ def create_dashboard_app(bot) -> FastAPI:
 
         return sections, {
             "total": len(commands),
-            "premium": sum(1 for command in commands if command["tier"] == PREMIUM_TIER),
             "modules": len(sections),
         }
 
