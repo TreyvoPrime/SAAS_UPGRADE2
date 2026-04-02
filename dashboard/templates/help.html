@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ bot_name }} Help</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body class="nitro-shell">
+    <main class="servers-page-shell help-page-shell">
+        <header class="servers-topline">
+            <div class="servers-brand-row">
+                <a class="sidebar-brand" href="/servers">
+                    <div class="brand-mark"><img src="/static/servercore-thumbnail.png" alt="ServerCore"></div>
+                    <div>
+                        <div class="eyebrow">ServerCore</div>
+                        <strong>Dashboard</strong>
+                    </div>
+                </a>
+                <a class="ghost-button compact-button" href="/servers">Back to servers</a>
+            </div>
+            <div class="servers-user-pill">
+                <span class="eyebrow">Connected as</span>
+                <strong>{{ user.global_name or user.username }}</strong>
+                <a class="ghost-button compact-button" href="/logout">Log out</a>
+            </div>
+        </header>
+
+        <section class="servers-hero-panel help-hero-panel">
+            <div class="servers-copy">
+                <div class="eyebrow">Help center</div>
+                <h1>Find every command in one place.</h1>
+                <p>Browse the full ServerCore command list by module, see what each command does, and spot which tools are part of Premium.</p>
+            </div>
+            <div class="servers-metric-grid">
+                <article class="metric-card">
+                    <span>Total commands</span>
+                    <strong>{{ stats.total }}</strong>
+                </article>
+                <article class="metric-card">
+                    <span>Modules</span>
+                    <strong>{{ stats.modules }}</strong>
+                </article>
+                <article class="metric-card">
+                    <span>Premium commands</span>
+                    <strong>{{ stats.premium }}</strong>
+                </article>
+            </div>
+        </section>
+
+        <section class="servers-toolbar help-toolbar">
+            <label class="search-shell server-search-shell help-search-shell">
+                <span>Search commands</span>
+                <input id="help-search" class="search-input page-search" type="search" placeholder="Search by command, module, or description">
+            </label>
+        </section>
+
+        <section class="help-grid" id="help-grid">
+            {% for section in sections %}
+            <article class="surface help-module-card" data-help-section data-name="{{ section.name|lower }}">
+                <header class="help-module-head">
+                    <div>
+                        <div class="command-flags">
+                            <span class="module-chip">{{ section.count }} commands</span>
+                            {% if section.premium_count %}
+                            <span class="tier tier-premium">{{ section.premium_count }} premium</span>
+                            {% else %}
+                            <span class="tier tier-free">Free</span>
+                            {% endif %}
+                        </div>
+                        <h2>{{ section.name }}</h2>
+                    </div>
+                </header>
+                <div class="help-command-list">
+                    {% for command in section.commands %}
+                    <article class="help-command-row" data-help-command data-search="{{ command.search_blob }}">
+                        <div class="help-command-top">
+                            <strong>/{{ command.name }}</strong>
+                            <span class="tier tier-{{ command.tier_slug }}">{{ command.tier }}</span>
+                        </div>
+                        <p>{{ command.description }}</p>
+                    </article>
+                    {% endfor %}
+                </div>
+            </article>
+            {% endfor %}
+        </section>
+    </main>
+
+    <script>
+        const helpSearch = document.getElementById("help-search");
+        const helpSections = Array.from(document.querySelectorAll("[data-help-section]"));
+
+        function filterHelpCatalog(query) {
+            const normalized = query.trim().toLowerCase();
+            helpSections.forEach((section) => {
+                const rows = Array.from(section.querySelectorAll("[data-help-command]"));
+                let visibleCount = 0;
+                rows.forEach((row) => {
+                    const visible = !normalized || row.dataset.search.includes(normalized);
+                    row.hidden = !visible;
+                    if (visible) {
+                        visibleCount += 1;
+                    }
+                });
+                section.hidden = visibleCount === 0;
+            });
+        }
+
+        helpSearch?.addEventListener("input", (event) => {
+            filterHelpCatalog(event.target.value || "");
+        });
+    </script>
+</body>
+</html>

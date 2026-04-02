@@ -9,13 +9,16 @@
 <body class="nitro-shell">
     <main class="servers-page-shell">
         <header class="servers-topline">
-            <a class="sidebar-brand" href="/servers">
-                <div class="brand-mark"><img src="/static/servercore-thumbnail.png" alt="ServerCore"></div>
-                <div>
-                    <div class="eyebrow">ServerCore</div>
-                    <strong>Dashboard</strong>
-                </div>
-            </a>
+            <div class="servers-brand-row">
+                <a class="sidebar-brand" href="/servers">
+                    <div class="brand-mark"><img src="/static/servercore-thumbnail.png" alt="ServerCore"></div>
+                    <div>
+                        <div class="eyebrow">ServerCore</div>
+                        <strong>Dashboard</strong>
+                    </div>
+                </a>
+                <a class="ghost-button compact-button" href="/help">Help</a>
+            </div>
             <div class="servers-user-pill">
                 <span class="eyebrow">Connected as</span>
                 <strong>{{ user.global_name or user.username }}</strong>

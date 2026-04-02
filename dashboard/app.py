@@ -1329,6 +1329,38 @@ def create_dashboard_app(bot) -> FastAPI:
         rows.sort(key=lambda item: (item["module"].lower(), item["name"]))
         return rows, module_cards
 
+    def help_catalog_sections() -> tuple[list[dict], dict[str, int]]:
+        grouped: dict[str, list[dict]] = defaultdict(list)
+        commands = build_command_catalog(bot)
+        for command in commands:
+            grouped[command["module"]].append(
+                {
+                    "name": command["name"],
+                    "description": command["description"],
+                    "tier": command["tier"],
+                    "tier_slug": command["tier"].lower(),
+                    "search_blob": f"{command['name']} {command['module']} {command['tier']} {command['description']}".lower(),
+                }
+            )
+
+        sections: list[dict] = []
+        for module_name, module_commands in sorted(grouped.items(), key=lambda item: item[0].lower()):
+            sections.append(
+                {
+                    "name": module_name,
+                    "slug": _slugify(module_name),
+                    "count": len(module_commands),
+                    "premium_count": sum(1 for command in module_commands if command["tier"] == PREMIUM_TIER),
+                    "commands": sorted(module_commands, key=lambda item: item["name"]),
+                }
+            )
+
+        return sections, {
+            "total": len(commands),
+            "premium": sum(1 for command in commands if command["tier"] == PREMIUM_TIER),
+            "modules": len(sections),
+        }
+
     async def render_dashboard_view(request: Request, guild_id: int, current_view: str) -> HTMLResponse | RedirectResponse:
         if session_user(request) is None:
             return RedirectResponse(url="/", status_code=302)
@@ -1465,6 +1497,23 @@ def create_dashboard_app(bot) -> FastAPI:
                 "user": user,
                 "guilds": guilds,
                 "premium_count": premium_count,
+            },
+        )
+
+    @app.get("/help", response_class=HTMLResponse)
+    async def help_page(request: Request):
+        user = session_user(request)
+        if user is None:
+            return RedirectResponse(url="/", status_code=302)
+        sections, stats = help_catalog_sections()
+        return render_template(
+            "help.html",
+            request,
+            {
+                "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
+                "user": user,
+                "sections": sections,
+                "stats": stats,
             },
         )
 
