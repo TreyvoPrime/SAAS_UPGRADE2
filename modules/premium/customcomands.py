@@ -1,29 +1,21 @@
-import json
 from pathlib import Path
 
 import discord
 from discord.ext import commands
 from discord import app_commands
+from core.storage import read_json, write_json
 
 DATA_FILE = Path("customcommands.json")
 MAX_CUSTOM_COMMANDS_PER_GUILD = 3  # free tier limit
 
 
 def load_data() -> dict:
-    if not DATA_FILE.exists():
-        return {}
-
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+    data = read_json(DATA_FILE, {})
+    return data if isinstance(data, dict) else {}
 
 
 def save_data(data: dict) -> None:
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+    write_json(DATA_FILE, data)
 
 
 class CustomCommands(commands.Cog):

@@ -16,6 +16,7 @@ from core.greetings import GreetingsManager, GreetingsStore
 from core.giveaways import GiveawayStore
 from core.server_defense import ServerDefenseManager, ServerDefenseStore
 from core.staffnotes import StaffNoteStore
+from core.storage import ensure_storage_ready, storage_backend_label
 from core.selfroles import SelfRoleStore
 from core.temp_roles import TempRoleStore
 from core.tickets import TicketStore
@@ -31,6 +32,9 @@ APP_ID = os.getenv("DISCORD_APP_ID") or os.getenv("DISCORD_CLIENT_ID")
 
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN is missing. Set it in the environment or .env before starting ServerCore.")
+
+
+ensure_storage_ready()
 
 
 def parse_application_id(raw_value: str | None) -> int | None:
@@ -159,6 +163,7 @@ async def on_ready():
     dashboard_url = resolve_dashboard_base_url(dashboard_host, dashboard_port)
     print(f"Logged in as {bot.user} ({bot.user.id})")
     print(f"Dashboard available at {dashboard_url}")
+    print("Persistent storage:", storage_backend_label())
     print("Voice states intent:", bot.intents.voice_states)
     print("Moderation intent:", bot.intents.moderation)
     print("Members intent:", bot.intents.members)

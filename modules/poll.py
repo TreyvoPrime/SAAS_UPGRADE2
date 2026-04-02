@@ -1,4 +1,3 @@
-import json
 import time
 from pathlib import Path
 from typing import Optional
@@ -6,24 +5,18 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
+from core.storage import read_json, write_json
 
 DATA_FILE = Path("polls.json")
 
 
 def load_data() -> dict:
-    if not DATA_FILE.exists():
-        return {}
-    try:
-        with DATA_FILE.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-            return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+    data = read_json(DATA_FILE, {})
+    return data if isinstance(data, dict) else {}
 
 
 def save_data(data: dict) -> None:
-    with DATA_FILE.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=4)
+    write_json(DATA_FILE, data)
 
 
 def parse_duration(time_value: int, unit: str) -> int:

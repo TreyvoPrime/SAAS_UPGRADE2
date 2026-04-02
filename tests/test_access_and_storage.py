@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +11,7 @@ from unittest import mock
 from core.access import CommandAccessManager
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
+from core import storage
 from core.storage import read_json, write_json
 
 
@@ -177,6 +180,36 @@ class StorageTests(unittest.TestCase):
 
         self.assertEqual(loaded["guilds"]["1"]["enabled"], True)
 
+    def test_postgres_backend_migrates_existing_file_on_first_read(self) -> None:
+        target = self.root / "dashboard_data" / "command_controls.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        original_payload = {"guilds": {"1001": {"commands": {"warn": {"enabled": False}}}}}
+        target.write_text(json.dumps(original_payload), encoding="utf-8")
+        fake_psycopg, documents = build_fake_psycopg()
+
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
+            with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
+                storage._reset_storage_backend_cache()
+                loaded = read_json(target, {})
+
+        self.assertEqual(loaded, original_payload)
+        self.assertEqual(documents[storage._normalize_document_key(target)], original_payload)
+
+    def test_postgres_backend_writes_and_reads_documents_without_local_file(self) -> None:
+        target = self.root / "dashboard_data" / "command_controls.json"
+        payload = {"guilds": {"1001": {"commands": {"warn": {"enabled": True, "allowed_role_ids": [10]}}}}}
+        fake_psycopg, documents = build_fake_psycopg()
+
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
+            with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
+                storage._reset_storage_backend_cache()
+                write_json(target, payload)
+                loaded = read_json(target, {})
+
+        self.assertEqual(loaded, payload)
+        self.assertEqual(documents[storage._normalize_document_key(target)], payload)
+        self.assertFalse(target.exists())
+
 
 class CommandControlStoreSettingsTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -228,6 +261,61 @@ class CommandControlStoreSettingsTests(unittest.TestCase):
         self.assertEqual(premium_tier, "premium")
         self.assertEqual(free_tier, "free")
         self.assertEqual(self.controls.get_purge_settings(1001)["limit"], self.controls.FREE_PURGE_LIMIT_CAP)
+
+class FakePsycopgCursor:
+    def __init__(self, documents: dict[str, object]):
+        self.documents = documents
+        self._last_fetchone = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, query: str, params=None):
+        normalized_query = " ".join(query.split()).strip().lower()
+        params = params or ()
+        if normalized_query.startswith("create table if not exists servercore_documents"):
+            self._last_fetchone = None
+            return
+        if normalized_query.startswith("select payload::text from servercore_documents where document_key = %s"):
+            payload = self.documents.get(params[0])
+            self._last_fetchone = None if payload is None else (json.dumps(payload),)
+            return
+        if normalized_query.startswith("insert into servercore_documents"):
+            self.documents[params[0]] = json.loads(params[1])
+            self._last_fetchone = None
+            return
+        raise AssertionError(f"Unexpected SQL: {query}")
+
+    def fetchone(self):
+        return self._last_fetchone
+
+
+class FakePsycopgConnection:
+    def __init__(self, documents: dict[str, object]):
+        self.documents = documents
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def cursor(self):
+        return FakePsycopgCursor(self.documents)
+
+
+def build_fake_psycopg():
+    documents: dict[str, object] = {}
+
+    class FakePsycopgModule:
+        @staticmethod
+        def connect(dsn, autocommit=True, connect_timeout=5):
+            return FakePsycopgConnection(documents)
+
+    return FakePsycopgModule(), documents
 
 
 if __name__ == "__main__":

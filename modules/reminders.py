@@ -1,4 +1,3 @@
-import json
 import re
 import time
 from pathlib import Path
@@ -6,6 +5,7 @@ from pathlib import Path
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
+from core.storage import read_json, write_json
 
 
 DATA_FILE = Path("reminders.json")
@@ -13,20 +13,12 @@ TIME_TOKEN_PATTERN = re.compile(r"(\d+)\s*([smhd])", re.IGNORECASE)
 
 
 def load_reminders() -> list:
-    if not DATA_FILE.exists():
-        return []
-
-    try:
-        with DATA_FILE.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-            return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    data = read_json(DATA_FILE, [])
+    return data if isinstance(data, list) else []
 
 
 def save_reminders(reminders: list) -> None:
-    with DATA_FILE.open("w", encoding="utf-8") as handle:
-        json.dump(reminders, handle, indent=4)
+    write_json(DATA_FILE, reminders)
 
 
 def parse_duration_input(value: str) -> int:

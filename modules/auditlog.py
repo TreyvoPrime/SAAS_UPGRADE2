@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -8,6 +7,7 @@ from typing import Any
 import discord
 from discord import app_commands
 from discord.ext import commands
+from core.storage import read_json, write_json
 
 
 DATA_FILE = Path("auditlog_config.json")
@@ -30,17 +30,12 @@ LOG_CATEGORIES = [
 
 
 def load_config() -> dict[str, dict[str, Any]]:
-    if DATA_FILE.exists():
-        try:
-            data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else {}
-        except Exception:
-            return {}
-    return {}
+    data = read_json(DATA_FILE, {})
+    return data if isinstance(data, dict) else {}
 
 
 def save_config(data: dict[str, dict[str, Any]]) -> None:
-    DATA_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    write_json(DATA_FILE, data)
 
 
 def truncate(text: Any, limit: int = MAX_FIELD) -> str:
