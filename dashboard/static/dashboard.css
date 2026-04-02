@@ -4398,8 +4398,21 @@ body,
 .servers-brand-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
     min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+}
+
+.servers-brand-row .sidebar-brand {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.servers-brand-row .ghost-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .help-page-shell {
