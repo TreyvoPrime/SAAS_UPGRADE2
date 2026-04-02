@@ -2908,6 +2908,21 @@ textarea.search-input {
     line-height: 1.2;
 }
 
+.inline-premium-tag {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(135, 255, 101, 0.22);
+    background: #243026;
+    color: #ACEB98;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+}
+
 .command-card p,
 .defense-card p,
 .greeting-card p,

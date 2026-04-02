@@ -942,7 +942,7 @@
                         <div class="command-grid">
                             {% for command in section.commands %}
                             <article
-                                class="command-card {% if command.tier|lower == 'premium' and not subscription.is_premium %}is-locked-card{% endif %}"
+                                class="command-card"
                                 data-command-card
                                 data-command="{{ command.name }}"
                                 data-module="{{ section.slug }}"
@@ -950,30 +950,29 @@
                                 data-enabled="{{ 'true' if command.enabled else 'false' }}"
                                 data-role-ids="{{ command.allowed_role_ids|join(',') }}"
                             >
-                                {% if command.tier|lower == 'premium' %}
-                                <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
-                                    <strong>Premium required</strong>
-                                    <span>Turn Premium on for this server to use /{{ command.name }} and the rest of the advanced toolkit.</span>
-                                </div>
-                                {% endif %}
                                 <div class="command-card-top">
                                     <div>
                                         <div class="command-flags">
                                             <span class="tier tier-{{ command.tier|lower }}">{{ command.tier }}</span>
                                             <span class="module-chip">{{ command.module }}</span>
                                         </div>
-                                        <h4>/{{ command.name }}</h4>
+                                        <h4>/{{ command.name }}{% if command.tier|lower == 'premium' %}<span class="inline-premium-tag">Premium</span>{% endif %}</h4>
                                     </div>
+                                    {% if command.tier|lower == 'premium' %}
+                                    <span class="defense-status-pill {% if subscription.is_premium %}{% else %}is-muted{% endif %}">
+                                        {% if subscription.is_premium %}Premium command{% else %}Premium only{% endif %}
+                                    </span>
+                                    {% else %}
                                     <label class="toggle">
                                         <input
                                             type="checkbox"
                                             {% if command.enabled %}checked{% endif %}
                                             data-command-toggle
                                             data-command-name="{{ command.name }}"
-                                            {% if command.tier|lower == 'premium' and not subscription.is_premium %}disabled{% endif %}
                                         >
                                         <span>Enabled</span>
                                     </label>
+                                    {% endif %}
                                 </div>
 
                                 <p>{{ command.description }}</p>
@@ -982,14 +981,26 @@
                                     <div class="role-summary" data-role-summary>
                                         {{ command.role_summary }}
                                     </div>
+                                    {% if command.tier|lower == 'premium' %}
                                     <div class="command-actions">
-                                        <button type="button" class="ghost-button compact-button" data-role-editor data-command-name="{{ command.name }}" {% if command.tier|lower == 'premium' and not subscription.is_premium %}disabled{% endif %}>
+                                        <span class="dashboard-access-note">
+                                            {% if subscription.is_premium %}
+                                                This advanced command is included with Premium.
+                                            {% else %}
+                                                Turn Premium on above to unlock this command.
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    {% else %}
+                                    <div class="command-actions">
+                                        <button type="button" class="ghost-button compact-button" data-role-editor data-command-name="{{ command.name }}">
                                             Edit roles
                                         </button>
-                                        <button type="button" class="ghost-button compact-button" data-clear-roles data-command-name="{{ command.name }}" {% if command.tier|lower == 'premium' and not subscription.is_premium %}disabled{% endif %}>
+                                        <button type="button" class="ghost-button compact-button" data-clear-roles data-command-name="{{ command.name }}">
                                             Allow all
                                         </button>
                                     </div>
+                                    {% endif %}
                                 </div>
                             </article>
                             {% endfor %}
