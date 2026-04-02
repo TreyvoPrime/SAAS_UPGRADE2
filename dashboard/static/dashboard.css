@@ -4241,3 +4241,117 @@ body,
         -webkit-line-clamp: 2;
     }
 }
+
+/* Server switcher page final overrides */
+.servers-page-shell .server-board {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+}
+
+.servers-page-shell .server-card,
+.servers-page-shell .server-card-redesign {
+    gap: 12px;
+    padding: 14px;
+    background: #313239;
+    border-color: rgba(164, 194, 168, 0.14);
+}
+
+.servers-page-shell .server-card-top {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+}
+
+.servers-page-shell .server-card-visual {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 10px;
+    background: #2d3035;
+    border: 1px solid rgba(164, 194, 168, 0.12);
+    overflow: hidden;
+}
+
+.servers-page-shell .server-card-visual img,
+.servers-page-shell .server-avatar-fallback {
+    width: 44px;
+    height: 44px;
+    border-radius: 0;
+    object-fit: cover;
+    display: block;
+}
+
+.servers-page-shell .server-card-heading,
+.servers-page-shell .server-card-body,
+.servers-page-shell .server-card-footer {
+    min-width: 0;
+}
+
+.servers-page-shell .server-card-heading h2 {
+    display: block;
+    min-width: 0;
+    margin: 0;
+    font-size: 0.98rem;
+    line-height: 1.18;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: normal;
+}
+
+.servers-page-shell .server-card-body p {
+    font-size: 0.83rem;
+    line-height: 1.45;
+}
+
+.servers-page-shell .server-card-meta {
+    gap: 6px;
+}
+
+.servers-page-shell .server-card-meta span,
+.servers-page-shell .server-meta-badge {
+    min-height: 26px;
+    padding: 0 10px;
+    font-size: 0.75rem;
+    background: #2d2f34;
+    border-color: rgba(164, 194, 168, 0.14);
+}
+
+.servers-page-shell .server-card-cta {
+    padding: 7px 12px;
+    background: #2c2d31;
+    border: 1px solid rgba(164, 194, 168, 0.16);
+    color: #eef4ea;
+}
+
+.servers-page-shell .server-card-redesign:hover,
+.servers-page-shell .server-card-redesign:hover .server-card-cta,
+.servers-page-shell .server-card-cta:hover {
+    background: #2e3531;
+    border-color: rgba(164, 194, 168, 0.28);
+    color: #eef4ea;
+}
+
+.servers-page-shell .servers-user-pill .ghost-button:hover,
+.servers-page-shell .servers-toolbar .ghost-button:hover,
+.servers-page-shell .primary-button:hover,
+.servers-page-shell .ghost-button:hover {
+    background: #2e3531;
+    border-color: rgba(164, 194, 168, 0.28);
+    color: #eef4ea;
+}
+
+@media (max-width: 1500px) {
+    .servers-page-shell .server-board {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .servers-page-shell .server-card-heading h2 {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+}
