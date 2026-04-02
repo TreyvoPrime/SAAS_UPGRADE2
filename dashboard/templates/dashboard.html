@@ -128,6 +128,7 @@
 
             {% if current_view == 'defense' %}
             <section class="surface defense-workspace">
+                {% set autofilter_card = defense_cards|selectattr("name", "equalto", "autofilter")|first %}
                 <div class="workspace-topline defense-topline">
                     <div>
                         <div class="eyebrow">ServerGuard</div>
@@ -218,6 +219,7 @@
 
                 <div class="defense-grid" id="defense-grid">
                     {% for defense in defense_cards %}
+                    {% if defense.name != 'autofilter' %}
                     <article
                         class="defense-card"
                         data-defense-card
@@ -297,6 +299,7 @@
                             </div>
                         </div>
                     </article>
+                    {% endif %}
                     {% endfor %}
                 </div>
 
@@ -307,12 +310,26 @@
                         <p>Keep a live list of words or phrases that should never land in chat. Members get three warnings, and after that AutoFilter applies a one-hour timeout automatically.</p>
                     </div>
                     <div class="command-settings-actions">
+                        <div class="autofilter-panel-head">
+                            <div class="defense-status-row autofilter-status-row">
+                                <span class="defense-status-pill {% if not autofilter_card.enabled %}is-muted{% endif %}" id="autofilter-status">{{ autofilter_card.status_label }}</span>
+                                <span class="defense-duration-pill" id="autofilter-remaining">{{ autofilter_card.remaining_label }}</span>
+                            </div>
+                            <label class="toggle autofilter-toggle">
+                                <input
+                                    id="autofilter-enabled-toggle"
+                                    type="checkbox"
+                                    {% if autofilter_card.enabled %}checked{% endif %}
+                                >
+                                <span>AutoFilter active</span>
+                            </label>
+                        </div>
                         <label class="search-shell">
                             <span>Blocked terms</span>
                             <textarea id="autofilter-terms-input" class="search-input greeting-textarea" rows="6" placeholder="One word or phrase per line">{{ defense_summary.autofilter_terms|join('\n') }}</textarea>
                         </label>
                         <div class="dashboard-access-summary" id="autofilter-summary">AutoFilter is tracking {{ defense_summary.autofilter_terms|length }} blocked term(s). It warns 3 times, then times out for {{ defense_summary.autofilter_timeout_minutes }} minutes.</div>
-                        <button type="button" class="primary-button" id="save-autofilter-terms">Save blocked terms</button>
+                        <button type="button" class="primary-button" id="save-autofilter-terms">Save AutoFilter</button>
                     </div>
                 </section>
 
@@ -1176,6 +1193,9 @@
         const threatSignalList = document.getElementById("threat-signal-list");
         const threatActionStrip = document.getElementById("threat-action-strip");
         const autofilterTermsInput = document.getElementById("autofilter-terms-input");
+        const autofilterEnabledToggle = document.getElementById("autofilter-enabled-toggle");
+        const autofilterStatus = document.getElementById("autofilter-status");
+        const autofilterRemaining = document.getElementById("autofilter-remaining");
         const autofilterSummary = document.getElementById("autofilter-summary");
         const saveAutofilterTermsButton = document.getElementById("save-autofilter-terms");
         const greetingCards = Array.from(document.querySelectorAll("[data-greeting-card]"));
@@ -1553,6 +1573,10 @@
             }
             if (result.state) {
                 syncDefenseSummary(result.state);
+                const autofilterDefense = (result.state.cards || []).find((item) => item.name === "autofilter");
+                if (autofilterDefense) {
+                    syncAutofilterControls(autofilterDefense);
+                }
                 defenseCards.forEach((card) => {
                     const updatedDefense = (result.state.cards || []).find((item) => item.name === card.dataset.defenseName);
                     if (updatedDefense) {
@@ -1624,6 +1648,27 @@
 
         function getDefenseCard(defenseName) {
             return defenseCards.find((card) => card.dataset.defenseName === defenseName) || null;
+        }
+
+        function syncAutofilterControls(defense) {
+            if (!defense) return;
+            if (autofilterEnabledToggle) {
+                autofilterEnabledToggle.checked = Boolean(defense.enabled);
+                autofilterEnabledToggle.disabled = Boolean(defense.locked);
+            }
+            if (autofilterStatus) {
+                autofilterStatus.textContent = defense.status_label;
+                autofilterStatus.classList.toggle("is-muted", !defense.enabled);
+            }
+            if (autofilterRemaining) {
+                autofilterRemaining.textContent = defense.locked
+                    ? (defense.remaining_premium_label || "Premium only")
+                    : defense.remaining_label;
+            }
+            if (saveAutofilterTermsButton) {
+                saveAutofilterTermsButton.disabled = Boolean(defense.locked);
+                saveAutofilterTermsButton.textContent = defense.locked ? "Premium only" : "Save AutoFilter";
+            }
         }
 
         function syncDefenseSummary(state) {
@@ -2200,10 +2245,20 @@
 
         saveAutofilterTermsButton?.addEventListener("click", async () => {
             const terms = collectAutofilterTerms();
+            if (autofilterEnabledToggle?.checked && !terms.length) {
+                showToast("Add at least one blocked word or phrase before enabling AutoFilter.", "error");
+                return;
+            }
             try {
                 const result = await updateAutofilterTerms(terms);
                 syncAutofilterTermsResult(result);
-                showToast("AutoFilter terms updated.");
+                const defenseResult = await updateDefenseState("autofilter", {
+                    enabled: Boolean(autofilterEnabledToggle?.checked),
+                    duration_minutes: null,
+                });
+                syncAutofilterControls(defenseResult.card);
+                syncDefenseSummary(defenseResult.state);
+                showToast(`AutoFilter ${defenseResult.card.enabled ? "updated" : "disabled"}.`);
             } catch {}
         });
 
@@ -2285,6 +2340,10 @@
             if (!response.ok) return;
             const state = await response.json();
             syncDefenseSummary(state);
+            const autofilterDefense = (state.cards || []).find((item) => item.name === "autofilter");
+            if (autofilterDefense) {
+                syncAutofilterControls(autofilterDefense);
+            }
             defenseCards.forEach((card) => {
                 const updatedDefense = (state.cards || []).find((item) => item.name === card.dataset.defenseName);
                 if (updatedDefense) {

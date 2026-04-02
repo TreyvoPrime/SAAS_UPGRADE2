@@ -4774,6 +4774,22 @@ textarea.search-input {
     width: 100%;
 }
 
+.autofilter-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 16px;
+    flex-wrap: wrap;
+}
+
+.autofilter-status-row {
+    flex: 1 1 auto;
+}
+
+.autofilter-toggle {
+    flex: 0 0 auto;
+}
+
 .command-card-top,
 .defense-card-head,
 .greeting-card-head {
