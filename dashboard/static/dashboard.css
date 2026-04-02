@@ -2908,21 +2908,6 @@ textarea.search-input {
     line-height: 1.2;
 }
 
-.inline-premium-tag {
-    display: inline-flex;
-    align-items: center;
-    margin-left: 8px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid rgba(135, 255, 101, 0.22);
-    background: #243026;
-    color: #ACEB98;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    vertical-align: middle;
-}
-
 .command-card p,
 .defense-card p,
 .greeting-card p,
@@ -4577,9 +4562,7 @@ body,
 .setup-panel-head p,
 .setup-role-head p,
 .dashboard-access-summary,
-.role-summary,
 .defense-note,
-.dashboard-access-note,
 .greeting-preview p,
 .help-command-line p {
     overflow-wrap: anywhere;
@@ -4782,6 +4765,15 @@ textarea.search-input {
     gap: 12px;
 }
 
+.command-card[data-tier="premium"] .command-card-bottom {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+}
+
+.command-card[data-tier="premium"] .command-actions {
+    width: 100%;
+}
+
 .command-card-top,
 .defense-card-head,
 .greeting-card-head {
@@ -4805,6 +4797,14 @@ textarea.search-input {
     font-size: 0.92rem;
 }
 
+.role-summary,
+.dashboard-access-note {
+    overflow-wrap: normal;
+    word-break: normal;
+    white-space: normal;
+    text-wrap: pretty;
+}
+
 .command-flags,
 .defense-status-row,
 .page-meta-row,
@@ -4822,11 +4822,6 @@ textarea.search-input {
     padding: 0 10px;
     border-radius: 999px;
     white-space: nowrap;
-}
-
-.inline-premium-tag {
-    margin-left: 8px;
-    vertical-align: middle;
 }
 
 .toggle {
