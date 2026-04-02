@@ -4976,6 +4976,23 @@ textarea.search-input {
     text-overflow: clip;
 }
 
+/* Setup wizard step labels should stay fully readable instead of clipping. */
+.dashboard-view-setup .setup-progress {
+    grid-template-columns: repeat(5, minmax(110px, 1fr));
+}
+
+.dashboard-view-setup .setup-step-pill {
+    min-height: 48px;
+    padding: 0 12px;
+}
+
+.dashboard-view-setup .setup-step-text {
+    font-size: 0.8rem;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+
 @media (max-width: 1120px) {
     .setup-grid,
     .setup-grid-wide,
