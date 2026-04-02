@@ -221,7 +221,7 @@
                     {% for defense in defense_cards %}
                     {% if defense.name != 'autofilter' %}
                     <article
-                        class="defense-card{% if defense.name == 'antiraid' %} guardian-defense-card{% if defense.locked %} is-preview-locked{% endif %}{% endif %}"
+                        class="defense-card{% if defense.name == 'antiraid' %} guardian-defense-card{% endif %}"
                         data-defense-card
                         data-defense-name="{{ defense.name }}"
                         data-enabled="{{ 'true' if defense.enabled else 'false' }}"
@@ -230,15 +230,12 @@
                         data-lockdown-role-ids="{{ defense.allowed_role_ids|join(',') }}"
                         {% endif %}
                     >
-                        {% if defense.name == 'antiraid' %}
-                        <div class="premium-card-lock{% if not defense.locked %} is-hidden{% endif %}" data-premium-lock>
-                            <strong>Guardian is locked</strong>
-                            <span>Turn Premium on for this server to unlock live threat watching and raid response.</span>
-                        </div>
-                        {% endif %}
                         <div class="command-flags defense-flags">
                             <span class="tier tier-free">Defense</span>
                             <span class="module-chip">{{ defense.tag }}</span>
+                            {% if defense.name == 'antiraid' and defense.locked %}
+                            <span class="tier tier-premium guardian-inline-tag">Premium</span>
+                            {% endif %}
                         </div>
                         <div class="defense-card-head">
                             <div>
@@ -279,6 +276,9 @@
                             </label>
                             {% if defense.rate_label %}
                             <div class="defense-note">{{ defense.rate_label }}</div>
+                            {% endif %}
+                            {% if defense.name == 'antiraid' and defense.locked %}
+                            <div class="dashboard-access-note guardian-premium-note">Guardian is part of Premium on this server. Turn Premium on above to unlock live threat watching and automatic raid response.</div>
                             {% endif %}
                             {% if defense.locked %}
                             <div class="dashboard-access-summary">{{ defense.remaining_premium_label }}</div>
@@ -333,17 +333,19 @@
                     </div>
                 </section>
 
-                <section class="surface threat-stage{% if not subscription.is_premium %} is-preview-gated{% endif %}">
-                    <div class="guardian-stage-lock{% if subscription.is_premium %} is-hidden{% endif %}" id="guardian-stage-lock">
-                        <strong>Guardian Live Threat Watch</strong>
-                        <span>Premium unlocks live threat tracking, raid response signals, and the full Guardian watch surface for this server.</span>
-                    </div>
+                <section class="surface threat-stage">
                     <div class="threat-stage-copy">
                         <div class="eyebrow">Guardian</div>
                         <h3>Live threat watch</h3>
                         <div class="guardian-preview-strip">
-                            <span class="module-chip guardian-preview-chip">Premium preview</span>
+                            {% if not subscription.is_premium %}
+                            <span class="module-chip guardian-preview-chip">Premium</span>
                             <span class="guardian-preview-note">Guardian watches join spikes, spam bursts, and stacked defense pressure so staff can react before a raid spreads.</span>
+                            <span class="guardian-preview-note guardian-upgrade-note">Upgrade this server to unlock the live threat meter and Guardian response controls.</span>
+                            {% else %}
+                            <span class="module-chip guardian-preview-chip">Live</span>
+                            <span class="guardian-preview-note">Guardian watches join spikes, spam bursts, and stacked defense pressure so staff can react before a raid spreads.</span>
+                            {% endif %}
                         </div>
                         <p id="threat-status-copy">{{ defense_summary.threat.status_copy }}</p>
                     </div>
@@ -1221,7 +1223,6 @@
         const subscriptionStateCopy = document.getElementById("subscription-state-copy");
         const setTierFreeButton = document.getElementById("set-tier-free");
         const setTierPremiumButton = document.getElementById("set-tier-premium");
-        const guardianStageLock = document.getElementById("guardian-stage-lock");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
             disabled: document.querySelector('[data-stat="disabled"]'),
@@ -1745,9 +1746,6 @@
             card.dataset.durationMinutes = defense.duration_minutes ?? "";
             card.dataset.locked = defense.locked ? "true" : "false";
             card.classList.toggle("is-locked-card", Boolean(defense.locked));
-            if (card.dataset.defenseName === "antiraid") {
-                card.classList.toggle("is-preview-locked", Boolean(defense.locked));
-            }
 
             if (status) {
                 status.textContent = defense.status_label;
@@ -1809,9 +1807,6 @@
             if (setTierPremiumButton) {
                 setTierPremiumButton.classList.toggle("is-active-toggle", premiumOn);
                 setTierPremiumButton.setAttribute("aria-pressed", String(premiumOn));
-            }
-            if (guardianStageLock) {
-                guardianStageLock.classList.toggle("is-hidden", premiumOn);
             }
         }
 
