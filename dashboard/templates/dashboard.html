@@ -34,9 +34,9 @@
             <section class="sidebar-quicklinks">
                 <div class="eyebrow">Quick links</div>
                 <nav class="sidebar-nav">
-                    <a class="nav-link" href="/dashboard/{{ selected_guild.id }}/setup">Setup wizard</a>
-                    <a class="nav-link" href="/servers">All Servers</a>
-                    <a class="nav-link" href="/logout">Log Out</a>
+                    <a class="nav-link" href="/dashboard/{{ selected_guild.id }}/setup"><span class="nav-icon">SW</span><span>Setup wizard</span></a>
+                    <a class="nav-link" href="/servers"><span class="nav-icon">SV</span><span>All servers</span></a>
+                    <a class="nav-link" href="/logout"><span class="nav-icon">LO</span><span>Log out</span></a>
                 </nav>
             </section>
 
@@ -58,8 +58,8 @@
             <header class="page-head">
                 <div class="page-lead">
                     <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% elif current_view == 'support' %}Support{% elif current_view == 'autofeed' %}Autofeed{% elif current_view == 'giveaways' %}Giveaways{% else %}Command Control{% endif %}</div>
-                    <h2>{% if current_view == 'defense' %}Protect your server with fewer clicks{% elif current_view == 'greetings' %}Shape the first impression people get{% elif current_view == 'support' %}Keep support clean and easy to run{% elif current_view == 'autofeed' %}Keep recurring updates on track{% elif current_view == 'giveaways' %}Run giveaways people can follow easily{% else %}Choose what people can use{% endif %}</h2>
-                    <p>{% if current_view == 'defense' %}Turn protections on fast, adjust the rules, and keep the right people talking when the server needs more control.{% elif current_view == 'greetings' %}Pick the right channels, write your own message, and make join and leave moments feel like your community.{% elif current_view == 'support' %}Set up ticket categories that make sense for your server so members get help faster.{% elif current_view == 'autofeed' %}Review repeating posts, manage schedules, and keep important channels active without reposting by hand.{% elif current_view == 'giveaways' %}Check what is live, what ended recently, and the Discord commands staff need most often.{% else %}Turn commands on or off, decide who can use them, and keep access easy to manage in one place.{% endif %}</p>
+                    <h2>{% if current_view == 'defense' %}Security controls and response rules{% elif current_view == 'greetings' %}Welcome, leave, and join guide messaging{% elif current_view == 'support' %}Ticket routing and support controls{% elif current_view == 'autofeed' %}Scheduled channel updates{% elif current_view == 'giveaways' %}Giveaway operations{% else %}Manage command access{% endif %}</h2>
+                    <p>{% if current_view == 'defense' %}Arm protections, review live threat status, and control who can still speak when the server is locked down.{% elif current_view == 'greetings' %}Choose channels, update messages, and preview what members will see when they join, leave, or open your join guide DM.{% elif current_view == 'support' %}Keep support issue types, ticket entry points, and staff access organized without digging through Discord commands.{% elif current_view == 'autofeed' %}Review repeating posts, track current schedules, and keep important channels up to date from one place.{% elif current_view == 'giveaways' %}See what is live, what recently ended, and the controls staff need to manage giveaway rounds reliably.{% else %}Review every command, decide who can use it, and keep server permissions predictable across modules.{% endif %}</p>
                     <div class="page-meta-row">
                         <span class="module-chip">{{ selected_guild.member_count }} members</span>
                         <span class="module-chip">{{ roles|length }} roles</span>
@@ -75,9 +75,9 @@
 
             <section class="surface command-settings-panel defense-settings-panel premium-tier-panel">
                 <div>
-                    <div class="eyebrow">Premium testing</div>
-                    <h3>Flip this server between Free and Premium</h3>
-                    <p>Use this temporary switch to test plan gating while Premium is still being built out. Guardian only arms when this server is on Premium.</p>
+                    <div class="eyebrow">Server plan</div>
+                    <h3>Switch this server between Free and Premium</h3>
+                    <p>Use the plan toggle below when you want to test locked features on this server. Guardian only arms on Premium.</p>
                 </div>
                     <div class="command-settings-actions">
                         <div class="dashboard-access-summary" id="subscription-summary">
@@ -95,12 +95,12 @@
             </section>
 
             <nav class="view-switcher" aria-label="Dashboard sections">
-                <a class="view-pill {% if current_view == 'commands' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}">Command Control</a>
-                <a class="view-pill {% if current_view == 'defense' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense">ServerGuard</a>
-                <a class="view-pill {% if current_view == 'greetings' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/greetings">Welcome/Leave</a>
-                <a class="view-pill {% if current_view == 'support' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/support">Support</a>
-                <a class="view-pill {% if current_view == 'autofeed' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/autofeed">Autofeed</a>
-                <a class="view-pill {% if current_view == 'giveaways' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/giveaways">Giveaways</a>
+                <a class="view-pill {% if current_view == 'commands' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}"><span class="view-pill-icon">CC</span><span>Command Control</span></a>
+                <a class="view-pill {% if current_view == 'defense' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense"><span class="view-pill-icon">SG</span><span>ServerGuard</span></a>
+                <a class="view-pill {% if current_view == 'greetings' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/greetings"><span class="view-pill-icon">WL</span><span>Welcome/Leave</span></a>
+                <a class="view-pill {% if current_view == 'support' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/support"><span class="view-pill-icon">SP</span><span>Support</span></a>
+                <a class="view-pill {% if current_view == 'autofeed' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/autofeed"><span class="view-pill-icon">AF</span><span>Autofeed</span></a>
+                <a class="view-pill {% if current_view == 'giveaways' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/giveaways"><span class="view-pill-icon">GW</span><span>Giveaways</span></a>
             </nav>
 
             <section class="surface dashboard-access-panel">

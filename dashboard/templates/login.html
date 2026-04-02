@@ -10,8 +10,8 @@
     <main class="auth-layout">
         <section class="hero-panel">
             <div class="eyebrow">ServerCore Dashboard</div>
-            <h1>Manage your bot with a cleaner control surface built for real server operations.</h1>
-            <p>Review command access, lock features to trusted roles, and move between communities without losing your place. Sign in once, then manage every server you control from one Nitro-inspired workspace.</p>
+            <h1>Manage bot settings with a clear, server-first control panel.</h1>
+            <p>Review access, security, support, automations, and logging from one dashboard built for practical server administration.</p>
             <div class="feature-strip">
                 <span>Command access by role</span>
                 <span>Server install and switcher</span>
@@ -23,10 +23,10 @@
             <div class="panel-glow"></div>
             <div class="eyebrow">Sign in</div>
             <h2>Connect Discord</h2>
-            <p>Use Discord OAuth to open only the servers you can actually manage, then jump straight into command controls and dashboard actions.</p>
+            <p>Sign in with Discord to open only the servers you can manage and move straight into setup, moderation, and server controls.</p>
             {% if oauth_ready %}
             <a class="primary-button full-width" href="/login">Continue with Discord</a>
-            <p class="footnote">Secure sign-in powered by your Discord application and public dashboard domain.</p>
+            <p class="footnote">Your session is limited to your Discord account and the servers you already control.</p>
             {% else %}
             <div class="notice-card">
                 <strong>OAuth setup required</strong>

@@ -34,9 +34,9 @@
             <section class="sidebar-quicklinks">
                 <div class="eyebrow">Quick links</div>
                 <nav class="sidebar-nav">
-                    <a class="nav-link active" href="/dashboard/{{ selected_guild.id }}/setup">Setup wizard</a>
-                    <a class="nav-link" href="/servers">All Servers</a>
-                    <a class="nav-link" href="/logout">Log Out</a>
+                    <a class="nav-link active" href="/dashboard/{{ selected_guild.id }}/setup"><span class="nav-icon">SW</span><span>Setup wizard</span></a>
+                    <a class="nav-link" href="/servers"><span class="nav-icon">SV</span><span>All servers</span></a>
+                    <a class="nav-link" href="/logout"><span class="nav-icon">LO</span><span>Log out</span></a>
                 </nav>
             </section>
 
@@ -57,8 +57,8 @@
             <header class="page-head">
                 <div class="page-lead">
                     <div class="eyebrow">Setup Wizard</div>
-                    <h2>Get {{ selected_guild.name }} ready in a few guided steps</h2>
-                    <p>Move through the important setup first, then finish with the extra community tools. Each screen only covers one area so it stays quick and easy to follow.</p>
+                    <h2>Configure the essentials for {{ selected_guild.name }}</h2>
+                    <p>Work through the key setup areas one page at a time, then come back here whenever the server needs a clean reset or review.</p>
                     <div class="page-meta-row">
                         <span class="module-chip">{{ selected_guild.member_count }} members</span>
                         <span class="module-chip">{{ roles|length }} roles</span>
