@@ -3993,3 +3993,100 @@ body,
         width: 100%;
     }
 }
+
+/* Sidebar typography and alignment refinement */
+.brand-lockup {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-lockup .eyebrow {
+    margin-bottom: 2px;
+}
+
+.brand-lockup h1 {
+    font-size: 1rem;
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+}
+
+.sidebar .eyebrow {
+    color: #A4C2A8;
+}
+
+.sidebar-quicklinks,
+.server-switcher {
+    gap: 8px;
+}
+
+.guild-spotlight {
+    align-items: center;
+    padding: 12px;
+}
+
+.guild-spotlight > div {
+    min-width: 0;
+}
+
+.guild-spotlight strong {
+    font-size: 0.95rem;
+    line-height: 1.18;
+}
+
+.guild-spotlight p {
+    margin-top: 5px;
+    font-size: 0.79rem;
+    line-height: 1.2;
+}
+
+.nav-icon,
+.nav-link::after {
+    display: none !important;
+    content: none !important;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+    min-height: 42px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: #34353b;
+    border-color: rgba(164, 194, 168, 0.08);
+}
+
+.nav-link span {
+    display: block;
+    min-width: 0;
+    font-size: 0.93rem;
+    line-height: 1.2;
+    font-weight: 500;
+    color: var(--muted-strong);
+}
+
+.nav-link:hover,
+.nav-link.active {
+    background: #2f3035;
+    border-color: rgba(164, 194, 168, 0.22);
+}
+
+.server-link {
+    align-items: center;
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 10px;
+}
+
+.server-link img {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+}
+
+.server-link span {
+    font-size: 0.84rem;
+    line-height: 1.18;
+}
