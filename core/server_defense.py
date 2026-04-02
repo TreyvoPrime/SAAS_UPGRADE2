@@ -531,7 +531,7 @@ class ServerDefenseManager:
             level_key, level_label = ("normal", "Offline")
 
         if not guardian_available:
-            status_copy = "Upgrade this server to Premium to unlock Guardian threat scoring, raid presets, and automatic pressure tracking."
+            status_copy = "Guardian is offline on this server."
         elif level_key == "high":
             status_copy = "Guardian has moved into raid response mode. Anti-join should be live and staff should be ready to hard-lock channels if pressure continues."
         elif level_key == "major":
