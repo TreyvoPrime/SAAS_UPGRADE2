@@ -1908,13 +1908,18 @@ def create_dashboard_app(bot) -> FastAPI:
         await require_guild_access(request, guild_id)
         tier = bot.access_manager.controls.set_subscription_tier(guild_id, payload.tier)
         if tier != TIER_PREMIUM and hasattr(bot, "server_defense"):
-            try:
-                await run_on_bot_loop(bot.server_defense.disable_feature(guild_id, "antiraid", reason="Guardian requires Premium."))
-            except Exception:
-                if hasattr(bot.server_defense, "store"):
-                    bot.server_defense.store.patch_feature(guild_id, "antiraid", enabled=False, ends_at=None)
-                if hasattr(bot.server_defense, "reset_threat_state"):
-                    bot.server_defense.reset_threat_state(guild_id)
+            for feature_name, reason in (
+                ("antiraid", "Guardian requires Premium."),
+                ("linkblock", "Link Block requires Premium."),
+                ("lockdown", "Lockdown requires Premium."),
+            ):
+                try:
+                    await run_on_bot_loop(bot.server_defense.disable_feature(guild_id, feature_name, reason=reason))
+                except Exception:
+                    if hasattr(bot.server_defense, "store"):
+                        bot.server_defense.store.patch_feature(guild_id, feature_name, enabled=False, ends_at=None)
+                    if feature_name == "antiraid" and hasattr(bot.server_defense, "reset_threat_state"):
+                        bot.server_defense.reset_threat_state(guild_id)
         await log_dashboard_event(
             request,
             guild_id,

@@ -71,14 +71,17 @@ class ServerDefense(commands.Cog):
         controls = getattr(self.bot, "command_controls", None)
         return bool(controls and hasattr(controls, "is_premium_enabled") and controls.is_premium_enabled(guild_id))
 
-    async def _require_premium_guardian(self, interaction: discord.Interaction) -> bool:
+    async def _require_premium_feature(self, interaction: discord.Interaction, feature_name: str) -> bool:
         if interaction.guild is None:
             await interaction.response.send_message("This command only works in a server.", ephemeral=True)
             return False
         if self._premium_enabled(interaction.guild.id):
             return True
-        await interaction.response.send_message("Guardian is part of ServerCore Premium right now.", ephemeral=True)
+        await interaction.response.send_message(f"{feature_name} is part of ServerCore Premium right now.", ephemeral=True)
         return False
+
+    async def _require_premium_guardian(self, interaction: discord.Interaction) -> bool:
+        return await self._require_premium_feature(interaction, "Guardian")
 
     @staticmethod
     def _moderation_embed(title: str, description: str, *, color: discord.Color) -> discord.Embed:
@@ -432,6 +435,8 @@ class ServerDefense(commands.Cog):
         interaction: discord.Interaction,
         duration_minutes: app_commands.Range[int, 1, MAX_DURATION_MINUTES] | None = None,
     ):
+        if not await self._require_premium_feature(interaction, "Link Block"):
+            return
         await self._enable_feature(
             interaction,
             "linkblock",
@@ -442,10 +447,14 @@ class ServerDefense(commands.Cog):
 
     @linkblock.command(name="disable", description="Turn off link blocking")
     async def linkblock_disable(self, interaction: discord.Interaction):
+        if not await self._require_premium_feature(interaction, "Link Block"):
+            return
         await self._disable_feature(interaction, "linkblock", "Link Block")
 
     @linkblock.command(name="status", description="View the current link block status")
     async def linkblock_status(self, interaction: discord.Interaction):
+        if not await self._require_premium_feature(interaction, "Link Block"):
+            return
         member = await self._require_admin(interaction)
         if member is None:
             return
@@ -791,6 +800,8 @@ class ServerDefense(commands.Cog):
         interaction: discord.Interaction,
         duration_minutes: app_commands.Range[int, 1, MAX_DURATION_MINUTES] | None = None,
     ):
+        if not await self._require_premium_feature(interaction, "Lockdown"):
+            return
         await self._enable_feature(
             interaction,
             "lockdown",
@@ -801,12 +812,16 @@ class ServerDefense(commands.Cog):
 
     @lockdown.command(name="disable", description="Lift the active server lockdown")
     async def lockdown_disable(self, interaction: discord.Interaction):
+        if not await self._require_premium_feature(interaction, "Lockdown"):
+            return
         if not await self._ensure_bot_permissions(interaction, manage_channels=True):
             return
         await self._disable_feature(interaction, "lockdown", "Server lockdown")
 
     @lockdown.command(name="status", description="View the current lockdown status")
     async def lockdown_status(self, interaction: discord.Interaction):
+        if not await self._require_premium_feature(interaction, "Lockdown"):
+            return
         member = await self._require_admin(interaction)
         if member is None or interaction.guild is None:
             return
@@ -839,6 +854,8 @@ class ServerDefense(commands.Cog):
         mode: app_commands.Choice[str],
         role: discord.Role | None = None,
     ):
+        if not await self._require_premium_feature(interaction, "Lockdown"):
+            return
         member = await self._require_admin(interaction)
         if member is None or interaction.guild is None:
             return

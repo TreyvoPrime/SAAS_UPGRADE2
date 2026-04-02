@@ -9,6 +9,13 @@ FREE_TIER = "Free"
 PREMIUM_TIER = "Premium"
 
 PREMIUM_COMMANDS = {
+    "linkblock enable",
+    "linkblock disable",
+    "linkblock status",
+    "lockdown enable",
+    "lockdown disable",
+    "lockdown status",
+    "lockdown role",
     "guardian enable",
     "guardian disable",
     "guardian status",
