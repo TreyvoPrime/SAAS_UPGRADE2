@@ -3607,3 +3607,389 @@ input[type="checkbox"] {
         max-width: none;
     }
 }
+
+/* Dashboard density cleanup */
+:root {
+    --shadow: none;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-xl: 12px;
+}
+
+html,
+body,
+.nitro-shell,
+.shell {
+    background: #2A2B2E;
+}
+
+.surface,
+.auth-panel,
+.guild-card,
+.notice-card,
+.modal-panel,
+.hero-panel,
+.login-panel,
+.servers-topline,
+.servers-hero-panel,
+.server-card,
+.server-card-redesign,
+.metric-card,
+.servers-user-pill,
+.sidebar,
+.page-head,
+.subscription-state-pill,
+.setup-shell,
+.setup-progress-strip,
+.setup-summary-card,
+.activity-surface {
+    background-image: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+.primary-button,
+.ghost-button,
+.icon-button,
+.view-pill,
+.module-pill,
+.server-link,
+.nav-link,
+.server-card-cta,
+.module-chip,
+.tier,
+.server-meta-badge,
+.subscription-state-pill {
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none;
+}
+
+.dashboard-shell {
+    grid-template-columns: 220px minmax(0, 1fr) 292px;
+    gap: 12px;
+}
+
+.sidebar {
+    gap: 14px;
+    padding: 12px 10px;
+    border-radius: 12px;
+    background: #303136;
+}
+
+.brand-mark,
+.guild-spotlight,
+.nav-icon,
+.view-pill-icon {
+    border-radius: 8px;
+}
+
+.guild-spotlight {
+    padding: 10px;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+}
+
+.guild-spotlight img {
+    width: 44px;
+    height: 44px;
+}
+
+.guild-spotlight strong {
+    min-width: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    line-height: 1.22;
+    word-break: break-word;
+}
+
+.sidebar-nav {
+    gap: 4px;
+}
+
+.nav-link {
+    min-height: 36px;
+    padding: 0 9px;
+    border-radius: 8px;
+}
+
+.server-list {
+    gap: 4px;
+    max-height: calc(100vh - 292px);
+    overflow-x: hidden;
+}
+
+.server-link {
+    min-height: 40px;
+    padding: 6px 8px;
+    border-radius: 8px;
+}
+
+.server-link span {
+    min-width: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    line-height: 1.22;
+    word-break: break-word;
+}
+
+.server-link.is-current,
+.server-link:hover {
+    background: #28292d;
+    border-color: rgba(164, 194, 168, 0.22);
+}
+
+.page-head {
+    padding: 14px 16px;
+    gap: 12px;
+}
+
+.page-lead h2 {
+    margin: 6px 0 8px;
+}
+
+.page-head p {
+    max-width: 66ch;
+}
+
+.page-actions {
+    justify-content: flex-end;
+}
+
+.primary-button,
+.ghost-button,
+.icon-button {
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 8px;
+}
+
+.primary-button {
+    background: #87FF65;
+    border-color: #87FF65;
+    color: #1d2417;
+}
+
+.primary-button:hover {
+    background: #94ff76;
+    border-color: #94ff76;
+}
+
+.ghost-button,
+.icon-button {
+    background: #303136;
+    border-color: rgba(164, 194, 168, 0.16);
+    color: var(--muted-strong);
+}
+
+.ghost-button:hover,
+.icon-button:hover {
+    background: #2b2c31;
+    border-color: rgba(164, 194, 168, 0.3);
+}
+
+.is-active-toggle {
+    background: #282f26 !important;
+    border-color: rgba(135, 255, 101, 0.32) !important;
+}
+
+.view-switcher {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+}
+
+.view-pill {
+    min-width: 0;
+    min-height: 40px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: #303136;
+    white-space: normal;
+}
+
+.view-pill span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.view-pill:hover,
+.view-pill.is-active {
+    background: #28292d;
+    border-color: rgba(164, 194, 168, 0.28);
+}
+
+.module-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+    gap: 8px;
+    overflow: visible;
+    padding-bottom: 0;
+}
+
+.module-pill {
+    min-width: 0;
+    min-height: 40px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    background: #303136;
+}
+
+.module-pill.is-active {
+    background: #282f26;
+    border-color: rgba(135, 255, 101, 0.22);
+}
+
+.servers-hero-panel {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 12px;
+}
+
+.servers-copy p {
+    max-width: 56ch;
+}
+
+.metric-card {
+    padding: 10px 12px;
+}
+
+.server-board {
+    grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+    gap: 10px;
+}
+
+.server-card,
+.server-card-redesign {
+    gap: 10px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #313239;
+}
+
+.server-card-redesign:hover {
+    transform: none;
+    background: #313239;
+    border-color: rgba(164, 194, 168, 0.24);
+}
+
+.server-card-top {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+}
+
+.server-card-visual img,
+.server-avatar-fallback {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+}
+
+.server-card-heading {
+    min-width: 0;
+}
+
+.server-card-heading h2 {
+    min-width: 0;
+    font-size: 0.95rem;
+    line-height: 1.24;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.server-card-body {
+    gap: 10px;
+}
+
+.server-card-body p,
+.server-card-redesign p {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: var(--muted);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+}
+
+.server-card-footer {
+    gap: 8px;
+}
+
+.server-card-meta {
+    gap: 6px;
+    font-size: 0.76rem;
+}
+
+.server-card-cta {
+    justify-self: start;
+    padding: 6px 10px;
+    border-top: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #2b2c31;
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.server-card-redesign:hover .server-card-cta {
+    background: #28292d;
+    border-color: rgba(164, 194, 168, 0.28);
+}
+
+@media (max-width: 1320px) {
+    .view-switcher {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1120px) {
+    .dashboard-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .view-switcher {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .module-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .servers-hero-panel {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .view-switcher,
+    .module-strip,
+    .server-board {
+        grid-template-columns: 1fr;
+    }
+
+    .page-actions {
+        justify-content: stretch;
+    }
+
+    .page-actions .ghost-button {
+        width: 100%;
+    }
+}
