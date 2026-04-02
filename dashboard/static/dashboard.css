@@ -4516,3 +4516,524 @@ body,
         white-space: normal;
     }
 }
+
+/* Dashboard text-fit and wizard refinement overrides */
+
+.page-head,
+.workspace-topline,
+.section-head,
+.section-headbar,
+.setup-panel-head,
+.setup-role-head,
+.command-card-top,
+.command-card-bottom,
+.defense-card-head,
+.greeting-card-head {
+    flex-wrap: wrap;
+}
+
+.page-head,
+.dashboard-access-panel,
+.command-settings-panel,
+.setup-shell,
+.defense-workspace,
+.greetings-workspace,
+.activity-surface,
+.servers-hero,
+.guild-card,
+.auth-panel,
+.help-module-section,
+.threat-stage {
+    border-radius: 16px;
+}
+
+.page-head {
+    align-items: flex-start;
+    gap: 16px 20px;
+}
+
+.page-lead,
+.page-head > div,
+.workspace-topline > div,
+.setup-panel-head > div,
+.setup-role-head > div,
+.command-card-top > div,
+.defense-card-head > div,
+.greeting-card-head > div,
+.guild-card-copy,
+.guild-spotlight > div,
+.brand-lockup > div {
+    min-width: 0;
+}
+
+.page-head h2 {
+    max-width: 14ch;
+    line-height: 1.02;
+    text-wrap: balance;
+}
+
+.page-head p,
+.workspace-topline p,
+.setup-panel-head p,
+.setup-role-head p,
+.dashboard-access-summary,
+.role-summary,
+.defense-note,
+.dashboard-access-note,
+.greeting-preview p,
+.help-command-line p {
+    overflow-wrap: anywhere;
+}
+
+.page-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    row-gap: 8px;
+    min-width: min(100%, 360px);
+}
+
+.page-actions .ghost-button,
+.page-actions .primary-button {
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.nav-link,
+.server-link,
+.view-pill,
+.module-pill,
+.primary-button,
+.ghost-button,
+.icon-button,
+.toggle,
+.module-chip,
+.defense-status-pill,
+.defense-duration-pill,
+.tier {
+    font-size: 0.9rem;
+    line-height: 1.2;
+}
+
+.nav-link {
+    min-height: 40px;
+    border-radius: 12px;
+    padding: 0 13px;
+}
+
+.nav-link span,
+.guild-spotlight strong,
+.brand-lockup h1,
+.server-link span,
+.module-pill strong,
+.view-pill span:last-child {
+    min-width: 0;
+}
+
+.server-link span {
+    line-height: 1.25;
+    -webkit-line-clamp: 2;
+    text-wrap: pretty;
+}
+
+.view-switcher {
+    gap: 8px;
+    padding: 6px;
+    border-radius: 14px;
+}
+
+.view-pill {
+    min-height: 42px;
+    padding: 0 12px;
+    border-radius: 10px;
+    gap: 8px;
+}
+
+.view-pill span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.view-pill-icon {
+    flex: 0 0 auto;
+}
+
+.dashboard-access-panel,
+.command-settings-panel {
+    align-items: flex-start;
+    gap: 16px 20px;
+    padding: 16px 18px;
+}
+
+.dashboard-access-actions,
+.command-settings-actions {
+    min-width: min(100%, 440px);
+    gap: 12px;
+}
+
+.dashboard-access-summary,
+.subscription-state-pill {
+    border-radius: 12px;
+}
+
+.setup-shell {
+    padding: 18px;
+    gap: 14px;
+}
+
+.setup-progress-strip {
+    padding: 14px;
+    border-radius: 14px;
+}
+
+.setup-progress {
+    gap: 8px;
+}
+
+.setup-step-pill {
+    min-height: 46px;
+    border-radius: 12px;
+    padding: 0 10px;
+}
+
+.setup-step-text {
+    font-size: 0.84rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.setup-summary-card,
+.setup-subpanel,
+.setup-role-group,
+.greeting-preview,
+.threat-signal-row,
+.support-issue-item {
+    border-radius: 12px;
+}
+
+.setup-panel-head,
+.setup-role-head {
+    align-items: flex-start;
+    gap: 14px 18px;
+}
+
+.setup-panel-head h3,
+.setup-role-head h4,
+.workspace-topline h3,
+.section-head h3,
+.section-headbar h3 {
+    text-wrap: balance;
+}
+
+.setup-summary-card {
+    min-width: min(100%, 260px);
+}
+
+.setup-summary-card span {
+    text-wrap: pretty;
+}
+
+.setup-grid,
+.setup-grid-wide {
+    align-items: start;
+}
+
+.setup-grid-wide {
+    grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+}
+
+.setup-checklist {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.search-shell > span,
+.toggle span,
+.role-option span,
+.support-issue-item span {
+    text-wrap: pretty;
+}
+
+.search-input {
+    min-height: 42px;
+    border-radius: 12px;
+}
+
+textarea.search-input {
+    min-height: 118px;
+    line-height: 1.45;
+}
+
+.command-grid,
+.defense-grid,
+.greetings-grid,
+.case-grid {
+    align-items: start;
+}
+
+.command-card,
+.defense-card,
+.greeting-card,
+.support-card {
+    padding: 16px;
+    border-radius: 14px;
+    gap: 12px;
+}
+
+.command-card-top,
+.defense-card-head,
+.greeting-card-head {
+    align-items: flex-start;
+    gap: 10px 12px;
+}
+
+.command-card h4,
+.defense-card h4,
+.greeting-card h4 {
+    font-size: clamp(1rem, 0.92rem + 0.24vw, 1.08rem);
+    line-height: 1.14;
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+}
+
+.command-card p,
+.defense-card p,
+.greeting-card p {
+    line-height: 1.5;
+    font-size: 0.92rem;
+}
+
+.command-flags,
+.defense-status-row,
+.page-meta-row,
+.placeholder-strip,
+.threat-chip-row,
+.guild-meta {
+    row-gap: 8px;
+}
+
+.module-chip,
+.tier,
+.defense-status-pill,
+.defense-duration-pill {
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.inline-premium-tag {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.toggle {
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 10px;
+    border-radius: 10px;
+}
+
+.toggle span {
+    min-width: 0;
+}
+
+.defense-actions,
+.command-actions {
+    gap: 8px;
+}
+
+.defense-actions .ghost-button,
+.defense-actions .primary-button,
+.command-actions .ghost-button,
+.command-actions .primary-button {
+    border-radius: 10px;
+}
+
+.threat-stage {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 1fr) minmax(280px, 0.9fr);
+    gap: 16px;
+    padding: 18px;
+    overflow: hidden;
+}
+
+.threat-stage.is-preview-gated .threat-stage-copy,
+.threat-stage.is-preview-gated .threat-stage-meter,
+.threat-stage.is-preview-gated .threat-stage-side {
+    filter: blur(1.6px);
+    opacity: 0.72;
+}
+
+.guardian-stage-lock,
+.premium-card-lock {
+    inset: 12px;
+    border-radius: 12px;
+}
+
+.guardian-preview-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.guardian-preview-chip {
+    border-color: rgba(135, 255, 101, 0.22);
+    background: rgba(135, 255, 101, 0.1);
+    color: #dfffd4;
+}
+
+.guardian-preview-note {
+    color: var(--muted-strong);
+    font-size: 0.9rem;
+    line-height: 1.45;
+    max-width: 56ch;
+    text-wrap: pretty;
+}
+
+.threat-stage-copy p {
+    max-width: 52ch;
+}
+
+.threat-scoreline,
+.greeting-card-head,
+.defense-card-head,
+.support-issue-item,
+.guild-card-topline {
+    min-width: 0;
+}
+
+.threat-marker strong,
+.threat-marker em {
+    overflow-wrap: anywhere;
+}
+
+.guild-grid-upgraded {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.guild-card {
+    padding: 16px;
+}
+
+.guild-card-upgraded {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 14px;
+}
+
+.guild-card img {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+}
+
+.guild-card-topline {
+    align-items: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.guild-card-topline h3,
+.guild-card-copy h3 {
+    margin: 0;
+    font-size: 1.02rem;
+    line-height: 1.2;
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+}
+
+.guild-card-copy {
+    gap: 8px;
+}
+
+.guild-card-copy p {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.52;
+}
+
+.help-module-section,
+.help-command-table,
+.help-command-line {
+    border-radius: 12px;
+}
+
+.help-command-name strong {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+@media (max-width: 1120px) {
+    .setup-grid,
+    .setup-grid-wide,
+    .greetings-grid,
+    .support-grid,
+    .threat-stage {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-view-setup .page-actions,
+    .page-actions {
+        min-width: 0;
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .setup-summary-card,
+    .dashboard-access-actions,
+    .command-settings-actions {
+        min-width: 0;
+        width: 100%;
+    }
+}
+
+@media (max-width: 760px) {
+    .shell {
+        padding: 14px;
+    }
+
+    .page-head,
+    .dashboard-access-panel,
+    .command-settings-panel,
+    .setup-shell,
+    .defense-workspace,
+    .greetings-workspace,
+    .activity-surface,
+    .guild-card {
+        padding: 14px;
+    }
+
+    .page-head h2 {
+        max-width: none;
+        font-size: clamp(1.62rem, 1.1rem + 2vw, 2.2rem);
+    }
+
+    .page-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+
+    .page-actions .ghost-button,
+    .page-actions .primary-button {
+        width: 100%;
+    }
+
+    .view-switcher {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .setup-progress {
+        grid-template-columns: 1fr;
+    }
+
+    .setup-checklist {
+        grid-template-columns: 1fr;
+    }
+
+    .guild-grid-upgraded {
+        grid-template-columns: 1fr;
+    }
+}
