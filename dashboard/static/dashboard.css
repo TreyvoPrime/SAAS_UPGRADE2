@@ -4765,6 +4765,44 @@ textarea.search-input {
     gap: 12px;
 }
 
+.guardian-defense-card {
+    min-height: 318px;
+    overflow: hidden;
+}
+
+.guardian-defense-card .premium-card-lock {
+    inset: auto 14px 14px 14px;
+    display: grid;
+    justify-items: start;
+    align-content: start;
+    gap: 8px;
+    padding: 14px 15px;
+    background: rgba(42, 43, 46, 0.86);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 10px 24px rgba(8, 9, 10, 0.22);
+}
+
+.guardian-defense-card .premium-card-lock strong {
+    font-size: 1rem;
+    line-height: 1.12;
+}
+
+.guardian-defense-card .premium-card-lock span {
+    max-width: none;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.guardian-defense-card.is-preview-locked > :not(.premium-card-lock),
+.guardian-defense-card[data-locked="true"] > :not(.premium-card-lock) {
+    opacity: 0.5;
+    filter: blur(1.8px);
+}
+
+.guardian-defense-card .defense-card-bottom {
+    align-content: start;
+}
+
 .command-card[data-tier="premium"] .command-card-bottom {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;

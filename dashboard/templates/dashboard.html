@@ -221,7 +221,7 @@
                     {% for defense in defense_cards %}
                     {% if defense.name != 'autofilter' %}
                     <article
-                        class="defense-card"
+                        class="defense-card{% if defense.name == 'antiraid' %} guardian-defense-card{% if defense.locked %} is-preview-locked{% endif %}{% endif %}"
                         data-defense-card
                         data-defense-name="{{ defense.name }}"
                         data-enabled="{{ 'true' if defense.enabled else 'false' }}"
@@ -1745,6 +1745,9 @@
             card.dataset.durationMinutes = defense.duration_minutes ?? "";
             card.dataset.locked = defense.locked ? "true" : "false";
             card.classList.toggle("is-locked-card", Boolean(defense.locked));
+            if (card.dataset.defenseName === "antiraid") {
+                card.classList.toggle("is-preview-locked", Boolean(defense.locked));
+            }
 
             if (status) {
                 status.textContent = defense.status_label;
