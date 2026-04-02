@@ -5064,3 +5064,87 @@ textarea.search-input {
         grid-template-columns: 1fr;
     }
 }
+
+/* Final setup wizard tab overrides: flatter, tighter, no legacy glow, no clipping. */
+.dashboard-view-setup .setup-progress-strip {
+    grid-template-columns: 148px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+}
+
+.dashboard-view-setup .setup-progress-copy {
+    min-width: 0;
+    gap: 6px;
+}
+
+.dashboard-view-setup .setup-progress-copy strong {
+    font-size: 1rem;
+}
+
+.dashboard-view-setup .setup-progress {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+}
+
+.dashboard-view-setup .setup-step-pill {
+    justify-content: flex-start;
+    min-height: 42px;
+    padding: 0 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(164, 194, 168, 0.12);
+    background: #2d2f34;
+    box-shadow: none !important;
+    transform: none !important;
+    overflow: hidden;
+}
+
+.dashboard-view-setup .setup-step-pill:hover {
+    border-color: rgba(164, 194, 168, 0.22);
+    background: #31343a;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.dashboard-view-setup .setup-step-pill.is-active {
+    border-color: rgba(135, 255, 101, 0.22);
+    background: #2f3a2f;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.dashboard-view-setup .setup-step-index {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    font-size: 0.72rem;
+    background: #23262b;
+    border: 1px solid rgba(164, 194, 168, 0.14);
+}
+
+.dashboard-view-setup .setup-step-pill:hover .setup-step-index,
+.dashboard-view-setup .setup-step-pill.is-active .setup-step-index {
+    background: #253127;
+    border-color: rgba(135, 255, 101, 0.18);
+}
+
+.dashboard-view-setup .setup-step-text {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+    font-size: 0.76rem;
+    letter-spacing: -0.01em;
+}
+
+.dashboard-view-setup .setup-step-pill:hover .setup-step-text,
+.dashboard-view-setup .setup-step-pill.is-active .setup-step-text {
+    color: var(--text);
+}
+
+@media (max-width: 980px) {
+    .dashboard-view-setup .setup-progress-strip {
+        grid-template-columns: 1fr;
+    }
+}
