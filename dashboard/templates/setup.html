@@ -338,7 +338,6 @@
                     <button type="button" class="ghost-button" id="setup-back-button" disabled>Back</button>
                     <div class="setup-footer-copy" id="setup-footer-copy">Step 1 of 5</div>
                     <button type="button" class="primary-button" id="setup-next-button">Continue</button>
-                    <button type="button" class="primary-button" id="setup-finish-button" hidden>Finish setup</button>
                 </footer>
             </section>
         </section>
@@ -351,7 +350,6 @@
         const triggers = Array.from(document.querySelectorAll("[data-setup-step-trigger]"));
         const backButton = document.getElementById("setup-back-button");
         const nextButton = document.getElementById("setup-next-button");
-        const finishButton = document.getElementById("setup-finish-button");
         const footerCopy = document.getElementById("setup-footer-copy");
         const progressTitle = document.getElementById("setup-progress-title");
         const progressLabel = document.getElementById("setup-progress-label");
@@ -389,8 +387,7 @@
             panels.forEach((panel, index) => panel.classList.toggle("is-active", index === currentStep));
             triggers.forEach((trigger, index) => trigger.classList.toggle("is-active", index === currentStep));
             backButton.disabled = currentStep === 0;
-            nextButton.hidden = currentStep === panels.length - 1;
-            finishButton.hidden = currentStep !== panels.length - 1;
+            nextButton.textContent = currentStep === panels.length - 1 ? "Finish setup" : "Continue";
             footerCopy.textContent = `Step ${currentStep + 1} of ${panels.length}`;
             if (progressTitle) {
                 progressTitle.textContent = `Step ${currentStep + 1} of ${panels.length}`;
@@ -468,8 +465,13 @@
         });
 
         backButton?.addEventListener("click", () => setActiveStep(currentStep - 1));
-        nextButton?.addEventListener("click", () => setActiveStep(currentStep + 1));
-        finishButton?.addEventListener("click", finishSetup);
+        nextButton?.addEventListener("click", () => {
+            if (currentStep === panels.length - 1) {
+                finishSetup();
+                return;
+            }
+            setActiveStep(currentStep + 1);
+        });
 
         syncAllowAllToggle("wizard-moderation-allow-all", "moderation");
         syncAllowAllToggle("wizard-support-allow-all", "support");
