@@ -384,9 +384,13 @@
 
                 <div class="case-grid">
                     {% for case in case_summary.cases %}
-                    <article class="command-card case-card">
+                    <article class="command-card case-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
+                        <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
+                            <strong>Premium required</strong>
+                            <span>Unlock deeper case history, staff notes, and richer moderation context with Premium.</span>
+                        </div>
                         <div class="command-flags">
-                            <span class="tier tier-free">Case #{{ case.case_id }}</span>
+                            <span class="tier tier-premium">Case #{{ case.case_id }}</span>
                             <span class="module-chip">{{ case.action|title }}</span>
                         </div>
                         <div class="command-card-top">
@@ -417,9 +421,13 @@
                     {% endif %}
 
                     {% if case_summary.recent_staff_notes %}
-                    <article class="command-card case-card">
+                    <article class="command-card case-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
+                        <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
+                            <strong>Premium required</strong>
+                            <span>Premium keeps private staff notes in one searchable moderation workspace.</span>
+                        </div>
                         <div class="command-flags">
-                            <span class="tier tier-free">Staff Notes</span>
+                            <span class="tier tier-premium">Staff Notes</span>
                             <span class="module-chip">Private context</span>
                         </div>
                         <div class="command-card-top">
@@ -622,9 +630,13 @@
                         </div>
                     </article>
 
-                    <article class="greeting-card support-card">
+                    <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
+                        <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
+                            <strong>Premium required</strong>
+                            <span>Claiming tickets, priority controls, transcripts, and richer support workflows unlock with Premium.</span>
+                        </div>
                         <div class="command-flags">
-                            <span class="tier tier-free">Support</span>
+                            <span class="tier tier-premium">Support</span>
                             <span class="module-chip">Staff tools</span>
                         </div>
                         <div class="greeting-card-head">
@@ -750,9 +762,13 @@
                         </div>
                     </article>
 
-                    <article class="greeting-card support-card">
+                    <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
+                        <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
+                            <strong>Premium required</strong>
+                            <span>Role requirements and bonus entries are part of the Premium giveaway toolkit.</span>
+                        </div>
                         <div class="command-flags">
-                            <span class="tier tier-free">Giveaways</span>
+                            <span class="tier tier-premium">Giveaways</span>
                             <span class="module-chip">Staff flow</span>
                         </div>
                         <div class="greeting-card-head">
@@ -834,9 +850,13 @@
                         </div>
                     </article>
 
-                    <article class="greeting-card support-card">
+                    <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
+                        <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
+                            <strong>Premium required</strong>
+                            <span>Editing, pausing, and resuming live feed loops unlock with Premium.</span>
+                        </div>
                         <div class="command-flags">
-                            <span class="tier tier-free">Autofeed</span>
+                            <span class="tier tier-premium">Autofeed</span>
                             <span class="module-chip">Staff commands</span>
                         </div>
                         <div class="greeting-card-head">
@@ -922,7 +942,7 @@
                         <div class="command-grid">
                             {% for command in section.commands %}
                             <article
-                                class="command-card"
+                                class="command-card {% if command.tier|lower == 'premium' and not subscription.is_premium %}is-locked-card{% endif %}"
                                 data-command-card
                                 data-command="{{ command.name }}"
                                 data-module="{{ section.slug }}"
@@ -930,6 +950,12 @@
                                 data-enabled="{{ 'true' if command.enabled else 'false' }}"
                                 data-role-ids="{{ command.allowed_role_ids|join(',') }}"
                             >
+                                {% if command.tier|lower == 'premium' %}
+                                <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
+                                    <strong>Premium required</strong>
+                                    <span>Turn Premium on for this server to use /{{ command.name }} and the rest of the advanced toolkit.</span>
+                                </div>
+                                {% endif %}
                                 <div class="command-card-top">
                                     <div>
                                         <div class="command-flags">
@@ -944,6 +970,7 @@
                                             {% if command.enabled %}checked{% endif %}
                                             data-command-toggle
                                             data-command-name="{{ command.name }}"
+                                            {% if command.tier|lower == 'premium' and not subscription.is_premium %}disabled{% endif %}
                                         >
                                         <span>Enabled</span>
                                     </label>
@@ -956,10 +983,10 @@
                                         {{ command.role_summary }}
                                     </div>
                                     <div class="command-actions">
-                                        <button type="button" class="ghost-button compact-button" data-role-editor data-command-name="{{ command.name }}">
+                                        <button type="button" class="ghost-button compact-button" data-role-editor data-command-name="{{ command.name }}" {% if command.tier|lower == 'premium' and not subscription.is_premium %}disabled{% endif %}>
                                             Edit roles
                                         </button>
-                                        <button type="button" class="ghost-button compact-button" data-clear-roles data-command-name="{{ command.name }}">
+                                        <button type="button" class="ghost-button compact-button" data-clear-roles data-command-name="{{ command.name }}" {% if command.tier|lower == 'premium' and not subscription.is_premium %}disabled{% endif %}>
                                             Allow all
                                         </button>
                                     </div>

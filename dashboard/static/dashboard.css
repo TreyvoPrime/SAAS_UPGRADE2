@@ -2976,6 +2976,14 @@ input[type="checkbox"] {
     border-color: rgba(172, 235, 152, 0.18);
 }
 
+.command-card.is-locked-card,
+.greeting-card.is-locked-card,
+.support-card.is-locked-card,
+.case-card.is-locked-card {
+    position: relative;
+    border-color: rgba(172, 235, 152, 0.18);
+}
+
 .premium-card-lock,
 .guardian-stage-lock {
     position: absolute;
@@ -3001,6 +3009,20 @@ input[type="checkbox"] {
 .premium-card-lock.is-hidden,
 .guardian-stage-lock.is-hidden {
     display: none;
+}
+
+.command-card .premium-card-lock,
+.greeting-card .premium-card-lock,
+.support-card .premium-card-lock,
+.case-card .premium-card-lock {
+    border-radius: inherit;
+}
+
+.command-card.is-locked-card > :not(.premium-card-lock),
+.greeting-card.is-locked-card > :not(.premium-card-lock),
+.support-card.is-locked-card > :not(.premium-card-lock),
+.case-card.is-locked-card > :not(.premium-card-lock) {
+    opacity: 0.54;
 }
 
 .threat-stage {
