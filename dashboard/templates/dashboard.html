@@ -357,14 +357,13 @@
                     <div class="threat-stage-copy">
                         <div class="eyebrow">Guardian</div>
                         <h3>Live threat watch</h3>
-                            <div class="guardian-preview-strip">
-                                {% if not subscription.is_premium %}
-                                <span class="tier tier-premium guardian-preview-chip">Premium</span>
-                                <span class="guardian-preview-note">Guardian watches join spikes, spam bursts, and stacked defense pressure so staff can react before a raid spreads.</span>
-                                <span class="guardian-preview-note guardian-upgrade-note">Locked on Free. Turn Premium on above to unlock the live threat meter and Guardian response controls.</span>
-                                {% else %}
-                            <span class="module-chip guardian-preview-chip">Live</span>
+                        <div class="guardian-preview-strip">
+                            {% if not subscription.is_premium %}
+                            <span class="tier tier-premium guardian-preview-chip">Premium</span>
                             <span class="guardian-preview-note">Guardian watches join spikes, spam bursts, and stacked defense pressure so staff can react before a raid spreads.</span>
+                            <span class="guardian-preview-note guardian-upgrade-note">Locked on Free. Turn Premium on above to unlock the live threat meter and Guardian response controls.</span>
+                            {% else %}
+                            <span class="module-chip guardian-preview-chip">Live</span>
                             {% endif %}
                         </div>
                         <p id="threat-status-copy">{{ defense_summary.threat.status_copy }}</p>

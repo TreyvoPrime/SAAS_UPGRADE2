@@ -539,7 +539,7 @@ class ServerDefenseManager:
         elif level_key == "moderate":
             status_copy = "ServerGuard is watching a suspicious pattern. Staff should keep an eye on joins, pings, and repeated content."
         elif self._is_active(antiraid_state):
-            status_copy = "Guardian is live and watching for bursts, coordination, and weak-account patterns."
+            status_copy = "Guardian is live and watching this server."
         else:
             status_copy = "Turn Guardian on when you want ServerGuard to watch for coordinated joins, spam waves, and escalating threat signals."
 
