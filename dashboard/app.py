@@ -622,11 +622,11 @@ def create_dashboard_app(bot) -> FastAPI:
         guild_name = guild.name if guild is not None else "This server"
         if viewer_billing["billing_ready"]:
             if is_premium:
-                summary_copy = f"{guild_name} is on the Premium tier. Premium is linked to your Discord account and active here."
+                summary_copy = f"{guild_name} is on the Premium tier. Guardian and the advanced staff toolkit are active here."
             elif viewer_billing["is_active"]:
-                summary_copy = "Premium is active on your Discord account. Turn it on here whenever you want."
+                summary_copy = "Premium is ready for this server. Turn it on here whenever you want Guardian and the advanced staff toolkit unlocked."
             else:
-                summary_copy = "Premium belongs to your Discord account. Start Premium once, then turn it on in any server you manage."
+                summary_copy = "Premium unlocks Guardian and the advanced staff toolkit for this server."
         else:
             summary_copy = (
                 f"{guild_name} is currently on the {tier_label(tier)} tier. Premium unlocks Guardian, advanced ticket tools, "
@@ -638,10 +638,10 @@ def create_dashboard_app(bot) -> FastAPI:
             state_copy = "Guardian and advanced tools are unlocked for this server."
         elif viewer_billing["is_active"]:
             state_title = "Premium is ready"
-            state_copy = "Your Discord account has Premium. Turn it on here whenever you want to unlock Guardian and advanced tools."
+            state_copy = "Premium is ready for this server. Turn it on here whenever you want to unlock Guardian and advanced tools."
         elif viewer_billing["billing_ready"]:
             state_title = "Free is active"
-            state_copy = "Start Premium on your Discord account, then come back here to turn it on for this server."
+            state_copy = "Start Premium for this server, then come back here to unlock Guardian and advanced tools."
         else:
             state_title = "Free is active"
             state_copy = "Guardian and advanced tools stay locked until Premium is turned on."
@@ -1785,7 +1785,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 )
                 synced = sync_checkout_session_to_billing(checkout_session, expected_user_id=viewer_user_id)
                 if synced and synced.get("is_active"):
-                    notice = "Premium is active on your Discord account now. Open any server dashboard you manage and turn Premium on there."
+                    notice = "Premium is active for this server now. Guardian and the advanced staff toolkit are unlocked here."
                     notice_tone = "success"
                 else:
                     notice = "Checkout completed, but premium is still syncing. Refresh this page in a moment if it does not appear yet."

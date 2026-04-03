@@ -30,9 +30,9 @@
 
         <section class="servers-hero-panel billing-hero-panel">
             <div class="servers-copy">
-                <div class="eyebrow">Account billing</div>
-                <h1>Premium follows your Discord account, not just one server.</h1>
-                <p>Start Premium for just {{ premium_price_display }} and unlock Guardian, sharper staff tools, deeper logs, and cleaner workflows anywhere you manage ServerCore.</p>
+                <div class="eyebrow">Server billing</div>
+                <h1>Premium unlocks advanced tools for this server.</h1>
+                <p>Start Premium for just {{ premium_price_display }} and unlock Guardian, sharper staff tools, deeper logs, and cleaner workflows for this community.</p>
             </div>
             <div class="servers-metric-grid">
                 <article class="metric-card">
@@ -97,7 +97,7 @@
                     <li>Advanced logs, analytics, and config tools</li>
                     <li>Advanced autofeed, reminders, giveaways, and moderation history</li>
                 </ul>
-                <div class="billing-plan-foot">One subscription. Any server you manage.</div>
+                <div class="billing-plan-foot">One subscription for this server.</div>
                 <div class="billing-actions">
                     {% if billing.is_active %}
                     <form method="post" action="/billing/portal">
@@ -126,9 +126,9 @@
                     <strong>{{ billing.status_label }}</strong>
                     <p>
                         {% if billing.is_active %}
-                            Premium is active for this Discord account{% if billing.period_end_label %} through {{ billing.period_end_label }}{% endif %}. Open any server dashboard you manage and turn it on there whenever you want the full toolkit.
+                            Premium is active for this server{% if billing.period_end_label %} through {{ billing.period_end_label }}{% endif %}. Guardian and the advanced staff toolkit are unlocked here.
                         {% else %}
-                            This Discord account is on the Free tier right now. Start Premium once and it becomes available anywhere you manage ServerCore.
+                            This server is on the Free tier right now. Start Premium to unlock Guardian and the advanced staff toolkit here.
                         {% endif %}
                     </p>
                     {% if billing.cancel_at_period_end %}
