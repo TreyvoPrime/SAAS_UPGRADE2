@@ -79,7 +79,7 @@
                 <div>
                     <div class="eyebrow">Server plan</div>
                     <h3>Premium for this server</h3>
-                    <p>See which plan is active for this server and open billing when you want to upgrade or manage Premium.</p>
+                    <p id="subscription-panel-copy">{% if subscription.is_premium %}This server already has Premium active. Guardian and advanced tools are unlocked here.{% else %}Free tier is active for this server. Open billing when you want to upgrade to Premium.{% endif %}</p>
                 </div>
                 <div class="command-settings-actions premium-tier-actions">
                     <div class="subscription-health-row">
@@ -90,7 +90,8 @@
                         <span id="subscription-state-copy">{{ subscription.state_copy }}</span>
                     </div>
                     <div class="defense-actions subscription-toggle-row">
-                        <a class="primary-button compact-button" href="{{ subscription.billing_url }}" id="open-billing-page">Buy Premium</a>
+                        <a class="primary-button compact-button" href="{{ subscription.billing_url }}" id="open-billing-page" {% if subscription.is_premium %}hidden{% endif %}>Buy Premium</a>
+                        <span class="dashboard-access-note subscription-plan-note" id="subscription-plan-note" {% if not subscription.is_premium %}hidden{% endif %}>Premium activated.</span>
                     </div>
                 </div>
             </section>
@@ -1212,10 +1213,12 @@
         const alertSettingsPill = document.getElementById("alert-settings-pill");
         const saveAlertSettingsButton = document.getElementById("save-alert-settings");
         const subscriptionTierChip = document.getElementById("subscription-tier-chip");
+        const subscriptionPanelCopy = document.getElementById("subscription-panel-copy");
         const subscriptionStatePill = document.getElementById("subscription-state-pill");
         const subscriptionStateTitle = document.getElementById("subscription-state-title");
         const subscriptionStateCopy = document.getElementById("subscription-state-copy");
         const openBillingPageButton = document.getElementById("open-billing-page");
+        const subscriptionPlanNote = document.getElementById("subscription-plan-note");
         const subscriptionHealthChip = document.getElementById("subscription-health-chip");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
@@ -1779,6 +1782,11 @@
             if (subscriptionTierChip) {
                 subscriptionTierChip.textContent = `${subscription.label} tier`;
             }
+            if (subscriptionPanelCopy) {
+                subscriptionPanelCopy.textContent = premiumOn
+                    ? "This server already has Premium active. Guardian and advanced tools are unlocked here."
+                    : "Free tier is active for this server. Open billing when you want to upgrade to Premium.";
+            }
             if (subscriptionHealthChip) {
                 subscriptionHealthChip.textContent = premiumOn ? "Premium active" : "Free tier active";
                 subscriptionHealthChip.classList.toggle("is-premium", premiumOn);
@@ -1803,6 +1811,11 @@
                     openBillingPageButton.setAttribute("href", subscription.billing_url);
                 }
                 openBillingPageButton.textContent = "Buy Premium";
+                openBillingPageButton.hidden = premiumOn;
+            }
+            if (subscriptionPlanNote) {
+                subscriptionPlanNote.hidden = !premiumOn;
+                subscriptionPlanNote.textContent = "Premium activated.";
             }
             lastKnownPremiumState = premiumOn;
             if (options.announceActivation && premiumOn && !previouslyPremium) {

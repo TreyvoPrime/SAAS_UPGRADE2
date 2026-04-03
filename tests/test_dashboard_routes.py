@@ -547,6 +547,30 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertIn("Free tier is active for this server", response.text)
         self.assertIn("Buy Premium", response.text)
 
+    def test_dashboard_hides_buy_premium_button_for_active_premium_server(self) -> None:
+        self._authenticate()
+        self.bot.command_controls.set_setup_wizard_completed(self.bot.guild.id, True)
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "DISCORD_APP_ID": "1487599032170975292",
+                "DISCORD_PREMIUM_SKU_ID": "1488888888888888888",
+            },
+            clear=False,
+        ):
+            self.bot.billing_store.upsert_guild_entitlement(
+                self.bot.guild.id,
+                entitlement_id="ent_123",
+                premium_user_id=5001,
+                sku_id="1488888888888888888",
+            )
+            response = self.client.get(f"/dashboard/{self.bot.guild.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Premium activated.", response.text)
+        self.assertIn('id="open-billing-page" hidden', response.text)
+
     def test_subscription_upgrade_requires_active_discord_guild_sku_when_billing_ready(self) -> None:
         self._authenticate()
 
