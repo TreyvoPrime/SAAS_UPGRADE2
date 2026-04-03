@@ -989,7 +989,7 @@
                                         </div>
                                         <h4>/{{ command.name }}</h4>
                                     </div>
-                                    {% if command.tier|lower != 'premium' %}
+                                    {% if command.tier|lower != 'premium' or subscription.is_premium %}
                                     <label class="toggle">
                                         <input
                                             type="checkbox"
@@ -1008,14 +1008,10 @@
                                     <div class="role-summary" data-role-summary>
                                         {{ command.role_summary }}
                                     </div>
-                                    {% if command.tier|lower == 'premium' %}
+                                    {% if command.tier|lower == 'premium' and not subscription.is_premium %}
                                     <div class="command-actions">
                                         <span class="dashboard-access-note">
-                                            {% if subscription.is_premium %}
-                                                Ready to use on this server.
-                                            {% else %}
-                                                Locked on Free. Turn Premium on above to unlock it.
-                                            {% endif %}
+                                            Locked on Free. Turn Premium on above to unlock it.
                                         </span>
                                     </div>
                                     {% else %}

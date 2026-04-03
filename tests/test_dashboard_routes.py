@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -610,6 +611,40 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertIn("Premium is active for Audit Guild", response.text)
         self.assertIn("Refresh status", response.text)
         self.assertIn("Open billing in Discord", response.text)
+
+    def test_premium_server_renders_toggle_for_premium_command_cards(self) -> None:
+        self._authenticate()
+        self.bot.command_controls.set_setup_wizard_completed(self.bot.guild.id, True)
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "DISCORD_APP_ID": "1487599032170975292",
+                "DISCORD_PREMIUM_SKU_ID": "1488888888888888888",
+            },
+            clear=False,
+        ):
+            self.bot.billing_store.upsert_guild_entitlement(
+                self.bot.guild.id,
+                entitlement_id="ent_123",
+                premium_user_id=5001,
+                sku_id="1488888888888888888",
+            )
+            with mock.patch(
+                "dashboard.app.build_command_catalog",
+                return_value=[
+                    {"name": "guardian enable", "description": "Enable Guardian", "module": "ServerGuard", "tier": "Premium"},
+                ],
+            ):
+                response = self.client.get(f"/dashboard/{self.bot.guild.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('data-command-name="guardian enable"', response.text)
+        self.assertRegex(
+            response.text,
+            re.compile(r'<input\s+type="checkbox"\s+checked\s+data-command-toggle\s+data-command-name="guardian enable"', re.MULTILINE),
+        )
+        self.assertNotIn("Locked on Free. Turn Premium on above to unlock it.", response.text)
 
     def test_guardian_requires_premium_from_dashboard(self) -> None:
         self._authenticate()
