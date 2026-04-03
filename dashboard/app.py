@@ -1749,6 +1749,20 @@ def create_dashboard_app(bot) -> FastAPI:
             },
         )
 
+    @app.get("/privacy", response_class=HTMLResponse)
+    async def privacy_page(request: Request):
+        user = session_user(request)
+        viewer_user_id = session_user_id(request)
+        return render_template(
+            "privacy.html",
+            request,
+            {
+                "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
+                "user": user,
+                "billing": billing_summary(viewer_user_id),
+            },
+        )
+
     @app.get("/billing", response_class=HTMLResponse)
     async def billing_page(
         request: Request,

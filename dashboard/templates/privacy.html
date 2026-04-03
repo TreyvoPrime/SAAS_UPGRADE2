@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ bot_name }} Privacy Policy</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body class="nitro-shell">
+    <main class="servers-page-shell terms-page-shell">
+        <header class="servers-topline">
+            <div class="servers-brand-row">
+                <a class="sidebar-brand" href="{% if user %}/servers{% else %}/{% endif %}">
+                    <div class="brand-mark"><img src="/static/servercore-thumbnail.png" alt="ServerCore"></div>
+                    <div>
+                        <div class="eyebrow">ServerCore</div>
+                        <strong>Privacy Policy</strong>
+                    </div>
+                </a>
+                <a class="ghost-button compact-button" href="/billing">Premium</a>
+                {% if user %}
+                <a class="ghost-button compact-button" href="/servers">Back to servers</a>
+                {% else %}
+                <a class="ghost-button compact-button" href="/">Back home</a>
+                {% endif %}
+            </div>
+            {% if user %}
+            <div class="servers-user-pill">
+                <span class="eyebrow">Connected as</span>
+                <strong>{{ user.global_name or user.username }}</strong>
+                <a class="ghost-button compact-button" href="/logout">Log out</a>
+            </div>
+            {% endif %}
+        </header>
+
+        <section class="servers-hero-panel terms-hero-panel">
+            <div class="servers-copy">
+                <h1>ServerCore Privacy Policy</h1>
+                <p>This page explains what information ServerCore processes, why that information is used, and how billing, dashboard, and server configuration data are handled.</p>
+            </div>
+            <div class="servers-metric-grid">
+                <article class="metric-card">
+                    <span>Service</span>
+                    <strong>ServerCore</strong>
+                </article>
+            </div>
+        </section>
+
+        <section class="surface terms-shell">
+            <article class="terms-section">
+                <h2>1. Information we process</h2>
+                <p>ServerCore may process Discord account identifiers, server identifiers, role identifiers, command permissions, support settings, moderation settings, logs, premium billing state, and other configuration data needed to operate the bot and dashboard.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>2. Why this data is used</h2>
+                <p>We use this information to provide core product features such as dashboard access, command restrictions, support ticket routing, logging, moderation tools, welcome and leave configuration, ServerGuard protections, and Premium subscription access.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>3. Discord account and server data</h2>
+                <p>When you sign in with Discord, ServerCore may process your Discord user ID, username, display name, and the list of servers your account can manage. Server settings are stored so your configuration continues to work across restarts, redeploys, and updates.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>4. Billing data</h2>
+                <p>Premium payments are processed through Stripe. ServerCore stores Stripe customer and subscription identifiers, subscription status, billing period details, and which servers are using Premium. Full payment card details are handled by Stripe, not by ServerCore.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>5. Logs and operational records</h2>
+                <p>ServerCore may store command usage, moderation records, support records, dashboard changes, and audit-style activity needed for product operation, troubleshooting, and feature history.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>6. Data sharing</h2>
+                <p>ServerCore does not sell personal data. Information may be shared with infrastructure and payment providers only to the extent needed to operate the product, process subscriptions, maintain uptime, or comply with legal obligations.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>7. Data retention</h2>
+                <p>Server configuration, billing linkage, and operational records may be retained for as long as reasonably necessary to run the service, preserve product functionality, support account recovery, handle billing operations, and investigate abuse or security issues.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>8. Security</h2>
+                <p>ServerCore uses reasonable technical and operational safeguards to protect stored settings, dashboard sessions, and billing-linked account data. No internet-connected service can guarantee absolute security.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>9. Your responsibility</h2>
+                <p>Server owners and administrators are responsible for the configuration choices they make in ServerCore, including moderation automations, role access, logging settings, support flows, and any content they choose to store through the service.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>10. Changes to this policy</h2>
+                <p>This Privacy Policy may be updated over time as the product evolves. Continued use of ServerCore after updates are published means you accept the revised policy.</p>
+            </article>
+        </section>
+    </main>
+</body>
+</html>
