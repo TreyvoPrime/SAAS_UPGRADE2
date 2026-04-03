@@ -122,6 +122,7 @@ class SetupWizardPayload(BaseModel):
     join_dm_message: str | None = Field(default=None, max_length=1500)
     support_issue_types: list[str] = Field(default_factory=list, max_length=20)
     support_command_channel_id: int | str | None = None
+    mark_complete: bool = False
 
 
 def resolve_dashboard_host() -> str:
@@ -2378,47 +2379,49 @@ def create_dashboard_app(bot) -> FastAPI:
                 for issue_type in payload.support_issue_types
                 if str(issue_type).strip()
             ]
-            if cleaned_issue_types:
-                ticket_store.set_issue_types(guild_id, cleaned_issue_types)
+            ticket_store.set_issue_types(guild_id, cleaned_issue_types)
             ticket_store.set_support_command_channel_id(guild_id, clean_channel_id(payload.support_command_channel_id))
 
-        bot.access_manager.controls.set_setup_wizard_completed(guild_id, True)
+        completed = bot.access_manager.controls.is_setup_wizard_completed(guild_id)
+        if payload.mark_complete:
+            completed = bot.access_manager.controls.set_setup_wizard_completed(guild_id, True)
 
-        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
-        await log_dashboard_event(
-            request,
-            guild_id,
-            title="Setup Wizard Completed",
-            description="Saved the server's guided setup settings from the dashboard.",
-            fields=[
-                (
-                    "Moderation Roles",
-                    "Allow everyone"
-                    if payload.moderation_allow_everyone
-                    else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in moderation_role_ids) or "No roles selected"),
-                    False,
-                ),
-                (
-                    "Support Roles",
-                    "Allow everyone"
-                    if payload.support_allow_everyone
-                    else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in support_role_ids) or "No roles selected"),
-                    False,
-                ),
-                ("Support Command Channel", next((channel["label"] for channel in guild_text_channels(guild_id) if channel["id"] == clean_channel_id(payload.support_command_channel_id)), "Any channel"), False),
-                (
-                    "Community Roles",
-                    "Allow everyone"
-                    if payload.community_allow_everyone
-                    else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in community_role_ids) or "No roles selected"),
-                    False,
-                ),
-                ("Autoroles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in autorole_role_ids) or "None", False),
-            ],
-        )
+            role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+            await log_dashboard_event(
+                request,
+                guild_id,
+                title="Setup Completed",
+                description="Saved the setup choices from the dashboard.",
+                fields=[
+                    (
+                        "Moderation Access",
+                        "Allow everyone"
+                        if payload.moderation_allow_everyone
+                        else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in moderation_role_ids) or "No roles selected"),
+                        False,
+                    ),
+                    (
+                        "Support Access",
+                        "Allow everyone"
+                        if payload.support_allow_everyone
+                        else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in support_role_ids) or "No roles selected"),
+                        False,
+                    ),
+                    ("Support Channel", next((channel["label"] for channel in guild_text_channels(guild_id) if channel["id"] == clean_channel_id(payload.support_command_channel_id)), "Any channel"), False),
+                    (
+                        "Community Access",
+                        "Allow everyone"
+                        if payload.community_allow_everyone
+                        else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in community_role_ids) or "No roles selected"),
+                        False,
+                    ),
+                    ("Autoroles", ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in autorole_role_ids) or "None", False),
+                ],
+            )
         return JSONResponse(
             {
-                "completed": True,
+                "completed": completed,
+                "saved": True,
                 "redirect_url": f"/dashboard/{guild_id}",
                 "setup_summary": setup_wizard_summary(guild_id),
                 "greetings_summary": greetings_dashboard_summary(guild_id),

@@ -568,7 +568,7 @@ class DashboardRouteTests(unittest.TestCase):
             response = self.client.get(f"/dashboard/{self.bot.guild.id}")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Premium activated.", response.text)
+        self.assertIn("Premium Active", response.text)
         self.assertIn('id="open-billing-page" hidden', response.text)
 
     def test_subscription_upgrade_requires_active_discord_guild_sku_when_billing_ready(self) -> None:
@@ -807,6 +807,7 @@ class DashboardRouteTests(unittest.TestCase):
                 "join_dm_message": "Read the rules",
                 "support_issue_types": ["Moderation Help", "Other"],
                 "support_command_channel_id": 3002,
+                "mark_complete": True,
             },
             headers={"origin": "http://testserver"},
         )
@@ -821,6 +822,45 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(self.bot.command_controls.get_autorole_role_ids(self.bot.guild.id), [11])
         self.assertEqual(self.bot.ticket_store.get_support_command_channel_id(self.bot.guild.id), 3002)
         self.assertTrue(self.bot.command_controls.is_setup_wizard_completed(self.bot.guild.id))
+
+    def test_setup_wizard_saves_draft_and_reloads_checked_roles(self) -> None:
+        self._authenticate()
+
+        draft_response = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/setup-wizard",
+            json={
+                "moderation_confirmation_enabled": True,
+                "default_timeout_minutes": 20,
+                "moderation_allow_everyone": True,
+                "moderation_role_ids": [],
+                "support_allow_everyone": False,
+                "support_role_ids": [10],
+                "community_allow_everyone": False,
+                "community_role_ids": [11],
+                "autorole_role_ids": [11],
+                "welcome_channel_id": 3001,
+                "welcome_message": "Welcome {user}",
+                "leave_channel_id": 3002,
+                "leave_message": "Bye {user_name}",
+                "join_dm_enabled": True,
+                "join_dm_message": "Read the rules",
+                "support_issue_types": ["Moderation Help", "Other"],
+                "support_command_channel_id": 3002,
+                "mark_complete": False,
+            },
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(draft_response.status_code, 200)
+        self.assertFalse(self.bot.command_controls.is_setup_wizard_completed(self.bot.guild.id))
+
+        setup_page = self.client.get(f"/dashboard/{self.bot.guild.id}/setup")
+
+        self.assertEqual(setup_page.status_code, 200)
+        self.assertIn('id="wizard-moderation-allow-all" type="checkbox" checked', setup_page.text)
+        self.assertIn('value="10" data-role-group="support" checked', setup_page.text)
+        self.assertIn('value="11" data-role-group="community" checked', setup_page.text)
+        self.assertIn('value="11" data-role-group="autorole" checked', setup_page.text)
 
     def test_logout_clears_dashboard_session(self) -> None:
         self._authenticate()

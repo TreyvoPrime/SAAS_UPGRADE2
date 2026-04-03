@@ -58,8 +58,8 @@
             <header class="page-head">
                 <div class="page-lead">
                     <div class="eyebrow">{% if current_view == 'defense' %}ServerGuard{% elif current_view == 'greetings' %}Welcome / Leave{% elif current_view == 'support' %}Support{% elif current_view == 'autofeed' %}Autofeed{% elif current_view == 'giveaways' %}Giveaways{% else %}Command Control{% endif %}</div>
-                    <h2>{% if current_view == 'defense' %}Security controls and response rules{% elif current_view == 'greetings' %}Welcome, leave, and join guide messaging{% elif current_view == 'support' %}Ticket routing and support controls{% elif current_view == 'autofeed' %}Scheduled channel updates{% elif current_view == 'giveaways' %}Giveaway operations{% else %}Manage command access{% endif %}</h2>
-                    <p>{% if current_view == 'defense' %}Arm protections, review live threat status, and control who can still speak when the server is locked down.{% elif current_view == 'greetings' %}Choose channels, update messages, and preview what members will see when they join, leave, or open your join guide DM.{% elif current_view == 'support' %}Keep support issue types, ticket entry points, and staff access organized without digging through Discord commands.{% elif current_view == 'autofeed' %}Review repeating posts, track current schedules, and keep important channels up to date from one place.{% elif current_view == 'giveaways' %}See what is live, what recently ended, and the controls staff need to manage giveaway rounds reliably.{% else %}Review every command, decide who can use it, and keep server permissions predictable across modules.{% endif %}</p>
+                    <h2>{% if current_view == 'defense' %}Protect your server{% elif current_view == 'greetings' %}Welcome, leave, and join messages{% elif current_view == 'support' %}Support and ticket settings{% elif current_view == 'autofeed' %}Scheduled updates{% elif current_view == 'giveaways' %}Giveaways{% else %}Manage command access{% endif %}</h2>
+                    <p>{% if current_view == 'defense' %}Turn protections on, review live threat activity, and choose who can still speak during a lockdown.{% elif current_view == 'greetings' %}Choose where messages go and preview what members will see when they join, leave, or receive a welcome DM.{% elif current_view == 'support' %}Keep ticket categories, entry channels, and staff access easy to manage from one place.{% elif current_view == 'autofeed' %}Review repeating posts, adjust schedules, and keep important channels up to date.{% elif current_view == 'giveaways' %}Track active giveaways and give staff the controls they need to run each round smoothly.{% else %}Choose who can use each command and keep permissions consistent across your server.{% endif %}</p>
                     <div class="page-meta-row">
                         <span class="module-chip">{{ selected_guild.member_count }} members</span>
                         <span class="module-chip">{{ roles|length }} roles</span>
@@ -68,9 +68,9 @@
                     </div>
                 </div>
                 <div class="page-actions">
+                    <a class="ghost-button" href="/help">Help</a>
                     <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}/setup">Setup wizard</a>
                     <a class="ghost-button" href="/billing?guild_id={{ selected_guild.id }}">Premium</a>
-                    <a class="ghost-button" href="/help">Help</a>
                     <a class="ghost-button" href="/servers">View all servers</a>
                 </div>
             </header>
@@ -79,11 +79,11 @@
                 <div>
                     <div class="eyebrow">Server plan</div>
                     <h3>Premium for this server</h3>
-                    <p id="subscription-panel-copy">{% if subscription.is_premium %}This server already has Premium active. Guardian and advanced tools are unlocked here.{% else %}Free tier is active for this server. Open billing when you want to upgrade to Premium.{% endif %}</p>
+                    <p id="subscription-panel-copy">{% if subscription.is_premium %}Premium is active for this server. Guardian and advanced tools are ready to use.{% else %}Free Tier is active for this server. Open billing whenever you are ready to upgrade.{% endif %}</p>
                 </div>
                 <div class="command-settings-actions premium-tier-actions">
                     <div class="subscription-health-row">
-                        <span class="module-chip subscription-health-chip" id="subscription-health-chip">{% if subscription.is_premium %}Premium active{% else %}Free tier active{% endif %}</span>
+                        <span class="module-chip subscription-health-chip" id="subscription-health-chip">{% if subscription.is_premium %}Premium Active{% else %}Free Tier Active{% endif %}</span>
                     </div>
                     <div class="subscription-state-pill {% if subscription.is_premium %}is-premium{% else %}is-free{% endif %}" id="subscription-state-pill">
                         <strong id="subscription-state-title">{{ subscription.state_title }}</strong>
@@ -91,7 +91,7 @@
                     </div>
                     <div class="defense-actions subscription-toggle-row">
                         <a class="primary-button compact-button" href="{{ subscription.billing_url }}" id="open-billing-page" {% if subscription.is_premium %}hidden{% endif %}>Buy Premium</a>
-                        <span class="dashboard-access-note subscription-plan-note" id="subscription-plan-note" {% if not subscription.is_premium %}hidden{% endif %}>Premium activated.</span>
+                        <span class="dashboard-access-note subscription-plan-note" id="subscription-plan-note" {% if not subscription.is_premium %}hidden{% endif %}>Premium Active</span>
                     </div>
                 </div>
             </section>
@@ -390,7 +390,7 @@
                             {% else %}
                                 <div class="notice-card compact threat-empty">
                                     <strong>No threat pressure yet</strong>
-                                    <p>ServerGuard will start listing the signals that move the score once Guardian is watching the server.</p>
+                                    <p>Guardian will list the signals that move the score once it starts watching this server.</p>
                                 </div>
                             {% endif %}
                         </div>
@@ -475,7 +475,7 @@
                     <div>
                         <div class="eyebrow">Welcome / Leave</div>
                         <h3>Custom join and exit messaging</h3>
-                        <p>Pick the channels, write custom copy, and use placeholders so the bot sounds like your server instead of a template.</p>
+                        <p>Pick the channels, write your messages, and use placeholders so the welcome flow feels like your server.</p>
                     </div>
                     <div class="placeholder-strip">
                         {% for placeholder in greetings_summary.placeholders %}
@@ -1050,7 +1050,7 @@
                     {% if not logs %}
                     <div class="notice-card compact">
                         <strong>No activity yet</strong>
-                        <p>Server activity, command usage, tickets, and dashboard changes will start appearing here once the bot is active.</p>
+                        <p>Server activity, command usage, tickets, and dashboard changes will appear here once ServerCore starts logging activity for this server.</p>
                     </div>
                     {% endif %}
                 </div>
@@ -1719,7 +1719,7 @@
                     : `
                         <div class="notice-card compact threat-empty">
                             <strong>No threat pressure yet</strong>
-                            <p>ServerGuard will start listing the signals that move the score once Guardian is watching the server.</p>
+                            <p>Guardian will list the signals that move the score once it starts watching this server.</p>
                         </div>
                     `;
             }
@@ -1784,11 +1784,11 @@
             }
             if (subscriptionPanelCopy) {
                 subscriptionPanelCopy.textContent = premiumOn
-                    ? "This server already has Premium active. Guardian and advanced tools are unlocked here."
-                    : "Free tier is active for this server. Open billing when you want to upgrade to Premium.";
+                    ? "Premium is active for this server. Guardian and advanced tools are ready to use."
+                    : "Free Tier is active for this server. Open billing whenever you are ready to upgrade.";
             }
             if (subscriptionHealthChip) {
-                subscriptionHealthChip.textContent = premiumOn ? "Premium active" : "Free tier active";
+                subscriptionHealthChip.textContent = premiumOn ? "Premium Active" : "Free Tier Active";
                 subscriptionHealthChip.classList.toggle("is-premium", premiumOn);
                 subscriptionHealthChip.classList.toggle("is-free", !premiumOn);
             }
@@ -1815,11 +1815,11 @@
             }
             if (subscriptionPlanNote) {
                 subscriptionPlanNote.hidden = !premiumOn;
-                subscriptionPlanNote.textContent = "Premium activated.";
+                subscriptionPlanNote.textContent = "Premium Active";
             }
             lastKnownPremiumState = premiumOn;
             if (options.announceActivation && premiumOn && !previouslyPremium) {
-                showToast(`${subscription.guild_name || "This server"} Premium was activated. Guardian and premium commands are now available.`, "success");
+                showToast(`${subscription.guild_name || "This server"} now has Premium active. Guardian and premium commands are ready to use.`, "success");
             }
         }
 
@@ -2393,7 +2393,7 @@
                     logList.innerHTML = `
                         <div class="notice-card compact">
                             <strong>No activity yet</strong>
-                            <p>Server activity, command usage, tickets, and dashboard changes will start appearing here once the bot is active.</p>
+                            <p>Server activity, command usage, tickets, and dashboard changes will appear here once ServerCore starts logging activity for this server.</p>
                         </div>
                     `;
                     logsHydrated = true;

@@ -32,17 +32,17 @@
         <section class="servers-hero-panel">
             <div class="servers-copy">
                 <div class="eyebrow">Server switcher</div>
-                <h1>Select a server and continue where you left off.</h1>
-                <p>Every server below is one your Discord account can manage. Open the dashboard where the bot is installed, or install it directly from the same list when it is missing.</p>
+                <h1>Manage your servers all in one place.</h1>
+                <p>Open any server you manage, update its settings, or add ServerCore where it is still missing.</p>
             </div>
             <div class="servers-metric-grid">
                 <article class="metric-card">
-                    <span>Manageable servers</span>
+                    <span>Your servers</span>
                     <strong>{{ guilds|length }}</strong>
                 </article>
                 <article class="metric-card">
-                    <span>Access</span>
-                    <strong>Direct launch</strong>
+                    <span>Open from here</span>
+                    <strong>Instantly</strong>
                 </article>
             </div>
         </section>
@@ -72,9 +72,9 @@
                 <div class="server-card-body">
                     <p>
                         {% if guild.bot_installed %}
-                            Open command access, logs, and role restrictions for this server.
+                            Open this server and manage settings, logs, and access from one place.
                         {% else %}
-                            The bot is not installed here yet. Add the app and commands to start managing this server.
+                            ServerCore is not installed here yet. Add the app and commands to start managing this server.
                         {% endif %}
                     </p>
                     <div class="server-card-footer">
@@ -93,7 +93,7 @@
                             <span>{{ guild.role_count }} roles</span>
                             {% endif %}
                             {% if not guild.bot_installed %}
-                            <span>Bot not installed</span>
+                            <span>Not installed</span>
                             {% endif %}
                         </div>
                         <div class="server-card-cta">{% if guild.bot_installed %}Open dashboard{% else %}Add app{% endif %}</div>
@@ -103,8 +103,8 @@
             {% endfor %}
             {% if not guilds %}
             <div class="notice-card wide">
-                <strong>No manageable servers yet</strong>
-                <p>Invite the bot to a server and make sure your Discord account has Manage Server or Administrator there.</p>
+                <strong>No servers to show yet</strong>
+                <p>Add ServerCore to a server and make sure your Discord account has Manage Server or Administrator there.</p>
             </div>
             {% endif %}
         </section>

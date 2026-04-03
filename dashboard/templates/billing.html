@@ -37,9 +37,9 @@
 
         <section class="servers-hero-panel billing-hero-panel">
             <div class="servers-copy">
-                <div class="eyebrow">Server billing</div>
-                <h1>{% if selected_guild %}Premium for {{ selected_guild.name }}{% else %}Choose a server to buy Premium{% endif %}</h1>
-                <p>{% if selected_guild %}Buy the Discord Guild Subscription for this server and unlock Guardian, sharper staff tools, deeper logs, and cleaner workflows for this community.{% else %}Premium is sold as a Discord Guild Subscription. Choose a server below to open billing for that community.{% endif %}</p>
+                <div class="eyebrow">Premium</div>
+                <h1>{% if selected_guild %}Premium for {{ selected_guild.name }}{% else %}Choose a server for Premium{% endif %}</h1>
+                <p>{% if selected_guild %}Upgrade this server to unlock Guardian, stronger staff tools, deeper logs, and more advanced automation.{% else %}Premium is sold per server through a Discord Guild Subscription. Choose a server below to open billing for that community.{% endif %}</p>
             </div>
             <div class="servers-metric-grid">
                 <article class="metric-card">
@@ -62,15 +62,15 @@
 
         {% if notice or selected_guild %}
         <section class="notice-card billing-notice billing-notice-{% if selected_guild and billing.is_active %}success{% else %}{{ notice_tone }}{% endif %}" id="billing-activation-banner" {% if not notice and not billing.is_active %}hidden{% endif %}>
-            <strong id="billing-activation-title">{% if selected_guild and billing.is_active %}Premium activated{% elif notice_tone == "success" %}Premium updated{% elif notice_tone == "warning" %}Purchase update{% else %}Billing update{% endif %}</strong>
+            <strong id="billing-activation-title">{% if selected_guild and billing.is_active %}Premium Active{% elif notice_tone == "success" %}Premium updated{% elif notice_tone == "warning" %}Purchase update{% else %}Billing update{% endif %}</strong>
             <p id="billing-activation-copy">{% if selected_guild and billing.is_active %}Premium is active for {{ selected_guild.name }}. Guardian and the premium command set are unlocked on this server.{% else %}{{ notice }}{% endif %}</p>
         </section>
         {% endif %}
 
         {% if not billing.billing_ready %}
         <section class="notice-card billing-notice">
-            <strong>Discord billing is not finished yet</strong>
-            <p>Add the Discord Premium SKU settings in Railway before turning Premium on for real servers.</p>
+            <strong>Discord billing is not ready yet</strong>
+            <p>Add the Discord Premium SKU settings in Railway before turning Premium on for live servers.</p>
         </section>
         {% endif %}
 
@@ -80,7 +80,7 @@
                     <div class="eyebrow">Premium flow</div>
                     <h3>How Premium turns on</h3>
                 </div>
-                <span class="module-chip billing-sync-chip" id="billing-sync-chip">{% if selected_guild and billing.is_active %}Premium active{% elif selected_guild %}Waiting for Discord{% else %}Choose a server{% endif %}</span>
+                <span class="module-chip billing-sync-chip" id="billing-sync-chip">{% if selected_guild and billing.is_active %}Premium Active{% elif selected_guild %}Waiting for Discord{% else %}Choose a server{% endif %}</span>
             </div>
             <div class="billing-flow-grid">
                 <article class="billing-flow-step {% if selected_guild %}is-complete{% else %}is-active{% endif %}">
@@ -101,7 +101,7 @@
                     <strong>3</strong>
                     <div>
                         <h4>Return and confirm</h4>
-                        <p id="billing-flow-note">{% if selected_guild and billing.is_active %}Premium is active for this server right now.{% elif selected_guild %}Come back here after checkout and this page will confirm when the entitlement reaches this server.{% else %}The activation check will appear here once a server is selected.{% endif %}</p>
+                        <p id="billing-flow-note">{% if selected_guild and billing.is_active %}Premium is active for this server right now.{% elif selected_guild %}Come back here after checkout and this page will confirm when Discord applies Premium to this server.{% else %}The activation check will appear here once a server is selected.{% endif %}</p>
                     </div>
                 </article>
             </div>
@@ -217,14 +217,14 @@
             <div class="section-head tight">
                 <div>
                     <div class="eyebrow">Servers</div>
-                    <h3>Open billing for a server</h3>
+                    <h3>Choose a server</h3>
                 </div>
             </div>
             <div class="billing-server-list">
                 {% for guild in guilds %}
                 <a class="billing-server-link{% if selected_guild and selected_guild.id == guild.id %} is-active{% endif %}" href="/billing?guild_id={{ guild.id }}">
                     <span class="billing-server-link-name">{{ guild.name }}</span>
-                    <span class="billing-server-link-meta">{% if guild.premium_enabled %}Premium active{% else %}Free tier{% endif %}</span>
+                    <span class="billing-server-link-meta">{% if guild.premium_enabled %}Premium Active{% else %}Free Tier{% endif %}</span>
                 </a>
                 {% endfor %}
             </div>
@@ -277,7 +277,7 @@
             activationBanner.classList.remove("billing-notice-success", "billing-notice-warning");
             activationBanner.classList.add(`billing-notice-${tone}`);
             if (activationTitle) {
-                activationTitle.textContent = tone === "success" ? "Premium activated" : "Purchase update";
+                activationTitle.textContent = tone === "success" ? "Premium Active" : "Purchase update";
             }
             activationCopy.textContent = message;
         }
@@ -311,7 +311,7 @@
                     : `After checkout finishes in Discord, this page will update automatically for ${guildName}.`;
             }
             if (billingSyncChip) {
-                billingSyncChip.textContent = premiumOn ? "Premium active" : stamp;
+                billingSyncChip.textContent = premiumOn ? "Premium Active" : stamp;
                 billingSyncChip.classList.toggle("is-premium", premiumOn);
             }
             if (billingFlowNote) {

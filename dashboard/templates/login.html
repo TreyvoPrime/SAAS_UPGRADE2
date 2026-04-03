@@ -9,13 +9,13 @@
 <body class="nitro-shell">
     <main class="auth-layout">
         <section class="hero-panel">
-            <div class="eyebrow">ServerCore Dashboard</div>
-            <h1>Manage bot settings with a clear, server-first control panel.</h1>
-            <p>Review access, security, support, automations, and logging from one dashboard built for practical server administration.</p>
+            <div class="eyebrow">Server Control Panel</div>
+            <h1>Manage your servers all in one place.</h1>
+            <p>Open the servers you manage, update permissions and settings, and keep moderation, support, and security organized from one dashboard.</p>
             <div class="feature-strip">
-                <span>Command access by role</span>
-                <span>Server install and switcher</span>
-                <span>Live activity visibility</span>
+                <span>Permissions and role access</span>
+                <span>Moderation and protection</span>
+                <span>Support, logs, and activity</span>
             </div>
         </section>
 
@@ -23,7 +23,7 @@
             <div class="panel-glow"></div>
             <div class="eyebrow">Sign in</div>
             <h2>Connect Discord</h2>
-            <p>Sign in with Discord to open only the servers you can manage and move straight into setup, moderation, and server controls.</p>
+            <p>Sign in with Discord to open the servers you manage and jump straight into setup, moderation, and daily controls.</p>
             {% if oauth_ready %}
             <a class="primary-button full-width" href="/login">Continue with Discord</a>
             <p class="footnote">Your session is limited to your Discord account and the servers you already control.</p>
@@ -33,7 +33,7 @@
                 <p>Add `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, and `DASHBOARD_SECRET_KEY` before logging in.</p>
             </div>
             {% endif %}
-            <p class="footnote"><a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a></p>
+            <p class="footnote"><a href="/terms">Terms of Service</a> &middot; <a href="/privacy">Privacy Policy</a></p>
         </section>
     </main>
 </body>
