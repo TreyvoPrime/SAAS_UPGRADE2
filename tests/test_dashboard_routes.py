@@ -578,7 +578,7 @@ class DashboardRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Premium follows your Discord account", response.text)
-        self.assertIn("$3.99/month", response.text)
+        self.assertIn("$2.99/month", response.text)
 
     def test_subscription_upgrade_requires_active_billing_when_stripe_ready(self) -> None:
         self._authenticate()

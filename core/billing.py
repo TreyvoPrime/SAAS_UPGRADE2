@@ -10,7 +10,7 @@ from core.storage import read_json, write_json
 
 TIER_FREE = "free"
 TIER_PREMIUM = "premium"
-PREMIUM_PRICE_DISPLAY = "$3.99/month"
+PREMIUM_PRICE_DISPLAY = "$2.99/month"
 ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing", "past_due"}
 INACTIVE_SUBSCRIPTION_STATUSES = {"canceled", "unpaid", "incomplete", "incomplete_expired"}
 

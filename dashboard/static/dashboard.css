@@ -5229,6 +5229,11 @@ textarea.search-input {
     align-items: start;
 }
 
+.billing-hero-panel .servers-metric-grid {
+    width: min(600px, 100%);
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
+}
+
 .billing-plan-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5260,6 +5265,32 @@ textarea.search-input {
 .billing-price span {
     font-size: 0.95rem;
     font-weight: 500;
+    color: var(--muted);
+    letter-spacing: normal;
+}
+
+.billing-price-metric-card {
+    min-width: 0;
+}
+
+.billing-metric-price {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    min-width: 0;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.billing-metric-price-amount {
+    font-size: clamp(1.08rem, 0.96rem + 0.4vw, 1.3rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+}
+
+.billing-metric-price-unit {
+    font-size: 0.82rem;
+    font-weight: 600;
     color: var(--muted);
     letter-spacing: normal;
 }
@@ -5378,9 +5409,17 @@ textarea.search-input {
     .billing-status-grid {
         grid-template-columns: 1fr;
     }
+
+    .billing-hero-panel .servers-metric-grid {
+        width: 100%;
+    }
 }
 
 @media (max-width: 760px) {
+    .billing-hero-panel .servers-metric-grid {
+        grid-template-columns: 1fr;
+    }
+
     .billing-compare-head,
     .billing-compare-row {
         grid-template-columns: minmax(0, 1fr) 72px 72px;

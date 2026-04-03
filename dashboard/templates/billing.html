@@ -30,19 +30,22 @@
             <div class="servers-copy">
                 <div class="eyebrow">Account billing</div>
                 <h1>Premium follows your Discord account, not just one server.</h1>
-                <p>Start Premium once for {{ premium_price_display }}, then turn it on in any server you manage from the dashboard.</p>
+                <p>Start Premium for just {{ premium_price_display }} and unlock Guardian, sharper staff tools, deeper logs, and cleaner workflows anywhere you manage ServerCore.</p>
             </div>
             <div class="servers-metric-grid">
                 <article class="metric-card">
                     <span>Plan</span>
                     <strong>{{ billing.status_label }}</strong>
                 </article>
-                <article class="metric-card">
+                <article class="metric-card billing-price-metric-card">
                     <span>Price</span>
-                    <strong>{{ premium_price_display }}</strong>
+                    <strong class="billing-metric-price">
+                        <span class="billing-metric-price-amount">{{ premium_price_display.split('/')[0] }}</span>
+                        <span class="billing-metric-price-unit">/month</span>
+                    </strong>
                 </article>
                 <article class="metric-card">
-                    <span>Servers using Premium</span>
+                    <span>Servers with Premium</span>
                     <strong>{{ billing.active_guild_count }}</strong>
                 </article>
             </div>
@@ -85,13 +88,14 @@
                 </div>
                 <h2>Premium</h2>
                 <div class="billing-price">{{ premium_price_display.split('/')[0] }}<span>/month</span></div>
-                <p>Unlock Guardian, advanced staff workflows, deeper history, analytics, and the rest of the serious admin toolkit.</p>
+                <p>Unlock the serious admin toolkit: Guardian, faster staff workflows, deeper history, analytics, and the premium controls that make bigger servers easier to run.</p>
                 <ul class="billing-feature-list">
                     <li>Guardian live threat monitoring and response</li>
                     <li>Advanced tickets, transcripts, and staff notes</li>
                     <li>Advanced logs, analytics, and config tools</li>
                     <li>Advanced autofeed, reminders, giveaways, and moderation history</li>
                 </ul>
+                <div class="billing-plan-foot">One subscription. Any server you manage.</div>
                 <div class="billing-actions">
                     {% if billing.is_active %}
                     <form method="post" action="/billing/portal">
@@ -99,10 +103,10 @@
                     </form>
                     {% elif billing.billing_ready %}
                     <form method="post" action="/billing/checkout">
-                        <button class="primary-button" type="submit">Start Premium</button>
+                        <button class="primary-button" type="submit">Start Premium for {{ premium_price_display.split('/')[0] }}</button>
                     </form>
                     {% else %}
-                    <button class="primary-button" type="button" disabled>Start Premium</button>
+                    <button class="primary-button" type="button" disabled>Start Premium for {{ premium_price_display.split('/')[0] }}</button>
                     {% endif %}
                 </div>
             </article>
@@ -120,7 +124,7 @@
                     <strong>{{ billing.status_label }}</strong>
                     <p>
                         {% if billing.is_active %}
-                            Premium is active for this Discord account{% if billing.period_end_label %} through {{ billing.period_end_label }}{% endif %}. Open any server dashboard you manage and turn Premium on there.
+                            Premium is active for this Discord account{% if billing.period_end_label %} through {{ billing.period_end_label }}{% endif %}. Open any server dashboard you manage and turn it on there whenever you want the full toolkit.
                         {% else %}
                             This Discord account is on the Free tier right now. Start Premium once and it becomes available anywhere you manage ServerCore.
                         {% endif %}
