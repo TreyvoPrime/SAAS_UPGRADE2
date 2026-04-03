@@ -82,9 +82,14 @@ class ReminderCog(commands.Cog):
             return 1
         return max(reminder["id"] for reminder in self.reminders) + 1
 
-    def _premium_enabled(self, guild_id: int | None) -> bool:
+    def _premium_enabled(self, guild_id: int | None, interaction: discord.Interaction | None = None) -> bool:
         if guild_id is None:
             return False
+        billing_store = getattr(self.bot, "billing_store", None)
+        if interaction is not None and billing_store is not None and hasattr(billing_store, "sync_from_entitlements"):
+            assignment = billing_store.sync_from_entitlements(guild_id, getattr(interaction, "entitlements", []))
+            if assignment.get("is_active"):
+                return True
         controls = getattr(self.bot, "command_controls", None)
         return bool(controls and hasattr(controls, "is_premium_enabled") and controls.is_premium_enabled(guild_id))
 
@@ -179,7 +184,7 @@ class ReminderCog(commands.Cog):
                 ephemeral=True,
             )
             return
-        if repeat_seconds and not self._premium_enabled(interaction.guild.id if interaction.guild else None):
+        if repeat_seconds and not self._premium_enabled(interaction.guild.id if interaction.guild else None, interaction):
             await interaction.response.send_message(
                 "Recurring reminders are part of ServerCore Premium right now.",
                 ephemeral=True,

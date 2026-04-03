@@ -6,6 +6,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from core.access import CommandAccessManager
@@ -328,6 +329,32 @@ class BillingStoreTests(unittest.TestCase):
                 self.store.store_url(),
                 "https://discord.com/application-directory/1487599032170975292/store/1488888888888888888",
             )
+
+    def test_sync_from_entitlements_activates_matching_guild_subscription(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "DISCORD_APP_ID": "1487599032170975292",
+                "DISCORD_PREMIUM_SKU_ID": "1488888888888888888",
+            },
+            clear=False,
+        ):
+            entitlement = SimpleNamespace(
+                id=9001,
+                guild_id=1001,
+                user_id=5001,
+                sku_id=1488888888888888888,
+                starts_at=None,
+                ends_at=None,
+                deleted=False,
+                is_expired=lambda: False,
+            )
+
+            assignment = self.store.sync_from_entitlements(1001, [entitlement])
+
+        self.assertTrue(assignment["is_active"])
+        self.assertEqual(assignment["entitlement_id"], "9001")
+        self.assertEqual(assignment["premium_user_id"], 5001)
 
 class FakePsycopgCursor:
     def __init__(self, documents: dict[str, object]):

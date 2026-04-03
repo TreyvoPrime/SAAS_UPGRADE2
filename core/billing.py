@@ -178,6 +178,48 @@ class BillingStore:
             deleted=bool(getattr(entitlement, "deleted", False)),
         )
 
+    def sync_from_entitlements(
+        self,
+        guild_id: int | str | None,
+        entitlements: list[Any] | tuple[Any, ...] | None,
+    ) -> dict[str, Any]:
+        normalized_guild_id = _clean_snowflake(guild_id)
+        current = self.get_guild_assignment(normalized_guild_id)
+        if normalized_guild_id is None or not entitlements:
+            return current
+
+        premium_sku_id = self.premium_sku_id()
+        matches: list[Any] = []
+        for entitlement in entitlements:
+            entitlement_guild_id = _clean_snowflake(getattr(entitlement, "guild_id", None))
+            entitlement_sku_id = _clean_snowflake(getattr(entitlement, "sku_id", None))
+            if entitlement_guild_id != normalized_guild_id:
+                continue
+            if premium_sku_id is not None and entitlement_sku_id != premium_sku_id:
+                continue
+            if bool(getattr(entitlement, "deleted", False)):
+                continue
+            is_expired = getattr(entitlement, "is_expired", None)
+            if callable(is_expired) and is_expired():
+                continue
+            matches.append(entitlement)
+
+        if not matches:
+            return current
+
+        def _sort_key(entitlement: Any) -> tuple[float, float, int]:
+            ends_at = _parse_datetime(getattr(entitlement, "ends_at", None))
+            starts_at = _parse_datetime(getattr(entitlement, "starts_at", None))
+            entitlement_id = _clean_snowflake(getattr(entitlement, "id", None)) or 0
+            return (
+                ends_at.timestamp() if ends_at is not None else float("inf"),
+                starts_at.timestamp() if starts_at is not None else 0.0,
+                entitlement_id,
+            )
+
+        latest = max(matches, key=_sort_key)
+        return self.sync_from_entitlement(latest) or current
+
     def clear_guild_entitlement(self, guild_id: int | str) -> dict[str, Any]:
         normalized_guild_id = _clean_snowflake(guild_id)
         if normalized_guild_id is None:
@@ -233,4 +275,3 @@ class BillingStore:
 
     def active_guild_count(self) -> int:
         return sum(1 for guild_id in self.stored_guild_ids() if self.guild_has_active_premium(guild_id))
-

@@ -34,7 +34,12 @@ class AutoFeedCog(commands.Cog):
         self.store: AutoFeedStore = bot.autofeed_store
         self._loop_task: asyncio.Task | None = None
 
-    def _premium_enabled(self, guild_id: int) -> bool:
+    def _premium_enabled(self, guild_id: int, interaction: discord.Interaction | None = None) -> bool:
+        billing_store = getattr(self.bot, "billing_store", None)
+        if interaction is not None and billing_store is not None and hasattr(billing_store, "sync_from_entitlements"):
+            assignment = billing_store.sync_from_entitlements(guild_id, getattr(interaction, "entitlements", []))
+            if assignment.get("is_active"):
+                return True
         controls = getattr(self.bot, "command_controls", None)
         return bool(controls and hasattr(controls, "is_premium_enabled") and controls.is_premium_enabled(guild_id))
 
@@ -42,7 +47,7 @@ class AutoFeedCog(commands.Cog):
         if interaction.guild is None:
             await interaction.response.send_message("This command only works in a server.", ephemeral=True)
             return False
-        if self._premium_enabled(interaction.guild.id):
+        if self._premium_enabled(interaction.guild.id, interaction):
             return True
         await interaction.response.send_message(
             f"{feature_name} is part of ServerCore Premium right now.",

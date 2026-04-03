@@ -65,7 +65,12 @@ class GiveawayCog(commands.Cog):
         self.store: GiveawayStore = bot.giveaway_store
         self._end_loop_task: asyncio.Task | None = None
 
-    def _premium_enabled(self, guild_id: int) -> bool:
+    def _premium_enabled(self, guild_id: int, interaction: discord.Interaction | None = None) -> bool:
+        billing_store = getattr(self.bot, "billing_store", None)
+        if interaction is not None and billing_store is not None and hasattr(billing_store, "sync_from_entitlements"):
+            assignment = billing_store.sync_from_entitlements(guild_id, getattr(interaction, "entitlements", []))
+            if assignment.get("is_active"):
+                return True
         controls = getattr(self.bot, "command_controls", None)
         return bool(controls and hasattr(controls, "is_premium_enabled") and controls.is_premium_enabled(guild_id))
 
@@ -304,7 +309,7 @@ class GiveawayCog(commands.Cog):
             await interaction.response.send_message("Set at least one time value so the giveaway knows when to end.", ephemeral=True)
             return
         wants_premium_rules = bool(required_role or bonus_role or bonus_entries)
-        if wants_premium_rules and not self._premium_enabled(interaction.guild.id):
+        if wants_premium_rules and not self._premium_enabled(interaction.guild.id, interaction):
             await interaction.response.send_message(
                 "Role requirements and bonus entries are part of ServerCore Premium right now.",
                 ephemeral=True,

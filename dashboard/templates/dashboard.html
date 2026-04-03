@@ -1237,6 +1237,7 @@
             disabled: document.querySelector('[data-stat="disabled"]'),
             restricted: document.querySelector('[data-stat="restricted"]'),
         };
+        let lastKnownPremiumState = {{ "true" if subscription.is_premium else "false" }};
         const lockdownRoleModal = document.getElementById("lockdown-role-modal");
         const lockdownRoleModalTitle = document.getElementById("lockdown-role-modal-title");
         const lockdownRoleChecklist = document.getElementById("lockdown-role-checklist");
@@ -1817,9 +1818,10 @@
             }
         }
 
-        function syncSubscriptionSummary(subscription) {
+        function syncSubscriptionSummary(subscription, options = {}) {
             if (!subscription) return;
             const premiumOn = Boolean(subscription.is_premium);
+            const previouslyPremium = Boolean(lastKnownPremiumState);
             if (subscriptionSummary) {
                 subscriptionSummary.textContent = subscription.summary_copy || `${subscription.guild_name || "{{ selected_guild.name }}"} is currently on the ${subscription.label} tier.`;
             }
@@ -1857,6 +1859,23 @@
                     openBillingPageButton.setAttribute("href", subscription.billing_url);
                 }
             }
+            lastKnownPremiumState = premiumOn;
+            if (options.announceActivation && premiumOn && !previouslyPremium) {
+                showToast(`${subscription.guild_name || "This server"} Premium was activated. Guardian and premium commands are now available.`, "success");
+            }
+        }
+
+        async function refreshSubscriptionStatus({ announceActivation = false, silent = false } = {}) {
+            const result = await loadSubscriptionSummary();
+            const previousPremium = Boolean(lastKnownPremiumState);
+            syncSubscriptionSummary(result, { announceActivation });
+            if (previousPremium !== Boolean(result.is_premium)) {
+                await refreshDefenseSnapshot();
+            }
+            if (!silent && !(announceActivation && result.is_premium && !previousPremium)) {
+                showToast(`${result.guild_name || "This server"} Premium status was refreshed from Discord.`, "success");
+            }
+            return result;
         }
 
         function syncGreetingCard(flow, state) {
@@ -2486,10 +2505,7 @@
 
         refreshSubscriptionStatusButton?.addEventListener("click", async () => {
             try {
-                const result = await loadSubscriptionSummary();
-                syncSubscriptionSummary(result);
-                await refreshDefenseSnapshot();
-                showToast(`${result.guild_name || "This server"} Premium status was refreshed from Discord.`, "success");
+                await refreshSubscriptionStatus({ announceActivation: true });
             } catch {}
         });
 
@@ -2497,6 +2513,9 @@
         updateSectionVisibility();
         refreshLogs();
         refreshDefenseSnapshot();
+        setInterval(() => {
+            refreshSubscriptionStatus({ announceActivation: true, silent: true }).catch(() => {});
+        }, 20000);
         setInterval(refreshLogs, 15000);
         setInterval(refreshDefenseSnapshot, 15000);
     </script>
