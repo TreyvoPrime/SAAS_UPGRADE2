@@ -75,6 +75,29 @@
         {% endif %}
 
         <section class="billing-plan-grid">
+            <section class="surface billing-compare-panel">
+                <div class="section-head tight">
+                    <div>
+                        <div class="eyebrow">Compare plans</div>
+                        <h3>Free vs Premium</h3>
+                    </div>
+                </div>
+                <div class="billing-compare-table">
+                    <div class="billing-compare-head">
+                        <span>Feature</span>
+                        <span>Free</span>
+                        <span>Premium</span>
+                    </div>
+                    {% for row in comparison_rows %}
+                    <div class="billing-compare-row">
+                        <span>{{ row.label }}</span>
+                        <span class="billing-compare-value {{ 'is-on' if row.free else 'is-off' }}">{{ "Yes" if row.free else "No" }}</span>
+                        <span class="billing-compare-value {{ 'is-on' if row.premium else 'is-off' }}">{{ "Yes" if row.premium else "No" }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
             <article class="surface billing-plan-card is-free-plan">
                 <div class="command-flags">
                     <span class="tier tier-free">Free</span>
@@ -170,29 +193,6 @@
             </div>
         </section>
         {% endif %}
-
-        <section class="surface billing-compare-panel">
-            <div class="section-head tight">
-                <div>
-                    <div class="eyebrow">Compare plans</div>
-                    <h3>Free vs Premium</h3>
-                </div>
-            </div>
-            <div class="billing-compare-table">
-                <div class="billing-compare-head">
-                    <span>Feature</span>
-                    <span>Free</span>
-                    <span>Premium</span>
-                </div>
-                {% for row in comparison_rows %}
-                <div class="billing-compare-row">
-                    <span>{{ row.label }}</span>
-                    <span>{{ "✓" if row.free else "✕" }}</span>
-                    <span>{{ "✓" if row.premium else "✕" }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </section>
     </main>
     {% if selected_guild and billing.billing_ready %}
     <script>
