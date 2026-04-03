@@ -269,20 +269,23 @@ class CommandControlStoreSettingsTests(unittest.TestCase):
         with mock.patch.dict(
             os.environ,
             {
-                "STRIPE_SECRET_KEY": "sk_test_123",
-                "STRIPE_PREMIUM_PRICE_ID": "price_123",
-                "STRIPE_WEBHOOK_SECRET": "whsec_123",
+                "DISCORD_APP_ID": "1487599032170975292",
+                "DISCORD_PREMIUM_SKU_ID": "1488888888888888888",
             },
             clear=False,
         ):
             self.controls.set_subscription_tier(1001, "premium")
             self.assertFalse(self.controls.is_premium_enabled(1001))
 
-            self.billing.upsert_subscription(5001, status="active", stripe_customer_id="cus_123", stripe_subscription_id="sub_123")
-            self.billing.assign_guild(1001, 5001)
+            self.billing.upsert_guild_entitlement(
+                1001,
+                entitlement_id="ent_123",
+                premium_user_id=5001,
+                sku_id="1488888888888888888",
+            )
 
             self.assertTrue(self.controls.is_premium_enabled(1001))
-            self.billing.clear_subscription(5001)
+            self.billing.clear_guild_entitlement(1001)
             self.assertFalse(self.controls.is_premium_enabled(1001))
 
 
@@ -295,33 +298,36 @@ class BillingStoreTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def test_subscription_and_guild_assignment_round_trip(self) -> None:
-        self.store.upsert_subscription(
-            5001,
-            stripe_customer_id="cus_123",
-            stripe_subscription_id="sub_123",
-            status="active",
-            current_period_end=1777777777,
-            cancel_at_period_end=False,
-            email="owner@example.com",
+    def test_guild_entitlement_round_trip(self) -> None:
+        self.store.upsert_guild_entitlement(
+            1001,
+            entitlement_id="ent_123",
+            premium_user_id=5001,
+            sku_id="1488888888888888888",
+            ends_at=1777777777,
         )
-        self.store.assign_guild(1001, 5001)
 
-        subscription = self.store.get_user_subscription(5001)
         assignment = self.store.get_guild_assignment(1001)
 
-        self.assertTrue(subscription["is_active"])
-        self.assertEqual(subscription["stripe_customer_id"], "cus_123")
-        self.assertEqual(subscription["active_guild_ids"], [1001])
-        self.assertEqual(assignment["premium_user_id"], 5001)
         self.assertTrue(assignment["is_active"])
+        self.assertEqual(assignment["premium_user_id"], 5001)
+        self.assertEqual(assignment["entitlement_id"], "ent_123")
+        self.assertEqual(assignment["sku_id"], 1488888888888888888)
+        self.assertIsNotNone(assignment["ends_at"])
 
-    def test_webhook_tracking_is_idempotent(self) -> None:
-        self.assertFalse(self.store.has_processed_webhook("evt_123"))
-        self.store.mark_webhook_processed("evt_123")
-        self.store.mark_webhook_processed("evt_123")
-        self.assertTrue(self.store.has_processed_webhook("evt_123"))
-        self.assertEqual(self.store.processed_webhook_ids(), ["evt_123"])
+    def test_store_url_uses_discord_app_and_sku(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "DISCORD_APP_ID": "1487599032170975292",
+                "DISCORD_PREMIUM_SKU_ID": "1488888888888888888",
+            },
+            clear=False,
+        ):
+            self.assertEqual(
+                self.store.store_url(),
+                "https://discord.com/application-directory/1487599032170975292/store/1488888888888888888",
+            )
 
 class FakePsycopgCursor:
     def __init__(self, documents: dict[str, object]):

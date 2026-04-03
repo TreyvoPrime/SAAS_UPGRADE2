@@ -94,6 +94,91 @@ class ServerCoreBot(commands.Bot):
 
         self.dashboard = DashboardServer(self, self.command_controls, self.command_logs)
 
+    def premium_sku_id(self) -> int | None:
+        return self.billing_store.premium_sku_id()
+
+    async def _enforce_premium_dependencies(self, guild_id: int, *, premium_active: bool) -> None:
+        if premium_active:
+            return
+        for feature_name, reason in (
+            ("antiraid", "Guardian requires Premium."),
+            ("lockdown", "Lockdown requires Premium."),
+        ):
+            try:
+                await self.server_defense.disable_feature(guild_id, feature_name, reason=reason)
+            except Exception:
+                if hasattr(self.server_defense, "store"):
+                    self.server_defense.store.patch_feature(guild_id, feature_name, enabled=False, ends_at=None)
+                if feature_name == "antiraid" and hasattr(self.server_defense, "reset_threat_state"):
+                    self.server_defense.reset_threat_state(guild_id)
+
+    async def sync_premium_for_guild(self, guild_id: int) -> dict:
+        current = self.billing_store.get_guild_assignment(guild_id)
+        sku_id = self.premium_sku_id()
+        if sku_id is None or self.application_id is None:
+            return current
+
+        entitlement_match = None
+        guild_ref = self.get_guild(guild_id) or discord.Object(id=guild_id)
+        async for entitlement in self.entitlements(
+            limit=100,
+            guild=guild_ref,
+            skus=[discord.Object(id=sku_id)],
+            exclude_ended=True,
+            exclude_deleted=True,
+        ):
+            if entitlement.guild_id != guild_id or entitlement.sku_id != sku_id:
+                continue
+            if entitlement.deleted or entitlement.is_expired():
+                continue
+            if entitlement_match is None:
+                entitlement_match = entitlement
+                continue
+            current_end = entitlement_match.ends_at or discord.utils.utcnow()
+            candidate_end = entitlement.ends_at or discord.utils.utcnow()
+            if candidate_end >= current_end:
+                entitlement_match = entitlement
+
+        if entitlement_match is None:
+            updated = self.billing_store.clear_guild_entitlement(guild_id)
+        else:
+            updated = self.billing_store.sync_from_entitlement(entitlement_match) or current
+
+        await self._enforce_premium_dependencies(guild_id, premium_active=bool(updated.get("is_active")))
+        return updated
+
+    async def sync_all_premium_entitlements(self) -> None:
+        sku_id = self.premium_sku_id()
+        if sku_id is None or self.application_id is None:
+            return
+
+        active_by_guild: dict[int, discord.Entitlement] = {}
+        async for entitlement in self.entitlements(
+            limit=None,
+            skus=[discord.Object(id=sku_id)],
+            exclude_ended=True,
+            exclude_deleted=True,
+        ):
+            guild_id = getattr(entitlement, "guild_id", None)
+            if guild_id is None or entitlement.deleted or entitlement.is_expired():
+                continue
+            current = active_by_guild.get(guild_id)
+            if current is None:
+                active_by_guild[guild_id] = entitlement
+                continue
+            current_end = current.ends_at or discord.utils.utcnow()
+            candidate_end = entitlement.ends_at or discord.utils.utcnow()
+            if candidate_end >= current_end:
+                active_by_guild[guild_id] = entitlement
+
+        known_guild_ids = set(self.billing_store.stored_guild_ids()) | set(active_by_guild.keys())
+        for guild_id, entitlement in active_by_guild.items():
+            self.billing_store.sync_from_entitlement(entitlement)
+        for guild_id in known_guild_ids - set(active_by_guild.keys()):
+            self.billing_store.clear_guild_entitlement(guild_id)
+        for guild_id in known_guild_ids:
+            await self._enforce_premium_dependencies(guild_id, premium_active=self.billing_store.guild_has_active_premium(guild_id))
+
     async def setup_hook(self) -> None:
         self.runtime_loop = asyncio.get_running_loop()
         await self.load_modules()
@@ -148,6 +233,11 @@ async def on_ready():
     if not bot._server_defense_initialized:
         await bot.server_defense.start()
         bot._server_defense_initialized = True
+
+    try:
+        await bot.sync_all_premium_entitlements()
+    except Exception as error:
+        print("Premium entitlement sync failed:", error)
 
     if not bot._commands_synced:
         try:
@@ -237,6 +327,32 @@ async def on_member_remove(member: discord.Member):
 @bot.event
 async def on_reaction_add(reaction: discord.Reaction, user: discord.abc.User | discord.Member):
     await bot.server_defense.handle_reaction_add(reaction, user)
+
+
+@bot.event
+async def on_entitlement_create(entitlement: discord.Entitlement):
+    if entitlement.guild_id is None or entitlement.sku_id != bot.premium_sku_id():
+        return
+    bot.billing_store.sync_from_entitlement(entitlement)
+
+
+@bot.event
+async def on_entitlement_update(entitlement: discord.Entitlement):
+    if entitlement.guild_id is None or entitlement.sku_id != bot.premium_sku_id():
+        return
+    if entitlement.deleted or entitlement.is_expired():
+        bot.billing_store.clear_guild_entitlement(entitlement.guild_id)
+        await bot._enforce_premium_dependencies(entitlement.guild_id, premium_active=False)
+        return
+    bot.billing_store.sync_from_entitlement(entitlement)
+
+
+@bot.event
+async def on_entitlement_delete(entitlement: discord.Entitlement):
+    if entitlement.guild_id is None or entitlement.sku_id != bot.premium_sku_id():
+        return
+    bot.billing_store.clear_guild_entitlement(entitlement.guild_id)
+    await bot._enforce_premium_dependencies(entitlement.guild_id, premium_active=False)
 
 
 if __name__ == "__main__":

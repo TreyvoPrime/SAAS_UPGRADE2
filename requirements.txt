@@ -6,4 +6,3 @@ jinja2
 httpx
 itsdangerous
 psycopg[binary]>=3.2,<4
-stripe>=12,<13

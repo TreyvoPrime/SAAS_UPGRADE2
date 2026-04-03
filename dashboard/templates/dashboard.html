@@ -69,7 +69,7 @@
                 </div>
                 <div class="page-actions">
                     <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}/setup">Setup wizard</a>
-                    <a class="ghost-button" href="/billing">Premium</a>
+                    <a class="ghost-button" href="/billing?guild_id={{ selected_guild.id }}">Premium</a>
                     <a class="ghost-button" href="/help">Help</a>
                     <a class="ghost-button" href="/servers">View all servers</a>
                 </div>
@@ -78,8 +78,8 @@
             <section class="surface command-settings-panel defense-settings-panel premium-tier-panel">
                 <div>
                     <div class="eyebrow">Server plan</div>
-                    <h3>{% if subscription.viewer_has_premium %}Turn Premium on for this server{% else %}Premium for this server{% endif %}</h3>
-                    <p>{% if subscription.viewer_has_premium %}Premium is ready for this server. Turn it on here whenever you want Guardian and the advanced staff toolkit unlocked.{% else %}Start Premium for this server to unlock Guardian and the advanced staff toolkit from the dashboard.{% endif %}</p>
+                    <h3>Premium for this server</h3>
+                    <p>{% if subscription.is_premium %}This server already has an active Discord Guild Subscription. Guardian and the advanced staff toolkit are unlocked here.{% elif subscription.billing_ready %}Buy the Discord Guild Subscription for this server to unlock Guardian and the advanced staff toolkit from the dashboard.{% else %}Finish the Discord Guild SKU setup first, then this panel will link directly to the purchase flow for this server.{% endif %}</p>
                 </div>
                     <div class="command-settings-actions">
                         <div class="dashboard-access-summary" id="subscription-summary">
@@ -90,9 +90,14 @@
                             <span id="subscription-state-copy">{{ subscription.state_copy }}</span>
                         </div>
                         <div class="defense-actions subscription-toggle-row">
+                            {% if subscription.supports_manual_toggle %}
                             <button type="button" class="ghost-button compact-button {% if not subscription.is_premium %}is-active-toggle{% endif %}" id="set-tier-free">Use Free</button>
                             <button type="button" class="primary-button compact-button {% if subscription.is_premium %}is-active-toggle{% endif %}" id="set-tier-premium">{{ subscription.premium_button_label }}</button>
-                            <a class="ghost-button compact-button" href="/billing" id="open-billing-page">{{ subscription.billing_button_label }}</a>
+                            <a class="ghost-button compact-button" href="{{ subscription.billing_url }}" id="open-billing-page">{{ subscription.billing_button_label }}</a>
+                            {% else %}
+                            <a class="primary-button compact-button" href="{{ subscription.billing_url }}" id="open-billing-page">{{ subscription.premium_button_label }}</a>
+                            <button type="button" class="ghost-button compact-button" id="refresh-subscription-status">Refresh status</button>
+                            {% endif %}
                         </div>
                     </div>
             </section>
@@ -1226,6 +1231,7 @@
         const setTierFreeButton = document.getElementById("set-tier-free");
         const setTierPremiumButton = document.getElementById("set-tier-premium");
         const openBillingPageButton = document.getElementById("open-billing-page");
+        const refreshSubscriptionStatusButton = document.getElementById("refresh-subscription-status");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
             disabled: document.querySelector('[data-stat="disabled"]'),
@@ -1528,6 +1534,28 @@
             return response.json();
         }
 
+        async function loadSubscriptionSummary() {
+            const response = await fetch(`/api/guilds/${guildId}/subscription`, {
+                credentials: "same-origin"
+            });
+
+            if (handleUnauthorizedResponse(response)) {
+                throw new Error("Dashboard session expired");
+            }
+
+            if (!response.ok) {
+                let message = "Could not refresh Premium status";
+                try {
+                    const data = await response.json();
+                    message = data.detail || message;
+                } catch {}
+                showToast(message, "error");
+                throw new Error(message);
+            }
+
+            return response.json();
+        }
+
         async function updateModerationSettings(payload) {
             const response = await fetch(`/api/guilds/${guildId}/moderation-settings`, {
                 method: "POST",
@@ -1822,7 +1850,12 @@
                 setTierPremiumButton.textContent = subscription.premium_button_label || "Use Premium";
             }
             if (openBillingPageButton) {
-                openBillingPageButton.textContent = subscription.billing_button_label || "Premium plans";
+                openBillingPageButton.textContent = subscription.supports_manual_toggle
+                    ? (subscription.billing_button_label || "Premium plans")
+                    : (subscription.premium_button_label || "Buy Premium");
+                if (subscription.billing_url) {
+                    openBillingPageButton.setAttribute("href", subscription.billing_url);
+                }
             }
         }
 
@@ -2448,6 +2481,15 @@
                 syncSubscriptionSummary(result);
                 await refreshDefenseSnapshot();
                 showToast(`${result.guild_name || "This server"} is now on the Premium tier. Guardian is unlocked.`, "success");
+            } catch {}
+        });
+
+        refreshSubscriptionStatusButton?.addEventListener("click", async () => {
+            try {
+                const result = await loadSubscriptionSummary();
+                syncSubscriptionSummary(result);
+                await refreshDefenseSnapshot();
+                showToast(`${result.guild_name || "This server"} Premium status was refreshed from Discord.`, "success");
             } catch {}
         });
 

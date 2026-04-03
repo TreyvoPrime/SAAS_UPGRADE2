@@ -5359,6 +5359,43 @@ textarea.search-input {
     align-items: start;
 }
 
+.billing-server-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.billing-server-link {
+    display: grid;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    color: inherit;
+    transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.billing-server-link:hover {
+    border-color: rgba(135, 255, 101, 0.28);
+    background: rgba(164, 194, 168, 0.06);
+}
+
+.billing-server-link.is-active {
+    border-color: rgba(135, 255, 101, 0.36);
+    background: rgba(135, 255, 101, 0.08);
+}
+
+.billing-server-link-name {
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.billing-server-link-meta {
+    font-size: 0.84rem;
+    color: var(--muted);
+}
+
 .billing-status-copy strong {
     display: block;
     margin-bottom: 8px;

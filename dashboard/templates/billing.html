@@ -31,12 +31,12 @@
         <section class="servers-hero-panel billing-hero-panel">
             <div class="servers-copy">
                 <div class="eyebrow">Server billing</div>
-                <h1>Premium unlocks advanced tools for this server.</h1>
-                <p>Start Premium for just {{ premium_price_display }} and unlock Guardian, sharper staff tools, deeper logs, and cleaner workflows for this community.</p>
+                <h1>{% if selected_guild %}Premium for {{ selected_guild.name }}{% else %}Choose a server to buy Premium{% endif %}</h1>
+                <p>{% if selected_guild %}Buy the Discord Guild Subscription for this server and unlock Guardian, sharper staff tools, deeper logs, and cleaner workflows for this community.{% else %}Premium is sold as a Discord Guild Subscription. Choose a server below to open billing for that community.{% endif %}</p>
             </div>
             <div class="servers-metric-grid">
                 <article class="metric-card">
-                    <span>Plan</span>
+                    <span>{% if selected_guild %}Plan{% else %}Selected{% endif %}</span>
                     <strong>{{ billing.status_label }}</strong>
                 </article>
                 <article class="metric-card billing-price-metric-card">
@@ -47,23 +47,23 @@
                     </strong>
                 </article>
                 <article class="metric-card">
-                    <span>Servers with Premium</span>
-                    <strong>{{ billing.active_guild_count }}</strong>
+                    <span>Source</span>
+                    <strong>{{ billing.source_label }}</strong>
                 </article>
             </div>
         </section>
 
         {% if notice %}
         <section class="notice-card billing-notice billing-notice-{{ notice_tone }}">
-            <strong>{% if notice_tone == "success" %}Premium updated{% elif notice_tone == "warning" %}Checkout canceled{% else %}Billing update{% endif %}</strong>
+            <strong>{% if notice_tone == "success" %}Premium updated{% elif notice_tone == "warning" %}Purchase update{% else %}Billing update{% endif %}</strong>
             <p>{{ notice }}</p>
         </section>
         {% endif %}
 
         {% if not billing.billing_ready %}
         <section class="notice-card billing-notice">
-            <strong>Stripe setup is not finished yet</strong>
-            <p>Add the Stripe keys and webhook secret in Railway before turning Premium on for real accounts.</p>
+            <strong>Discord billing is not finished yet</strong>
+            <p>Add the Discord Premium SKU settings in Railway before turning Premium on for real servers.</p>
         </section>
         {% endif %}
 
@@ -99,16 +99,16 @@
                 </ul>
                 <div class="billing-plan-foot">One subscription for this server.</div>
                 <div class="billing-actions">
-                    {% if billing.is_active %}
-                    <form method="post" action="/billing/portal">
-                        <button class="primary-button" type="submit">Manage billing</button>
-                    </form>
-                    {% elif billing.billing_ready %}
-                    <form method="post" action="/billing/checkout">
-                        <button class="primary-button" type="submit">Start Premium for {{ premium_price_display.split('/')[0] }}</button>
-                    </form>
+                    {% if selected_guild and billing.billing_ready %}
+                    <a class="primary-button" href="{{ billing.store_url }}" target="_blank" rel="noopener">
+                        {% if billing.is_active %}Open billing in Discord{% else %}Buy Premium in Discord{% endif %}
+                    </a>
+                    <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
                     {% else %}
-                    <button class="primary-button" type="button" disabled>Start Premium for {{ premium_price_display.split('/')[0] }}</button>
+                    <button class="primary-button" type="button" disabled>{% if selected_guild %}Discord billing not ready{% else %}Select a server first{% endif %}</button>
+                    {% if selected_guild %}
+                    <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
+                    {% endif %}
                     {% endif %}
                 </div>
             </article>
@@ -117,38 +117,50 @@
         <section class="surface billing-status-panel">
             <div class="section-head tight">
                 <div>
-                    <div class="eyebrow">Your account</div>
-                    <h3>Current Premium status</h3>
+                    <div class="eyebrow">{% if selected_guild %}Selected server{% else %}Premium status{% endif %}</div>
+                    <h3>{% if selected_guild %}Current status for {{ selected_guild.name }}{% else %}Choose a server to continue{% endif %}</h3>
                 </div>
             </div>
             <div class="billing-status-grid">
                 <div class="billing-status-copy">
                     <strong>{{ billing.status_label }}</strong>
                     <p>
-                        {% if billing.is_active %}
+                        {% if not selected_guild %}
+                            Open billing from a server dashboard, or pick a server below, to buy Premium for a specific community.
+                        {% elif billing.is_active %}
                             Premium is active for this server{% if billing.period_end_label %} through {{ billing.period_end_label }}{% endif %}. Guardian and the advanced staff toolkit are unlocked here.
                         {% else %}
                             This server is on the Free tier right now. Start Premium to unlock Guardian and the advanced staff toolkit here.
                         {% endif %}
                     </p>
-                    {% if billing.cancel_at_period_end %}
-                    <p>Your subscription is set to end at the close of the current billing period.</p>
-                    {% endif %}
                 </div>
                 <div class="billing-status-actions">
-                    {% if billing.is_active %}
-                    <form method="post" action="/billing/portal">
-                        <button class="ghost-button" type="submit">Open customer portal</button>
-                    </form>
-                    {% elif billing.billing_ready %}
-                    <form method="post" action="/billing/checkout">
-                        <button class="ghost-button" type="submit">Subscribe with Stripe</button>
-                    </form>
+                    {% if selected_guild and billing.billing_ready %}
+                    <a class="ghost-button" href="{{ billing.store_url }}" target="_blank" rel="noopener">{% if billing.is_active %}Manage in Discord{% else %}Open Discord checkout{% endif %}</a>
                     {% endif %}
                     <a class="ghost-button" href="/servers">Pick a server</a>
                 </div>
             </div>
         </section>
+
+        {% if guilds %}
+        <section class="surface billing-status-panel">
+            <div class="section-head tight">
+                <div>
+                    <div class="eyebrow">Servers</div>
+                    <h3>Open billing for a server</h3>
+                </div>
+            </div>
+            <div class="billing-server-list">
+                {% for guild in guilds %}
+                <a class="billing-server-link{% if selected_guild and selected_guild.id == guild.id %} is-active{% endif %}" href="/billing?guild_id={{ guild.id }}">
+                    <span class="billing-server-link-name">{{ guild.name }}</span>
+                    <span class="billing-server-link-meta">{% if guild.premium_enabled %}Premium active{% else %}Free tier{% endif %}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
 
         <section class="surface billing-compare-panel">
             <div class="section-head tight">
