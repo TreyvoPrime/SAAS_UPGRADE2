@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ bot_name }} Terms of Service</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body class="nitro-shell">
+    <main class="servers-page-shell terms-page-shell">
+        <header class="servers-topline">
+            <div class="servers-brand-row">
+                <a class="sidebar-brand" href="{% if user %}/servers{% else %}/{% endif %}">
+                    <div class="brand-mark"><img src="/static/servercore-thumbnail.png" alt="ServerCore"></div>
+                    <div>
+                        <div class="eyebrow">ServerCore</div>
+                        <strong>Terms of Service</strong>
+                    </div>
+                </a>
+                {% if user %}
+                <a class="ghost-button compact-button" href="/billing">Premium</a>
+                <a class="ghost-button compact-button" href="/servers">Back to servers</a>
+                {% else %}
+                <a class="ghost-button compact-button" href="/">Back home</a>
+                {% endif %}
+            </div>
+            {% if user %}
+            <div class="servers-user-pill">
+                <span class="eyebrow">Connected as</span>
+                <strong>{{ user.global_name or user.username }}</strong>
+                <a class="ghost-button compact-button" href="/logout">Log out</a>
+            </div>
+            {% endif %}
+        </header>
+
+        <section class="servers-hero-panel terms-hero-panel">
+            <div class="servers-copy">
+                <div class="eyebrow">Legal</div>
+                <h1>ServerCore Terms of Service</h1>
+                <p>These terms explain how ServerCore can be used, what account holders are responsible for, and how Premium subscriptions work inside the product.</p>
+            </div>
+            <div class="servers-metric-grid">
+                <article class="metric-card">
+                    <span>Service</span>
+                    <strong>ServerCore</strong>
+                </article>
+                <article class="metric-card">
+                    <span>Premium plan</span>
+                    <strong>{{ billing.price_display if billing else "$2.99/month" }}</strong>
+                </article>
+            </div>
+        </section>
+
+        <section class="surface terms-shell">
+            <article class="terms-section">
+                <h2>1. Acceptance of terms</h2>
+                <p>By using ServerCore, inviting the bot to a Discord server, using the dashboard, or subscribing to Premium, you agree to these Terms of Service. If you do not agree, do not use the service.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>2. Eligibility and account access</h2>
+                <p>You are responsible for making sure you have authority to manage any Discord server where you use ServerCore. You are also responsible for any actions taken through your Discord account, your dashboard session, or your Stripe billing account.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>3. Service use</h2>
+                <p>You may use ServerCore only in ways that comply with Discord’s Terms of Service, Discord’s Developer Terms, and all applicable laws. You may not use ServerCore to abuse users, evade moderation systems, interfere with Discord, or run harmful, deceptive, or unlawful activity.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>4. Dashboard and server settings</h2>
+                <p>ServerCore stores server configuration, command permissions, moderation settings, support settings, and related dashboard preferences so the service can function properly across updates and restarts. You are responsible for reviewing the settings you apply to your servers.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>5. Premium subscriptions</h2>
+                <p>Premium is billed as a recurring monthly subscription through Stripe. Premium is attached to the Discord account that purchased it, and that account can turn Premium on in the servers it manages through the dashboard. Pricing, billing dates, renewals, cancellations, and payment details are managed through Stripe.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>6. Billing and cancellation</h2>
+                <p>Premium renews automatically unless canceled. You can manage or cancel your subscription through the billing portal provided in ServerCore. Except where required by law, payments already processed are non-refundable.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>7. Availability and changes</h2>
+                <p>ServerCore may change, improve, suspend, or remove parts of the service at any time. Features, limits, integrations, and Premium benefits may evolve over time. We do not guarantee uninterrupted uptime or permanent availability of every feature.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>8. Moderation and data responsibility</h2>
+                <p>You are responsible for how you configure moderation, logging, support workflows, automated actions, and role permissions on your servers. ServerCore provides tooling, but server owners and administrators remain responsible for how that tooling is used.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>9. Termination</h2>
+                <p>Access to ServerCore may be limited or terminated if the service is used in abusive, fraudulent, harmful, or unlawful ways, or if continued access creates operational, security, or platform risk.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>10. Disclaimer</h2>
+                <p>ServerCore is provided on an “as is” and “as available” basis. To the fullest extent allowed by law, we make no warranties about uninterrupted service, fitness for a particular purpose, or error-free operation.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>11. Limitation of liability</h2>
+                <p>To the fullest extent allowed by law, ServerCore and its operators are not liable for indirect, incidental, special, consequential, or punitive damages, or for lost revenue, lost data, or server disruption arising from use of the service.</p>
+            </article>
+
+            <article class="terms-section">
+                <h2>12. Updates to these terms</h2>
+                <p>These terms may be updated from time to time. Continued use of ServerCore after updated terms are published means you accept the revised terms.</p>
+            </article>
+        </section>
+    </main>
+</body>
+</html>
