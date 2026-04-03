@@ -5410,7 +5410,8 @@ textarea.search-input {
 }
 
 .terms-hero-panel {
-    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    align-items: start;
 }
 
 .terms-shell {
@@ -5444,6 +5445,31 @@ textarea.search-input {
     max-width: 88ch;
 }
 
+.terms-hero-panel .servers-copy {
+    max-width: 760px;
+}
+
+.terms-hero-panel .servers-copy h1 {
+    margin: 0 0 10px;
+    font-size: clamp(2rem, 1.45rem + 1.25vw, 2.75rem);
+    line-height: 1.05;
+    letter-spacing: -0.045em;
+    max-width: 16ch;
+}
+
+.terms-hero-panel .servers-copy p {
+    margin: 0;
+    max-width: 52ch;
+    line-height: 1.52;
+    font-size: 0.98rem;
+}
+
+.terms-hero-panel .servers-metric-grid {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    align-self: stretch;
+}
+
 @media (max-width: 980px) {
     .billing-plan-grid,
     .billing-status-grid {
@@ -5456,6 +5482,10 @@ textarea.search-input {
 
     .terms-hero-panel {
         grid-template-columns: 1fr;
+    }
+
+    .terms-hero-panel .servers-copy h1 {
+        max-width: none;
     }
 }
 
