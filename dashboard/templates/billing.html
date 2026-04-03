@@ -74,6 +74,39 @@
         </section>
         {% endif %}
 
+        <section class="surface billing-flow-panel">
+            <div class="section-head tight">
+                <div>
+                    <div class="eyebrow">Premium flow</div>
+                    <h3>How Premium turns on</h3>
+                </div>
+                <span class="module-chip billing-sync-chip" id="billing-sync-chip">{% if selected_guild and billing.is_active %}Premium active{% elif selected_guild %}Waiting for Discord{% else %}Choose a server{% endif %}</span>
+            </div>
+            <div class="billing-flow-grid">
+                <article class="billing-flow-step {% if selected_guild %}is-complete{% else %}is-active{% endif %}">
+                    <strong>1</strong>
+                    <div>
+                        <h4>Choose a server</h4>
+                        <p>{% if selected_guild %}{{ selected_guild.name }} is selected for billing.{% else %}Pick the server that should receive Premium before opening checkout.{% endif %}</p>
+                    </div>
+                </article>
+                <article class="billing-flow-step {% if selected_guild and billing.billing_ready %}is-active{% endif %}">
+                    <strong>2</strong>
+                    <div>
+                        <h4>Open Discord checkout</h4>
+                        <p>{% if billing.billing_ready %}Discord handles the Guild Subscription checkout in a separate tab.{% else %}Finish the Discord SKU setup first, then checkout will open from here.{% endif %}</p>
+                    </div>
+                </article>
+                <article class="billing-flow-step {% if selected_guild and billing.is_active %}is-complete{% endif %}">
+                    <strong>3</strong>
+                    <div>
+                        <h4>Return and confirm</h4>
+                        <p id="billing-flow-note">{% if selected_guild and billing.is_active %}Premium is active for this server right now.{% elif selected_guild %}Come back here after checkout and this page will confirm when the entitlement reaches this server.{% else %}The activation check will appear here once a server is selected.{% endif %}</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
         <section class="billing-plan-grid">
             <section class="surface billing-compare-panel">
                 <div class="section-head tight">
@@ -213,6 +246,30 @@
         const billingSecondaryAction = document.getElementById("billing-secondary-action");
         const billingRefreshStatus = document.getElementById("billing-refresh-status");
         const billingInlineNote = document.getElementById("billing-inline-note");
+        const billingSyncChip = document.getElementById("billing-sync-chip");
+        const billingFlowNote = document.getElementById("billing-flow-note");
+        let billingRefreshInFlight = false;
+
+        function formatBillingStamp(date = new Date()) {
+            return `Checked ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+        }
+
+        function setBillingRefreshBusy(isBusy) {
+            if (!billingRefreshStatus) return;
+            if (!billingRefreshStatus.dataset.defaultText) {
+                billingRefreshStatus.dataset.defaultText = billingRefreshStatus.textContent.trim();
+            }
+            billingRefreshStatus.disabled = isBusy;
+            billingRefreshStatus.classList.toggle("is-busy", isBusy);
+            billingRefreshStatus.textContent = isBusy ? "Refreshing..." : billingRefreshStatus.dataset.defaultText;
+            if (billingSyncChip && isBusy) {
+                billingSyncChip.textContent = "Checking Discord";
+            }
+        }
+
+        if (billingSyncChip && !billingActive && billingGuildId) {
+            billingSyncChip.textContent = formatBillingStamp();
+        }
 
         function revealBillingBanner(message, tone = "success") {
             if (!activationBanner || !activationCopy) return;
@@ -229,6 +286,7 @@
             if (!subscription) return;
             const premiumOn = Boolean(subscription.is_premium);
             const guildName = subscription.guild_name || "This server";
+            const stamp = formatBillingStamp();
 
             if (billingPlanStatus) {
                 billingPlanStatus.textContent = premiumOn ? "Premium" : (subscription.label || "Free");
@@ -252,40 +310,67 @@
                     ? `Premium is active for ${guildName}. Changes should now appear on the dashboard and premium commands should work right away.`
                     : `After checkout finishes in Discord, this page will update automatically for ${guildName}.`;
             }
+            if (billingSyncChip) {
+                billingSyncChip.textContent = premiumOn ? "Premium active" : stamp;
+                billingSyncChip.classList.toggle("is-premium", premiumOn);
+            }
+            if (billingFlowNote) {
+                billingFlowNote.textContent = premiumOn
+                    ? `Premium is active for ${guildName} right now.`
+                    : `Come back here after checkout and this page will confirm when Discord applies the entitlement to ${guildName}.`;
+            }
             if (premiumOn && !billingActive) {
                 revealBillingBanner(`Premium is active for ${guildName}. Guardian and premium commands are now unlocked on this server.`, "success");
             }
             billingActive = premiumOn;
             document.body.dataset.billingActive = premiumOn ? "true" : "false";
+            setBillingRefreshBusy(false);
         }
 
         async function refreshBillingStatus({ silent = false } = {}) {
             if (!billingGuildId || !billingReady) return null;
-            const response = await fetch(`/api/guilds/${billingGuildId}/subscription`, {
-                credentials: "same-origin"
-            });
-            if (response.status === 401) {
-                window.location.href = "/";
-                return null;
-            }
-            if (!response.ok) {
-                if (!silent) {
-                    revealBillingBanner("Could not refresh Premium status right now. Try again in a moment.", "warning");
+            if (billingRefreshInFlight) return null;
+            billingRefreshInFlight = true;
+            setBillingRefreshBusy(true);
+            try {
+                const response = await fetch(`/api/guilds/${billingGuildId}/subscription`, {
+                    credentials: "same-origin"
+                });
+                if (response.status === 401) {
+                    window.location.href = "/";
+                    return null;
                 }
-                throw new Error("Could not refresh billing status");
+                if (!response.ok) {
+                    if (!silent) {
+                        revealBillingBanner("Could not refresh Premium status right now. Try again in a moment.", "warning");
+                    }
+                    throw new Error("Could not refresh billing status");
+                }
+                const data = await response.json();
+                syncBillingUi(data);
+                return data;
+            } finally {
+                billingRefreshInFlight = false;
+                setBillingRefreshBusy(false);
             }
-            const data = await response.json();
-            syncBillingUi(data);
-            return data;
         }
 
         billingRefreshStatus?.addEventListener("click", () => {
             refreshBillingStatus().catch(() => {});
         });
 
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden && billingGuildId && billingReady) {
+                refreshBillingStatus({ silent: true }).catch(() => {});
+            }
+        });
+
         if (!billingActive) {
             let pollCount = 0;
             const pollTimer = setInterval(() => {
+                if (document.hidden || billingRefreshInFlight) {
+                    return;
+                }
                 pollCount += 1;
                 refreshBillingStatus({ silent: true }).then((data) => {
                     if (data?.is_premium) {

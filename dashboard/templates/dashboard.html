@@ -81,7 +81,11 @@
                     <h3>Premium for this server</h3>
                     <p>{% if subscription.is_premium %}This server already has an active Discord Guild Subscription. Guardian and the advanced staff toolkit are unlocked here.{% elif subscription.billing_ready %}Buy the Discord Guild Subscription for this server to unlock Guardian and the advanced staff toolkit from the dashboard.{% else %}Finish the Discord Guild SKU setup first, then this panel will link directly to the purchase flow for this server.{% endif %}</p>
                 </div>
-                    <div class="command-settings-actions">
+                    <div class="command-settings-actions premium-tier-actions">
+                        <div class="subscription-health-row">
+                            <span class="module-chip subscription-health-chip" id="subscription-health-chip">{% if subscription.is_premium %}Premium active{% else %}Free tier{% endif %}</span>
+                            <span class="dashboard-access-note subscription-sync-label" id="subscription-sync-label">Status checks run automatically while this page is open.</span>
+                        </div>
                         <div class="dashboard-access-summary" id="subscription-summary">
                             {{ subscription.summary_copy }}
                         </div>
@@ -97,6 +101,15 @@
                             {% else %}
                             <a class="primary-button compact-button" href="{{ subscription.billing_url }}" id="open-billing-page">{{ subscription.premium_button_label }}</a>
                             <button type="button" class="ghost-button compact-button" id="refresh-subscription-status">Refresh status</button>
+                            {% endif %}
+                        </div>
+                        <div class="dashboard-access-note subscription-action-note" id="subscription-action-note">
+                            {% if subscription.is_premium %}
+                            Premium is already active here. Use refresh if Discord billing changes and you want the dashboard to pull the latest status right away.
+                            {% elif subscription.billing_ready %}
+                            Discord checkout opens in a new tab and unlocks this server automatically once the purchase is granted.
+                            {% else %}
+                            Finish the Discord SKU setup first, then this panel will link directly to the purchase flow for this server.
                             {% endif %}
                         </div>
                     </div>
@@ -1228,12 +1241,16 @@
         const setTierPremiumButton = document.getElementById("set-tier-premium");
         const openBillingPageButton = document.getElementById("open-billing-page");
         const refreshSubscriptionStatusButton = document.getElementById("refresh-subscription-status");
+        const subscriptionHealthChip = document.getElementById("subscription-health-chip");
+        const subscriptionSyncLabel = document.getElementById("subscription-sync-label");
+        const subscriptionActionNote = document.getElementById("subscription-action-note");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
             disabled: document.querySelector('[data-stat="disabled"]'),
             restricted: document.querySelector('[data-stat="restricted"]'),
         };
         let lastKnownPremiumState = {{ "true" if subscription.is_premium else "false" }};
+        let subscriptionRefreshInFlight = false;
         const lockdownRoleModal = document.getElementById("lockdown-role-modal");
         const lockdownRoleModalTitle = document.getElementById("lockdown-role-modal-title");
         const lockdownRoleChecklist = document.getElementById("lockdown-role-checklist");
@@ -1270,6 +1287,40 @@
                 window.location.href = "/";
             }, 700);
             return true;
+        }
+
+        function formatStatusStamp(date = new Date()) {
+            return `Last checked ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`;
+        }
+
+        function setButtonBusy(button, isBusy, busyText, idleText) {
+            if (!button) return;
+            if (!button.dataset.defaultText) {
+                button.dataset.defaultText = idleText || button.textContent.trim();
+            }
+            button.disabled = isBusy;
+            button.classList.toggle("is-busy", isBusy);
+            button.textContent = isBusy ? busyText : (idleText || button.dataset.defaultText);
+        }
+
+        function setSubscriptionRefreshBusy(isBusy) {
+            subscriptionRefreshInFlight = isBusy;
+            setButtonBusy(refreshSubscriptionStatusButton, isBusy, "Refreshing...", "Refresh status");
+            if (setTierFreeButton) {
+                setTierFreeButton.disabled = isBusy;
+                setTierFreeButton.classList.toggle("is-busy", isBusy);
+            }
+            if (setTierPremiumButton) {
+                setTierPremiumButton.disabled = isBusy;
+                setTierPremiumButton.classList.toggle("is-busy", isBusy);
+            }
+            if (subscriptionSyncLabel && isBusy) {
+                subscriptionSyncLabel.textContent = "Checking Discord billing for the latest server status...";
+            }
+        }
+
+        if (subscriptionSyncLabel) {
+            subscriptionSyncLabel.textContent = `${formatStatusStamp()} Status checks run automatically while this page is open.`;
         }
 
         function parseRoleIds(card) {
@@ -1818,11 +1869,17 @@
             if (!subscription) return;
             const premiumOn = Boolean(subscription.is_premium);
             const previouslyPremium = Boolean(lastKnownPremiumState);
+            const freshStamp = formatStatusStamp();
             if (subscriptionSummary) {
                 subscriptionSummary.textContent = subscription.summary_copy || `${subscription.guild_name || "{{ selected_guild.name }}"} is currently on the ${subscription.label} tier.`;
             }
             if (subscriptionTierChip) {
                 subscriptionTierChip.textContent = `${subscription.label} tier`;
+            }
+            if (subscriptionHealthChip) {
+                subscriptionHealthChip.textContent = premiumOn ? "Premium active" : "Free tier";
+                subscriptionHealthChip.classList.toggle("is-premium", premiumOn);
+                subscriptionHealthChip.classList.toggle("is-free", !premiumOn);
             }
             if (subscriptionStatePill) {
                 subscriptionStatePill.classList.toggle("is-premium", premiumOn);
@@ -1837,6 +1894,16 @@
                         ? "Guardian and advanced tools are unlocked for this server."
                         : "Guardian and advanced tools stay locked until Premium is turned on."
                 );
+            }
+            if (subscriptionSyncLabel) {
+                subscriptionSyncLabel.textContent = `${freshStamp} Status checks run automatically while this page is open.`;
+            }
+            if (subscriptionActionNote) {
+                subscriptionActionNote.textContent = premiumOn
+                    ? "Premium is already active here. Use refresh if Discord billing changes and you want the dashboard to pull the latest status right away."
+                    : (subscription.billing_ready
+                        ? "Discord checkout opens in a new tab and unlocks this server automatically once the purchase is granted."
+                        : "Finish the Discord SKU setup first, then this panel will link directly to the purchase flow for this server.");
             }
             if (setTierFreeButton) {
                 setTierFreeButton.classList.toggle("is-active-toggle", !premiumOn);
@@ -1856,22 +1923,31 @@
                 }
             }
             lastKnownPremiumState = premiumOn;
+            setSubscriptionRefreshBusy(false);
             if (options.announceActivation && premiumOn && !previouslyPremium) {
                 showToast(`${subscription.guild_name || "This server"} Premium was activated. Guardian and premium commands are now available.`, "success");
             }
         }
 
         async function refreshSubscriptionStatus({ announceActivation = false, silent = false } = {}) {
-            const result = await loadSubscriptionSummary();
-            const previousPremium = Boolean(lastKnownPremiumState);
-            syncSubscriptionSummary(result, { announceActivation });
-            if (previousPremium !== Boolean(result.is_premium)) {
-                await refreshDefenseSnapshot();
+            if (subscriptionRefreshInFlight) {
+                return null;
             }
-            if (!silent && !(announceActivation && result.is_premium && !previousPremium)) {
-                showToast(`${result.guild_name || "This server"} Premium status was refreshed from Discord.`, "success");
+            setSubscriptionRefreshBusy(true);
+            try {
+                const result = await loadSubscriptionSummary();
+                const previousPremium = Boolean(lastKnownPremiumState);
+                syncSubscriptionSummary(result, { announceActivation });
+                if (previousPremium !== Boolean(result.is_premium)) {
+                    await refreshDefenseSnapshot();
+                }
+                if (!silent && !(announceActivation && result.is_premium && !previousPremium)) {
+                    showToast(`${result.guild_name || "This server"} Premium status was refreshed from Discord.`, "success");
+                }
+                return result;
+            } finally {
+                setSubscriptionRefreshBusy(false);
             }
-            return result;
         }
 
         function syncGreetingCard(flow, state) {
@@ -2482,21 +2558,27 @@
         }
 
         setTierFreeButton?.addEventListener("click", async () => {
+            setSubscriptionRefreshBusy(true);
             try {
                 const result = await updateSubscriptionTier("free");
                 syncSubscriptionSummary(result);
                 await refreshDefenseSnapshot();
                 showToast(`${result.guild_name || "This server"} is now on the Free tier. Guardian is locked.`, "success");
-            } catch {}
+            } catch {
+                setSubscriptionRefreshBusy(false);
+            }
         });
 
         setTierPremiumButton?.addEventListener("click", async () => {
+            setSubscriptionRefreshBusy(true);
             try {
                 const result = await updateSubscriptionTier("premium");
                 syncSubscriptionSummary(result);
                 await refreshDefenseSnapshot();
                 showToast(`${result.guild_name || "This server"} is now on the Premium tier. Guardian is unlocked.`, "success");
-            } catch {}
+            } catch {
+                setSubscriptionRefreshBusy(false);
+            }
         });
 
         refreshSubscriptionStatusButton?.addEventListener("click", async () => {
@@ -2505,11 +2587,20 @@
             } catch {}
         });
 
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) {
+                refreshSubscriptionStatus({ announceActivation: true, silent: true }).catch(() => {});
+            }
+        });
+
         updateStats();
         updateSectionVisibility();
         refreshLogs();
         refreshDefenseSnapshot();
         setInterval(() => {
+            if (document.hidden || subscriptionRefreshInFlight) {
+                return;
+            }
             refreshSubscriptionStatus({ announceActivation: true, silent: true }).catch(() => {});
         }, 20000);
         setInterval(refreshLogs, 15000);
