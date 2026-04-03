@@ -98,52 +98,54 @@
                 </div>
             </section>
 
-            <article class="surface billing-plan-card is-free-plan">
-                <div class="command-flags">
-                    <span class="tier tier-free">Free</span>
-                </div>
-                <h2>Free</h2>
-                <div class="billing-price">$0<span>/month</span></div>
-                <p>Everything you need to run a solid server with moderation, logging, support, and dashboard controls.</p>
-                <ul class="billing-feature-list">
-                    <li>Core moderation and command routing</li>
-                    <li>Core ServerGuard protections</li>
-                    <li>Welcome / Leave and join DM basics</li>
-                    <li>Basic tickets, logs, giveaways, reminders, and autofeed</li>
-                </ul>
-                <div class="billing-plan-foot">Always included for every server.</div>
-            </article>
+            <div class="billing-plan-stack">
+                <article class="surface billing-plan-card is-free-plan">
+                    <div class="command-flags">
+                        <span class="tier tier-free">Free</span>
+                    </div>
+                    <h2>Free</h2>
+                    <div class="billing-price">$0<span>/month</span></div>
+                    <p>Everything you need to run a solid server with moderation, logging, support, and dashboard controls.</p>
+                    <ul class="billing-feature-list">
+                        <li>Core moderation and command routing</li>
+                        <li>Core ServerGuard protections</li>
+                        <li>Welcome / Leave and join DM basics</li>
+                        <li>Basic tickets, logs, giveaways, reminders, and autofeed</li>
+                    </ul>
+                    <div class="billing-plan-foot">Always included for every server.</div>
+                </article>
 
-            <article class="surface billing-plan-card is-premium-plan">
-                <div class="command-flags">
-                    <span class="tier tier-premium">Premium</span>
-                </div>
-                <h2>Premium</h2>
-                <div class="billing-price">{{ premium_price_display.split('/')[0] }}<span>/month</span></div>
-                <p>Unlock the serious admin toolkit: Guardian, faster staff workflows, deeper history, analytics, and the premium controls that make servers easier to run.</p>
-                <ul class="billing-feature-list">
-                    <li>Guardian live threat monitoring and response</li>
-                    <li>Advanced tickets, transcripts, and staff notes</li>
-                    <li>Advanced logs, analytics, and config tools</li>
-                    <li>Advanced autofeed, reminders, giveaways, and moderation history</li>
-                </ul>
-                <div class="billing-plan-foot">One subscription for this server.</div>
-                <div class="billing-actions">
-                    {% if selected_guild and billing.billing_ready %}
-                    <a class="primary-button" href="{{ billing.store_url }}" target="_blank" rel="noopener" id="billing-primary-action">
-                        {% if billing.is_active %}Open billing in Discord{% else %}Buy Premium in Discord{% endif %}
-                    </a>
-                    <button class="ghost-button" type="button" id="billing-refresh-status">Refresh status</button>
-                    <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
-                    <p class="billing-inline-note" id="billing-inline-note">{% if billing.is_active %}Premium is already active for this server.{% else %}After checkout finishes in Discord, this page will update automatically for {{ selected_guild.name }}.{% endif %}</p>
-                    {% else %}
-                    <button class="primary-button" type="button" disabled>{% if selected_guild %}Discord billing not ready{% else %}Select a server first{% endif %}</button>
-                    {% if selected_guild %}
-                    <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
-                    {% endif %}
-                    {% endif %}
-                </div>
-            </article>
+                <article class="surface billing-plan-card is-premium-plan">
+                    <div class="command-flags">
+                        <span class="tier tier-premium">Premium</span>
+                    </div>
+                    <h2>Premium</h2>
+                    <div class="billing-price">{{ premium_price_display.split('/')[0] }}<span>/month</span></div>
+                    <p>Unlock the serious admin toolkit: Guardian, faster staff workflows, deeper history, analytics, and the premium controls that make servers easier to run.</p>
+                    <ul class="billing-feature-list">
+                        <li>Guardian live threat monitoring and response</li>
+                        <li>Advanced tickets, transcripts, and staff notes</li>
+                        <li>Advanced logs, analytics, and config tools</li>
+                        <li>Advanced autofeed, reminders, giveaways, and moderation history</li>
+                    </ul>
+                    <div class="billing-plan-foot">One subscription for this server.</div>
+                    <div class="billing-actions">
+                        {% if selected_guild and billing.billing_ready %}
+                        <a class="primary-button" href="{{ billing.store_url }}" target="_blank" rel="noopener" id="billing-primary-action">
+                            {% if billing.is_active %}Open billing in Discord{% else %}Buy Premium in Discord{% endif %}
+                        </a>
+                        <button class="ghost-button" type="button" id="billing-refresh-status">Refresh status</button>
+                        <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
+                        <p class="billing-inline-note" id="billing-inline-note">{% if billing.is_active %}Premium is already active for this server.{% else %}After checkout finishes in Discord, this page will update automatically for {{ selected_guild.name }}.{% endif %}</p>
+                        {% else %}
+                        <button class="primary-button" type="button" disabled>{% if selected_guild %}Discord billing not ready{% else %}Select a server first{% endif %}</button>
+                        {% if selected_guild %}
+                        <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </article>
+            </div>
         </section>
 
         <section class="surface billing-status-panel">
