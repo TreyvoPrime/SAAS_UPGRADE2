@@ -5227,11 +5227,39 @@ textarea.search-input {
 
 .billing-hero-panel {
     align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+    gap: 18px;
 }
 
 .billing-hero-panel .servers-metric-grid {
-    width: min(600px, 100%);
-    grid-template-columns: repeat(3, minmax(120px, 1fr));
+    width: 100%;
+    max-width: 420px;
+    justify-self: end;
+    align-self: start;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.billing-hero-panel .metric-card {
+    min-height: 86px;
+    padding: 14px 14px 13px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-radius: 14px;
+}
+
+.billing-hero-panel .metric-card span {
+    margin-bottom: 7px;
+    font-size: 0.8rem;
+    line-height: 1.2;
+}
+
+.billing-hero-panel .metric-card strong {
+    margin-top: 0;
+    font-size: 0.98rem;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
 }
 
 .billing-plan-grid {
@@ -5275,21 +5303,22 @@ textarea.search-input {
 
 .billing-metric-price {
     display: flex;
-    align-items: baseline;
-    gap: 4px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
     min-width: 0;
     line-height: 1;
-    white-space: nowrap;
+    white-space: normal;
 }
 
 .billing-metric-price-amount {
-    font-size: clamp(1.08rem, 0.96rem + 0.4vw, 1.3rem);
+    font-size: clamp(1.08rem, 0.96rem + 0.28vw, 1.2rem);
     font-weight: 700;
     letter-spacing: -0.04em;
 }
 
 .billing-metric-price-unit {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: var(--muted);
     letter-spacing: normal;
@@ -5471,6 +5500,10 @@ textarea.search-input {
 }
 
 @media (max-width: 980px) {
+    .billing-hero-panel {
+        grid-template-columns: 1fr;
+    }
+
     .billing-plan-grid,
     .billing-status-grid {
         grid-template-columns: 1fr;
@@ -5478,6 +5511,8 @@ textarea.search-input {
 
     .billing-hero-panel .servers-metric-grid {
         width: 100%;
+        max-width: none;
+        justify-self: stretch;
     }
 
     .terms-hero-panel {
@@ -5492,6 +5527,10 @@ textarea.search-input {
 @media (max-width: 760px) {
     .billing-hero-panel .servers-metric-grid {
         grid-template-columns: 1fr;
+    }
+
+    .billing-hero-panel .metric-card {
+        min-height: 0;
     }
 
     .billing-compare-head,
