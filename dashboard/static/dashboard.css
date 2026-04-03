@@ -5270,8 +5270,8 @@ textarea.search-input {
 }
 
 .billing-plan-stack {
-    display: grid;
-    grid-template-rows: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 26px;
     min-height: 100%;
     align-self: stretch;
@@ -5293,6 +5293,14 @@ textarea.search-input {
 
 .billing-plan-card {
     justify-content: flex-start;
+}
+
+.billing-plan-stack .billing-plan-card {
+    min-height: 0;
+}
+
+.billing-plan-stack .is-premium-plan {
+    margin-top: auto;
 }
 
 .billing-plan-card h2,
@@ -5598,7 +5606,7 @@ textarea.search-input {
     }
 
     .billing-plan-stack {
-        grid-template-rows: repeat(2, minmax(0, auto));
+        min-height: 0;
     }
 
     .billing-hero-panel .servers-metric-grid {
