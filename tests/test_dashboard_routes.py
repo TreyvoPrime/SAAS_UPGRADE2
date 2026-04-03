@@ -587,6 +587,30 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertIn("https://discord.com/application-directory/1487599032170975292/store/1488888888888888888", response.text)
         self.assertIn("Buy Premium in Discord", response.text)
 
+    def test_billing_page_highlights_active_premium_for_selected_server(self) -> None:
+        self._authenticate()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "DISCORD_APP_ID": "1487599032170975292",
+                "DISCORD_PREMIUM_SKU_ID": "1488888888888888888",
+            },
+            clear=False,
+        ):
+            self.bot.billing_store.upsert_guild_entitlement(
+                self.bot.guild.id,
+                entitlement_id="ent_123",
+                premium_user_id=5001,
+                sku_id="1488888888888888888",
+            )
+            response = self.client.get(f"/billing?guild_id={self.bot.guild.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Premium is active for Audit Guild", response.text)
+        self.assertIn("Refresh status", response.text)
+        self.assertIn("Open billing in Discord", response.text)
+
     def test_guardian_requires_premium_from_dashboard(self) -> None:
         self._authenticate()
         blocked = self.client.post(

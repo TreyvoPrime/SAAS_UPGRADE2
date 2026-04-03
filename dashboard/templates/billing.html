@@ -6,7 +6,14 @@
     <title>{{ bot_name }} Premium</title>
     <link rel="stylesheet" href="/static/dashboard.css">
 </head>
-<body class="nitro-shell">
+<body
+    class="nitro-shell"
+    {% if selected_guild %}
+    data-billing-guild-id="{{ selected_guild.id }}"
+    data-billing-ready="{{ 'true' if billing.billing_ready else 'false' }}"
+    data-billing-active="{{ 'true' if billing.is_active else 'false' }}"
+    {% endif %}
+>
     <main class="servers-page-shell billing-page-shell">
         <header class="servers-topline">
             <div class="servers-brand-row">
@@ -37,7 +44,7 @@
             <div class="servers-metric-grid">
                 <article class="metric-card">
                     <span>{% if selected_guild %}Plan{% else %}Selected{% endif %}</span>
-                    <strong>{{ billing.status_label }}</strong>
+                    <strong id="billing-plan-status">{{ billing.status_label }}</strong>
                 </article>
                 <article class="metric-card billing-price-metric-card">
                     <span>Price</span>
@@ -53,10 +60,10 @@
             </div>
         </section>
 
-        {% if notice %}
-        <section class="notice-card billing-notice billing-notice-{{ notice_tone }}">
-            <strong>{% if notice_tone == "success" %}Premium updated{% elif notice_tone == "warning" %}Purchase update{% else %}Billing update{% endif %}</strong>
-            <p>{{ notice }}</p>
+        {% if notice or selected_guild %}
+        <section class="notice-card billing-notice billing-notice-{% if selected_guild and billing.is_active %}success{% else %}{{ notice_tone }}{% endif %}" id="billing-activation-banner" {% if not notice and not billing.is_active %}hidden{% endif %}>
+            <strong id="billing-activation-title">{% if selected_guild and billing.is_active %}Premium activated{% elif notice_tone == "success" %}Premium updated{% elif notice_tone == "warning" %}Purchase update{% else %}Billing update{% endif %}</strong>
+            <p id="billing-activation-copy">{% if selected_guild and billing.is_active %}Premium is active for {{ selected_guild.name }}. Guardian and the premium command set are unlocked on this server.{% else %}{{ notice }}{% endif %}</p>
         </section>
         {% endif %}
 
@@ -100,10 +107,12 @@
                 <div class="billing-plan-foot">One subscription for this server.</div>
                 <div class="billing-actions">
                     {% if selected_guild and billing.billing_ready %}
-                    <a class="primary-button" href="{{ billing.store_url }}" target="_blank" rel="noopener">
+                    <a class="primary-button" href="{{ billing.store_url }}" target="_blank" rel="noopener" id="billing-primary-action">
                         {% if billing.is_active %}Open billing in Discord{% else %}Buy Premium in Discord{% endif %}
                     </a>
+                    <button class="ghost-button" type="button" id="billing-refresh-status">Refresh status</button>
                     <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
+                    <p class="billing-inline-note" id="billing-inline-note">{% if billing.is_active %}Premium is already active for this server.{% else %}After checkout finishes in Discord, this page will update automatically for {{ selected_guild.name }}.{% endif %}</p>
                     {% else %}
                     <button class="primary-button" type="button" disabled>{% if selected_guild %}Discord billing not ready{% else %}Select a server first{% endif %}</button>
                     {% if selected_guild %}
@@ -123,8 +132,8 @@
             </div>
             <div class="billing-status-grid">
                 <div class="billing-status-copy">
-                    <strong>{{ billing.status_label }}</strong>
-                    <p>
+                    <strong id="billing-status-label">{{ billing.status_label }}</strong>
+                    <p id="billing-status-copy">
                         {% if not selected_guild %}
                             Open billing from a server dashboard, or pick a server below, to buy Premium for a specific community.
                         {% elif billing.is_active %}
@@ -136,7 +145,7 @@
                 </div>
                 <div class="billing-status-actions">
                     {% if selected_guild and billing.billing_ready %}
-                    <a class="ghost-button" href="{{ billing.store_url }}" target="_blank" rel="noopener">{% if billing.is_active %}Manage in Discord{% else %}Open Discord checkout{% endif %}</a>
+                    <a class="ghost-button" href="{{ billing.store_url }}" target="_blank" rel="noopener" id="billing-secondary-action">{% if billing.is_active %}Manage in Discord{% else %}Open Discord checkout{% endif %}</a>
                     {% endif %}
                     <a class="ghost-button" href="/servers">Pick a server</a>
                 </div>
@@ -185,5 +194,106 @@
             </div>
         </section>
     </main>
+    {% if selected_guild and billing.billing_ready %}
+    <script>
+        const billingGuildId = document.body.dataset.billingGuildId;
+        const billingReady = document.body.dataset.billingReady === "true";
+        let billingActive = document.body.dataset.billingActive === "true";
+        const activationBanner = document.getElementById("billing-activation-banner");
+        const activationTitle = document.getElementById("billing-activation-title");
+        const activationCopy = document.getElementById("billing-activation-copy");
+        const billingPlanStatus = document.getElementById("billing-plan-status");
+        const billingStatusLabel = document.getElementById("billing-status-label");
+        const billingStatusCopy = document.getElementById("billing-status-copy");
+        const billingPrimaryAction = document.getElementById("billing-primary-action");
+        const billingSecondaryAction = document.getElementById("billing-secondary-action");
+        const billingRefreshStatus = document.getElementById("billing-refresh-status");
+        const billingInlineNote = document.getElementById("billing-inline-note");
+
+        function revealBillingBanner(message, tone = "success") {
+            if (!activationBanner || !activationCopy) return;
+            activationBanner.hidden = false;
+            activationBanner.classList.remove("billing-notice-success", "billing-notice-warning");
+            activationBanner.classList.add(`billing-notice-${tone}`);
+            if (activationTitle) {
+                activationTitle.textContent = tone === "success" ? "Premium activated" : "Purchase update";
+            }
+            activationCopy.textContent = message;
+        }
+
+        function syncBillingUi(subscription) {
+            if (!subscription) return;
+            const premiumOn = Boolean(subscription.is_premium);
+            const guildName = subscription.guild_name || "This server";
+
+            if (billingPlanStatus) {
+                billingPlanStatus.textContent = premiumOn ? "Premium" : (subscription.label || "Free");
+            }
+            if (billingStatusLabel) {
+                billingStatusLabel.textContent = premiumOn ? "Premium is active" : "Free is active";
+            }
+            if (billingStatusCopy) {
+                billingStatusCopy.textContent = premiumOn
+                    ? `${guildName} now has Premium active. Guardian and the premium command set are unlocked on this server.`
+                    : `${guildName} is still on the Free tier. Finish checkout in Discord to unlock Guardian and the premium command set here.`;
+            }
+            if (billingPrimaryAction) {
+                billingPrimaryAction.textContent = premiumOn ? "Open billing in Discord" : "Buy Premium in Discord";
+            }
+            if (billingSecondaryAction) {
+                billingSecondaryAction.textContent = premiumOn ? "Manage in Discord" : "Open Discord checkout";
+            }
+            if (billingInlineNote) {
+                billingInlineNote.textContent = premiumOn
+                    ? `Premium is active for ${guildName}. Changes should now appear on the dashboard and premium commands should work right away.`
+                    : `After checkout finishes in Discord, this page will update automatically for ${guildName}.`;
+            }
+            if (premiumOn && !billingActive) {
+                revealBillingBanner(`Premium is active for ${guildName}. Guardian and premium commands are now unlocked on this server.`, "success");
+            }
+            billingActive = premiumOn;
+            document.body.dataset.billingActive = premiumOn ? "true" : "false";
+        }
+
+        async function refreshBillingStatus({ silent = false } = {}) {
+            if (!billingGuildId || !billingReady) return null;
+            const response = await fetch(`/api/guilds/${billingGuildId}/subscription`, {
+                credentials: "same-origin"
+            });
+            if (response.status === 401) {
+                window.location.href = "/";
+                return null;
+            }
+            if (!response.ok) {
+                if (!silent) {
+                    revealBillingBanner("Could not refresh Premium status right now. Try again in a moment.", "warning");
+                }
+                throw new Error("Could not refresh billing status");
+            }
+            const data = await response.json();
+            syncBillingUi(data);
+            return data;
+        }
+
+        billingRefreshStatus?.addEventListener("click", () => {
+            refreshBillingStatus().catch(() => {});
+        });
+
+        if (!billingActive) {
+            let pollCount = 0;
+            const pollTimer = setInterval(() => {
+                pollCount += 1;
+                refreshBillingStatus({ silent: true }).then((data) => {
+                    if (data?.is_premium) {
+                        clearInterval(pollTimer);
+                    }
+                }).catch(() => {});
+                if (pollCount >= 24) {
+                    clearInterval(pollTimer);
+                }
+            }, 5000);
+        }
+    </script>
+    {% endif %}
 </body>
 </html>

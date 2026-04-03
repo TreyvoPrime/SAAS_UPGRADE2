@@ -5346,6 +5346,14 @@ textarea.search-input {
     margin: 0;
 }
 
+.billing-inline-note {
+    flex-basis: 100%;
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
 .billing-plan-foot {
     margin-top: 16px;
     color: var(--muted);
