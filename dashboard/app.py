@@ -492,23 +492,21 @@ def create_dashboard_app(bot) -> FastAPI:
         guild_name = guild.name if guild is not None else "This server"
         if guild_billing["billing_ready"]:
             if is_premium:
-                summary_copy = f"{guild_name} has an active Discord Guild Subscription. Guardian and the advanced staff toolkit are active here."
+                summary_copy = f"Premium is active for {guild_name}."
             else:
-                summary_copy = f"{guild_name} is on the Free tier. Buy the Discord Guild Subscription to unlock Guardian and the advanced staff toolkit here."
+                summary_copy = f"Free tier is active for {guild_name}."
         else:
-            summary_copy = (
-                f"{guild_name} is currently on the {tier_label(tier)} tier. Add your Discord Guild SKU settings to start selling Premium for this server."
-            )
+            summary_copy = f"Free tier is active for {guild_name}."
 
         if is_premium:
-            state_title = "Premium is active"
-            state_copy = "Guardian and advanced tools are unlocked for this server."
+            state_title = "Premium is active for this server"
+            state_copy = "Guardian and advanced tools are unlocked here."
         elif guild_billing["billing_ready"]:
-            state_title = "Free is active"
-            state_copy = "Buy the Discord Guild Subscription for this server to unlock Guardian and advanced tools."
+            state_title = "Free tier is active for this server"
+            state_copy = "Open billing to upgrade this server to Premium."
         else:
-            state_title = "Free is active"
-            state_copy = "Discord billing is not configured yet, so Premium stays unavailable."
+            state_title = "Free tier is active for this server"
+            state_copy = "Open billing to review Premium setup for this server."
         return {
             "tier": tier,
             "label": tier_label(tier),
@@ -1574,7 +1572,6 @@ def create_dashboard_app(bot) -> FastAPI:
         if user is None:
             return RedirectResponse(url="/", status_code=302)
         guilds = await load_user_guilds(request)
-        premium_count = len([command for command in build_command_catalog(bot) if command["tier"] == PREMIUM_TIER])
         return render_template(
             "guilds.html",
             request,
@@ -1582,7 +1579,6 @@ def create_dashboard_app(bot) -> FastAPI:
                 "bot_name": bot.user.name if getattr(bot, "user", None) else "ServerCore",
                 "user": user,
                 "guilds": guilds,
-                "premium_count": premium_count,
                 "billing": billing_summary(None),
             },
         )

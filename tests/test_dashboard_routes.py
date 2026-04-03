@@ -544,8 +544,8 @@ class DashboardRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Premium for this server", response.text)
-        self.assertIn("Status checks run automatically while this page is open.", response.text)
-        self.assertIn("Discord checkout opens in a new tab and unlocks this server automatically once the purchase is granted.", response.text)
+        self.assertIn("Free tier is active for this server", response.text)
+        self.assertIn("Buy Premium", response.text)
 
     def test_subscription_upgrade_requires_active_discord_guild_sku_when_billing_ready(self) -> None:
         self._authenticate()
