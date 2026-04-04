@@ -17,7 +17,7 @@ from core.greetings import GreetingsManager, GreetingsStore
 from core.giveaways import GiveawayStore
 from core.server_defense import ServerDefenseManager, ServerDefenseStore
 from core.staffnotes import StaffNoteStore
-from core.storage import ensure_storage_ready, storage_backend_label
+from core.storage import ensure_storage_ready, run_storage_maintenance, storage_backend_label
 from core.selfroles import SelfRoleStore
 from core.temp_roles import TempRoleStore
 from core.tickets import TicketStore
@@ -84,6 +84,7 @@ class ServerCoreBot(commands.Bot):
         self._server_defense_initialized = False
         self._commands_synced = False
         self.runtime_loop = None
+        self._storage_maintenance_task = None
 
         super().__init__(
             command_prefix="!",
@@ -183,6 +184,8 @@ class ServerCoreBot(commands.Bot):
         self.runtime_loop = asyncio.get_running_loop()
         await self.load_modules()
         await self.dashboard.start()
+        if self._storage_maintenance_task is None:
+            self._storage_maintenance_task = asyncio.create_task(self._storage_maintenance_loop())
 
         try:
             synced = await self.tree.sync()
@@ -192,8 +195,27 @@ class ServerCoreBot(commands.Bot):
 
     async def close(self) -> None:
         await self.server_defense.stop()
+        if self._storage_maintenance_task is not None:
+            self._storage_maintenance_task.cancel()
+            try:
+                await self._storage_maintenance_task
+            except asyncio.CancelledError:
+                pass
+            self._storage_maintenance_task = None
         await self.dashboard.stop()
         await super().close()
+
+    async def _storage_maintenance_loop(self) -> None:
+        while True:
+            try:
+                result = await asyncio.to_thread(run_storage_maintenance, retention_days=5)
+                if result.get("backend") == "postgres" and not result.get("healthy", True):
+                    print("Storage maintenance detected a PostgreSQL issue; see [storage] console output for details.")
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:
+                print(f"Storage maintenance failed: {error}")
+            await asyncio.sleep(3600)
 
     async def load_modules(self) -> None:
         modules_path = Path("modules")

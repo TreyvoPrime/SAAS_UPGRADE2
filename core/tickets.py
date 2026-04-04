@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import threading
 from typing import Any
 
 from core.storage import read_json, write_json
@@ -21,10 +22,15 @@ DEFAULT_ISSUE_TYPES = [
 class TicketStore:
     def __init__(self, path: Path | None = None):
         self.path = path or TICKET_DATA_PATH
-        self._data = read_json(self.path, {})
+        self._default: dict[str, Any] = {}
+        self._lock = threading.RLock()
+        self._data = read_json(self.path, self._default)
 
     def _save(self) -> None:
         write_json(self.path, self._data)
+
+    def _refresh(self) -> None:
+        self._data = read_json(self.path, self._default)
 
     def _guild_key(self, guild_id: int) -> str:
         return str(guild_id)
@@ -56,40 +62,46 @@ class TicketStore:
             return None
 
     def next_ticket_number(self, guild_id: int) -> int:
-        guild_state = self._ensure_guild(guild_id)
-        guild_state["counter"] = int(guild_state.get("counter", 0)) + 1
-        self._save()
-        return guild_state["counter"]
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            guild_state["counter"] = int(guild_state.get("counter", 0)) + 1
+            self._save()
+            return guild_state["counter"]
 
     def get_issue_types(self, guild_id: int) -> list[str]:
-        guild_state = self._ensure_guild(guild_id)
-        raw_items = guild_state.get("issue_types", DEFAULT_ISSUE_TYPES)
-        cleaned = [
-            str(item).strip()
-            for item in raw_items
-            if str(item).strip()
-        ]
-        if not cleaned:
-            cleaned = list(DEFAULT_ISSUE_TYPES)
-            guild_state["issue_types"] = cleaned
-            self._save()
-        return cleaned
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            raw_items = guild_state.get("issue_types", DEFAULT_ISSUE_TYPES)
+            cleaned = [
+                str(item).strip()
+                for item in raw_items
+                if str(item).strip()
+            ]
+            if not cleaned:
+                cleaned = list(DEFAULT_ISSUE_TYPES)
+                guild_state["issue_types"] = cleaned
+                self._save()
+            return cleaned
 
     def set_issue_types(self, guild_id: int, issue_types: list[str]) -> list[str]:
-        guild_state = self._ensure_guild(guild_id)
-        normalized: list[str] = []
-        seen: set[str] = set()
-        for item in issue_types:
-            label = str(item).strip()
-            if not label:
-                continue
-            key = label.casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            normalized.append(label[:80])
-        guild_state["issue_types"] = normalized[:20] or list(DEFAULT_ISSUE_TYPES)
-        self._save()
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            normalized: list[str] = []
+            seen: set[str] = set()
+            for item in issue_types:
+                label = str(item).strip()
+                if not label:
+                    continue
+                key = label.casefold()
+                if key in seen:
+                    continue
+                seen.add(key)
+                normalized.append(label[:80])
+            guild_state["issue_types"] = normalized[:20] or list(DEFAULT_ISSUE_TYPES)
+            self._save()
         return self.get_issue_types(guild_id)
 
     def add_issue_type(self, guild_id: int, issue_type: str) -> list[str]:
@@ -103,33 +115,45 @@ class TicketStore:
         return self.set_issue_types(guild_id, remaining)
 
     def get_support_category_id(self, guild_id: int) -> int | None:
-        guild_state = self._ensure_guild(guild_id)
-        return self._coerce_int(guild_state.get("support_category_id"))
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            return self._coerce_int(guild_state.get("support_category_id"))
 
     def get_support_command_channel_id(self, guild_id: int) -> int | None:
-        guild_state = self._ensure_guild(guild_id)
-        return self._coerce_int(guild_state.get("support_command_channel_id"))
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            return self._coerce_int(guild_state.get("support_command_channel_id"))
 
     def set_support_command_channel_id(self, guild_id: int, channel_id: int | None) -> int | None:
-        guild_state = self._ensure_guild(guild_id)
-        guild_state["support_command_channel_id"] = self._coerce_int(channel_id)
-        self._save()
-        return self._coerce_int(guild_state.get("support_command_channel_id"))
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            guild_state["support_command_channel_id"] = self._coerce_int(channel_id)
+            self._save()
+            return self._coerce_int(guild_state.get("support_command_channel_id"))
 
     def set_support_category_id(self, guild_id: int, category_id: int | None) -> int | None:
-        guild_state = self._ensure_guild(guild_id)
-        guild_state["support_category_id"] = self._coerce_int(category_id)
-        self._save()
-        return self._coerce_int(guild_state.get("support_category_id"))
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            guild_state["support_category_id"] = self._coerce_int(category_id)
+            self._save()
+            return self._coerce_int(guild_state.get("support_category_id"))
 
     def get_open_ticket_channel(self, guild_id: int, user_id: int) -> int | None:
-        guild_state = self._ensure_guild(guild_id)
-        return self._coerce_int(guild_state.get("open_by_user", {}).get(str(user_id)))
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            return self._coerce_int(guild_state.get("open_by_user", {}).get(str(user_id)))
 
     def clear_open_ticket(self, guild_id: int, user_id: int) -> None:
-        guild_state = self._ensure_guild(guild_id)
-        guild_state.setdefault("open_by_user", {}).pop(str(user_id), None)
-        self._save()
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            guild_state.setdefault("open_by_user", {}).pop(str(user_id), None)
+            self._save()
 
     def register_ticket(
         self,
@@ -140,59 +164,67 @@ class TicketStore:
         issue_type: str,
         description: str,
     ) -> dict[str, Any]:
-        guild_state = self._ensure_guild(guild_id)
-        record = {
-            "channel_id": int(channel_id),
-            "ticket_number": int(guild_state.get("counter", 0)),
-            "requester_id": int(requester_id),
-            "issue_type": str(issue_type),
-            "description": str(description),
-            "status": "open",
-            "opened_at": datetime.now(timezone.utc).isoformat(),
-            "closed_at": None,
-            "claimed_by_id": None,
-            "claimed_by_name": None,
-            "priority": "normal",
-            "close_reason": None,
-            "internal_notes": [],
-        }
-        guild_state.setdefault("tickets", {})[str(channel_id)] = record
-        guild_state.setdefault("open_by_user", {})[str(requester_id)] = int(channel_id)
-        self._save()
-        return record
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            record = {
+                "channel_id": int(channel_id),
+                "ticket_number": int(guild_state.get("counter", 0)),
+                "requester_id": int(requester_id),
+                "issue_type": str(issue_type),
+                "description": str(description),
+                "status": "open",
+                "opened_at": datetime.now(timezone.utc).isoformat(),
+                "closed_at": None,
+                "claimed_by_id": None,
+                "claimed_by_name": None,
+                "priority": "normal",
+                "close_reason": None,
+                "internal_notes": [],
+            }
+            guild_state.setdefault("tickets", {})[str(channel_id)] = record
+            guild_state.setdefault("open_by_user", {})[str(requester_id)] = int(channel_id)
+            self._save()
+            return record
 
     def get_ticket(self, guild_id: int, channel_id: int) -> dict[str, Any] | None:
-        guild_state = self._ensure_guild(guild_id)
-        ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
-        return dict(ticket) if isinstance(ticket, dict) else None
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
+            return dict(ticket) if isinstance(ticket, dict) else None
 
     def close_ticket(self, guild_id: int, channel_id: int) -> dict[str, Any] | None:
         return self.close_ticket_with_reason(guild_id, channel_id, reason=None)
 
     def close_ticket_with_reason(self, guild_id: int, channel_id: int, *, reason: str | None) -> dict[str, Any] | None:
-        guild_state = self._ensure_guild(guild_id)
-        ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
-        if not isinstance(ticket, dict):
-            return None
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
+            if not isinstance(ticket, dict):
+                return None
 
-        ticket["status"] = "closed"
-        ticket["closed_at"] = datetime.now(timezone.utc).isoformat()
-        ticket["close_reason"] = str(reason).strip() if reason else None
-        requester_id = self._coerce_int(ticket.get("requester_id"))
-        if requester_id is not None:
-            guild_state.setdefault("open_by_user", {}).pop(str(requester_id), None)
-        self._save()
-        return dict(ticket)
+            ticket["status"] = "closed"
+            ticket["closed_at"] = datetime.now(timezone.utc).isoformat()
+            ticket["close_reason"] = str(reason).strip() if reason else None
+            requester_id = self._coerce_int(ticket.get("requester_id"))
+            if requester_id is not None:
+                guild_state.setdefault("open_by_user", {}).pop(str(requester_id), None)
+            self._save()
+            return dict(ticket)
 
     def claim_ticket(self, guild_id: int, channel_id: int, *, staff_id: int, staff_name: str) -> dict[str, Any] | None:
-        guild_state = self._ensure_guild(guild_id)
-        ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
-        if not isinstance(ticket, dict):
-            return None
-        ticket["claimed_by_id"] = int(staff_id)
-        ticket["claimed_by_name"] = str(staff_name)
-        self._save()
-        return dict(ticket)
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
+            if not isinstance(ticket, dict):
+                return None
+            ticket["claimed_by_id"] = int(staff_id)
+            ticket["claimed_by_name"] = str(staff_name)
+            self._save()
+            return dict(ticket)
 
     def add_internal_note(
         self,
@@ -203,23 +235,25 @@ class TicketStore:
         staff_name: str,
         note: str,
     ) -> dict[str, Any] | None:
-        guild_state = self._ensure_guild(guild_id)
-        ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
-        if not isinstance(ticket, dict):
-            return None
-        notes = ticket.setdefault("internal_notes", [])
-        note_id = len(notes) + 1
-        notes.append(
-            {
-                "note_id": note_id,
-                "staff_id": int(staff_id),
-                "staff_name": str(staff_name),
-                "note": str(note).strip()[:500],
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-        )
-        self._save()
-        return dict(ticket)
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
+            if not isinstance(ticket, dict):
+                return None
+            notes = ticket.setdefault("internal_notes", [])
+            note_id = len(notes) + 1
+            notes.append(
+                {
+                    "note_id": note_id,
+                    "staff_id": int(staff_id),
+                    "staff_name": str(staff_name),
+                    "note": str(note).strip()[:500],
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            self._save()
+            return dict(ticket)
 
     def list_internal_notes(self, guild_id: int, channel_id: int) -> list[dict[str, Any]]:
         ticket = self.get_ticket(guild_id, channel_id)
@@ -229,23 +263,27 @@ class TicketStore:
         return [dict(item) for item in notes if isinstance(item, dict)]
 
     def set_priority(self, guild_id: int, channel_id: int, priority: str) -> dict[str, Any] | None:
-        guild_state = self._ensure_guild(guild_id)
-        ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
-        if not isinstance(ticket, dict):
-            return None
-        ticket["priority"] = str(priority).strip().lower()
-        self._save()
-        return dict(ticket)
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            ticket = guild_state.setdefault("tickets", {}).get(str(channel_id))
+            if not isinstance(ticket, dict):
+                return None
+            ticket["priority"] = str(priority).strip().lower()
+            self._save()
+            return dict(ticket)
 
     def list_tickets(self, guild_id: int, *, status: str | None = None, limit: int = 25) -> list[dict[str, Any]]:
-        guild_state = self._ensure_guild(guild_id)
-        tickets = [
-            dict(ticket)
-            for ticket in guild_state.setdefault("tickets", {}).values()
-            if isinstance(ticket, dict) and (status is None or ticket.get("status") == status)
-        ]
-        tickets.sort(key=lambda item: item.get("opened_at", ""), reverse=True)
-        return tickets[:limit]
+        with self._lock:
+            self._refresh()
+            guild_state = self._ensure_guild(guild_id)
+            tickets = [
+                dict(ticket)
+                for ticket in guild_state.setdefault("tickets", {}).values()
+                if isinstance(ticket, dict) and (status is None or ticket.get("status") == status)
+            ]
+            tickets.sort(key=lambda item: item.get("opened_at", ""), reverse=True)
+            return tickets[:limit]
 
     def analytics(self, guild_id: int) -> dict[str, Any]:
         tickets = self.list_tickets(guild_id, status=None, limit=1000)

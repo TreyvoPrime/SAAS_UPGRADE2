@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+import threading
 from typing import Any
 
 from core.storage import read_json, write_json
@@ -85,15 +86,20 @@ def _parse_datetime(value: datetime | int | float | str | None) -> datetime | No
 class BillingStore:
     def __init__(self, path: str | Path = "dashboard_data/billing.json"):
         self.path = Path(path)
+        self._default = {
+            "guilds": {},
+        }
+        self._lock = threading.RLock()
         self.data = read_json(
             self.path,
-            {
-                "guilds": {},
-            },
+            self._default,
         )
 
     def save(self) -> None:
         write_json(self.path, self.data)
+
+    def _refresh(self) -> None:
+        self.data = read_json(self.path, self._default)
 
     def application_id(self) -> int | None:
         return _clean_snowflake(os.getenv("DISCORD_APP_ID") or os.getenv("DISCORD_CLIENT_ID"))
@@ -130,7 +136,9 @@ class BillingStore:
         )
 
     def stored_guild_ids(self) -> list[int]:
-        return sorted(int(guild_id) for guild_id in self.data.get("guilds", {}) if str(guild_id).isdigit())
+        with self._lock:
+            self._refresh()
+            return sorted(int(guild_id) for guild_id in self.data.get("guilds", {}) if str(guild_id).isdigit())
 
     def upsert_guild_entitlement(
         self,
@@ -146,22 +154,23 @@ class BillingStore:
         normalized_guild_id = _clean_snowflake(guild_id)
         if normalized_guild_id is None:
             raise ValueError("A valid guild ID is required.")
-
-        bucket = self._guild_bucket(normalized_guild_id)
-        if entitlement_id is not None:
-            bucket["entitlement_id"] = str(entitlement_id).strip() or None
-        if premium_user_id is not None:
-            bucket["premium_user_id"] = _clean_snowflake(premium_user_id)
-        if sku_id is not None:
-            bucket["sku_id"] = _clean_snowflake(sku_id)
-        if starts_at is not None:
-            bucket["starts_at"] = _to_iso(_parse_datetime(starts_at))
-        if ends_at is not None:
-            bucket["ends_at"] = _to_iso(_parse_datetime(ends_at))
-        if deleted is not None:
-            bucket["deleted"] = bool(deleted)
-        bucket["updated_at"] = _to_iso(_utcnow())
-        self.save()
+        with self._lock:
+            self._refresh()
+            bucket = self._guild_bucket(normalized_guild_id)
+            if entitlement_id is not None:
+                bucket["entitlement_id"] = str(entitlement_id).strip() or None
+            if premium_user_id is not None:
+                bucket["premium_user_id"] = _clean_snowflake(premium_user_id)
+            if sku_id is not None:
+                bucket["sku_id"] = _clean_snowflake(sku_id)
+            if starts_at is not None:
+                bucket["starts_at"] = _to_iso(_parse_datetime(starts_at))
+            if ends_at is not None:
+                bucket["ends_at"] = _to_iso(_parse_datetime(ends_at))
+            if deleted is not None:
+                bucket["deleted"] = bool(deleted)
+            bucket["updated_at"] = _to_iso(_utcnow())
+            self.save()
         return self.get_guild_assignment(normalized_guild_id)
 
     def sync_from_entitlement(self, entitlement) -> dict[str, Any] | None:
@@ -224,16 +233,17 @@ class BillingStore:
         normalized_guild_id = _clean_snowflake(guild_id)
         if normalized_guild_id is None:
             raise ValueError("A valid guild ID is required.")
-
-        bucket = self._guild_bucket(normalized_guild_id)
-        bucket["entitlement_id"] = None
-        bucket["premium_user_id"] = None
-        bucket["sku_id"] = self.premium_sku_id()
-        bucket["starts_at"] = None
-        bucket["ends_at"] = None
-        bucket["deleted"] = False
-        bucket["updated_at"] = _to_iso(_utcnow())
-        self.save()
+        with self._lock:
+            self._refresh()
+            bucket = self._guild_bucket(normalized_guild_id)
+            bucket["entitlement_id"] = None
+            bucket["premium_user_id"] = None
+            bucket["sku_id"] = self.premium_sku_id()
+            bucket["starts_at"] = None
+            bucket["ends_at"] = None
+            bucket["deleted"] = False
+            bucket["updated_at"] = _to_iso(_utcnow())
+            self.save()
         return self.get_guild_assignment(normalized_guild_id)
 
     def get_guild_assignment(self, guild_id: int | str | None) -> dict[str, Any]:
@@ -250,25 +260,27 @@ class BillingStore:
                 "is_active": False,
             }
 
-        bucket = self._guild_bucket(normalized_guild_id)
-        ends_at = _from_iso(bucket.get("ends_at"))
-        starts_at = _from_iso(bucket.get("starts_at"))
-        assigned_at = _from_iso(bucket.get("updated_at"))
-        deleted = bool(bucket.get("deleted", False))
-        is_active = bool(bucket.get("entitlement_id")) and not deleted
-        if is_active and ends_at is not None and _utcnow() >= ends_at:
-            is_active = False
+        with self._lock:
+            self._refresh()
+            bucket = self._guild_bucket(normalized_guild_id)
+            ends_at = _from_iso(bucket.get("ends_at"))
+            starts_at = _from_iso(bucket.get("starts_at"))
+            assigned_at = _from_iso(bucket.get("updated_at"))
+            deleted = bool(bucket.get("deleted", False))
+            is_active = bool(bucket.get("entitlement_id")) and not deleted
+            if is_active and ends_at is not None and _utcnow() >= ends_at:
+                is_active = False
 
-        return {
-            "guild_id": normalized_guild_id,
-            "premium_user_id": _clean_snowflake(bucket.get("premium_user_id")),
-            "entitlement_id": str(bucket.get("entitlement_id") or "").strip() or None,
-            "sku_id": _clean_snowflake(bucket.get("sku_id")) or self.premium_sku_id(),
-            "starts_at": _to_iso(starts_at),
-            "ends_at": _to_iso(ends_at),
-            "assigned_at": _to_iso(assigned_at),
-            "is_active": is_active,
-        }
+            return {
+                "guild_id": normalized_guild_id,
+                "premium_user_id": _clean_snowflake(bucket.get("premium_user_id")),
+                "entitlement_id": str(bucket.get("entitlement_id") or "").strip() or None,
+                "sku_id": _clean_snowflake(bucket.get("sku_id")) or self.premium_sku_id(),
+                "starts_at": _to_iso(starts_at),
+                "ends_at": _to_iso(ends_at),
+                "assigned_at": _to_iso(assigned_at),
+                "is_active": is_active,
+            }
 
     def guild_has_active_premium(self, guild_id: int | str) -> bool:
         return bool(self.get_guild_assignment(guild_id)["is_active"])

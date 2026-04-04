@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import re
+import threading
 from collections import defaultdict, deque
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -138,10 +139,15 @@ def _extract_domains(text: str) -> list[str]:
 class ServerDefenseStore:
     def __init__(self, path: str | Path = "dashboard_data/server_defense.json"):
         self.path = Path(path)
-        self.data = read_json(self.path, {"guilds": {}})
+        self._default = {"guilds": {}}
+        self._lock = threading.RLock()
+        self.data = read_json(self.path, self._default)
 
     def save(self) -> None:
         write_json(self.path, self.data)
+
+    def _refresh(self) -> None:
+        self.data = read_json(self.path, self._default)
 
     def _guild_bucket(self, guild_id: int) -> dict[str, Any]:
         guilds = self.data.setdefault("guilds", {})
@@ -153,11 +159,15 @@ class ServerDefenseStore:
         return guild_bucket
 
     def all_guild_ids(self) -> list[int]:
-        guilds = self.data.get("guilds", {})
-        return [int(guild_id) for guild_id in guilds if str(guild_id).isdigit()]
+        with self._lock:
+            self._refresh()
+            guilds = self.data.get("guilds", {})
+            return [int(guild_id) for guild_id in guilds if str(guild_id).isdigit()]
 
     def get_feature(self, guild_id: int, feature: str) -> dict[str, Any]:
-        bucket = copy.deepcopy(self._guild_bucket(guild_id).get(feature, {}))
+        with self._lock:
+            self._refresh()
+            bucket = copy.deepcopy(self._guild_bucket(guild_id).get(feature, {}))
         if feature == "lockdown":
             bucket["allowed_role_ids"] = _normalize_role_ids(bucket.get("allowed_role_ids", []))
             bucket["snapshot"] = bucket.get("snapshot", {}) or {}
@@ -177,13 +187,17 @@ class ServerDefenseStore:
         return bucket
 
     def get_all(self, guild_id: int) -> dict[str, dict[str, Any]]:
-        self._guild_bucket(guild_id)
+        with self._lock:
+            self._refresh()
+            self._guild_bucket(guild_id)
         return {feature: self.get_feature(guild_id, feature) for feature in DEFENSE_FEATURES}
 
     def patch_feature(self, guild_id: int, feature: str, **changes) -> dict[str, Any]:
-        bucket = self._guild_bucket(guild_id).setdefault(feature, copy.deepcopy(DEFAULT_GUILD_DEFENSES[feature]))
-        bucket.update(changes)
-        self.save()
+        with self._lock:
+            self._refresh()
+            bucket = self._guild_bucket(guild_id).setdefault(feature, copy.deepcopy(DEFAULT_GUILD_DEFENSES[feature]))
+            bucket.update(changes)
+            self.save()
         return self.get_feature(guild_id, feature)
 
     def set_lockdown_snapshot(self, guild_id: int, snapshot: dict[str, Any]) -> dict[str, Any]:

@@ -2118,8 +2118,11 @@ def create_dashboard_app(bot) -> FastAPI:
         safe_role_ids = [role_id for role_id in payload.allowed_role_ids if role_id in valid_role_ids]
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
 
-        for command in commands:
-            bot.access_manager.controls.set_roles(guild_id, command["name"], safe_role_ids)
+        bot.access_manager.controls.set_roles_for_commands(
+            guild_id,
+            [command["name"] for command in commands],
+            safe_role_ids,
+        )
 
         summary = module_access_summary(guild_id, payload.module_name)
         await log_dashboard_event(
@@ -2149,11 +2152,17 @@ def create_dashboard_app(bot) -> FastAPI:
 
         if config["summary_kind"] == "module":
             commands = [command for command in build_command_catalog(bot) if command["module"] == config["module_name"]]
-            for command in commands:
-                bot.access_manager.controls.set_roles(guild_id, command["name"], safe_role_ids)
+            bot.access_manager.controls.set_roles_for_commands(
+                guild_id,
+                [command["name"] for command in commands],
+                safe_role_ids,
+            )
         else:
-            for command_name in config["command_names"]:
-                bot.access_manager.controls.set_roles(guild_id, command_name, safe_role_ids)
+            bot.access_manager.controls.set_roles_for_commands(
+                guild_id,
+                list(config["command_names"]),
+                safe_role_ids,
+            )
 
         summary = pillar_access_summary(guild_id, payload.pillar_key)
         await log_dashboard_event(
@@ -2577,48 +2586,42 @@ def create_dashboard_app(bot) -> FastAPI:
         )
         bot.access_manager.controls.set_autorole_role_ids(guild_id, autorole_role_ids)
 
-        for command_name in setup_command_groups["moderation"]:
-            bot.access_manager.controls.set_roles(
-                guild_id,
-                command_name,
-                moderation_role_ids,
-                restrict_to_roles=not payload.moderation_allow_everyone,
-            )
-        for command_name in setup_command_groups["welcome"]:
-            bot.access_manager.controls.set_roles(
-                guild_id,
-                command_name,
-                welcome_role_ids,
-                restrict_to_roles=not payload.welcome_allow_everyone,
-            )
-        for command_name in setup_command_groups["support"]:
-            bot.access_manager.controls.set_roles(
-                guild_id,
-                command_name,
-                support_role_ids,
-                restrict_to_roles=not payload.support_allow_everyone,
-            )
-        for command_name in setup_command_groups["giveaways"]:
-            bot.access_manager.controls.set_roles(
-                guild_id,
-                command_name,
-                giveaway_role_ids,
-                restrict_to_roles=not payload.giveaway_allow_everyone,
-            )
-        for command_name in setup_command_groups["autofeed"]:
-            bot.access_manager.controls.set_roles(
-                guild_id,
-                command_name,
-                autofeed_role_ids,
-                restrict_to_roles=not payload.autofeed_allow_everyone,
-            )
-        for command_name in setup_command_groups["community"]:
-            bot.access_manager.controls.set_roles(
-                guild_id,
-                command_name,
-                community_role_ids,
-                restrict_to_roles=not payload.community_allow_everyone,
-            )
+        bot.access_manager.controls.set_roles_for_commands(
+            guild_id,
+            list(setup_command_groups["moderation"]),
+            moderation_role_ids,
+            restrict_to_roles=not payload.moderation_allow_everyone,
+        )
+        bot.access_manager.controls.set_roles_for_commands(
+            guild_id,
+            list(setup_command_groups["welcome"]),
+            welcome_role_ids,
+            restrict_to_roles=not payload.welcome_allow_everyone,
+        )
+        bot.access_manager.controls.set_roles_for_commands(
+            guild_id,
+            list(setup_command_groups["support"]),
+            support_role_ids,
+            restrict_to_roles=not payload.support_allow_everyone,
+        )
+        bot.access_manager.controls.set_roles_for_commands(
+            guild_id,
+            list(setup_command_groups["giveaways"]),
+            giveaway_role_ids,
+            restrict_to_roles=not payload.giveaway_allow_everyone,
+        )
+        bot.access_manager.controls.set_roles_for_commands(
+            guild_id,
+            list(setup_command_groups["autofeed"]),
+            autofeed_role_ids,
+            restrict_to_roles=not payload.autofeed_allow_everyone,
+        )
+        bot.access_manager.controls.set_roles_for_commands(
+            guild_id,
+            list(setup_command_groups["community"]),
+            community_role_ids,
+            restrict_to_roles=not payload.community_allow_everyone,
+        )
 
         manager = getattr(bot, "greetings", None)
         if manager is not None:

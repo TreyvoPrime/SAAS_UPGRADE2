@@ -14,7 +14,7 @@ from core.billing import BillingStore
 from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
 from core import storage
-from core.storage import read_json, write_json
+from core.storage import read_json, run_storage_maintenance, write_json
 
 
 class FakePermissions:
@@ -159,8 +159,10 @@ class StorageTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.root = Path(self.tempdir.name)
+        storage._reset_storage_backend_cache()
 
     def tearDown(self) -> None:
+        storage._reset_storage_backend_cache()
         self.tempdir.cleanup()
 
     def test_read_json_returns_default_and_backs_up_corrupt_file(self) -> None:
@@ -187,7 +189,7 @@ class StorageTests(unittest.TestCase):
         target.parent.mkdir(parents=True, exist_ok=True)
         original_payload = {"guilds": {"1001": {"commands": {"warn": {"enabled": False}}}}}
         target.write_text(json.dumps(original_payload), encoding="utf-8")
-        fake_psycopg, documents = build_fake_psycopg()
+        fake_psycopg, documents, _ = build_fake_psycopg()
 
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
             with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
@@ -200,7 +202,7 @@ class StorageTests(unittest.TestCase):
     def test_postgres_backend_writes_and_reads_documents_without_local_file(self) -> None:
         target = self.root / "dashboard_data" / "command_controls.json"
         payload = {"guilds": {"1001": {"commands": {"warn": {"enabled": True, "allowed_role_ids": [10]}}}}}
-        fake_psycopg, documents = build_fake_psycopg()
+        fake_psycopg, documents, _ = build_fake_psycopg()
 
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
             with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
@@ -211,6 +213,64 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(loaded, payload)
         self.assertEqual(documents[storage._normalize_document_key(target)], payload)
         self.assertFalse(target.exists())
+
+    def test_postgres_command_logs_are_retained_and_cleaned_up(self) -> None:
+        fake_psycopg, _, command_logs = build_fake_psycopg()
+
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
+            with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
+                storage._reset_storage_backend_cache()
+                logs = CommandLogStore(self.root / "dashboard_data" / "command_logs.json")
+                logs.append(
+                    {
+                        "guild_id": 1001,
+                        "guild_name": "Audit Guild",
+                        "command": "warn",
+                        "status": "success",
+                        "timestamp": "2026-04-03T12:00:00+00:00",
+                    }
+                )
+                logs.append(
+                    {
+                        "guild_id": 1001,
+                        "guild_name": "Audit Guild",
+                        "command": "ban",
+                        "status": "success",
+                        "timestamp": "2026-03-20T12:00:00+00:00",
+                    }
+                )
+                stored_count = len(command_logs)
+                listed = logs.list_for_guild(1001, limit=10)
+                maintenance = run_storage_maintenance(retention_days=5)
+                remaining = logs.list_for_guild(1001, limit=10)
+
+        self.assertEqual(stored_count, 2)
+        self.assertEqual([entry["command"] for entry in listed], ["warn", "ban"])
+        self.assertTrue(maintenance["healthy"])
+        self.assertEqual(maintenance["deleted_logs"], 1)
+        self.assertEqual([entry["command"] for entry in remaining], ["warn"])
+
+    def test_command_controls_reload_from_postgres_across_instances(self) -> None:
+        target = self.root / "dashboard_data" / "command_controls.json"
+        fake_psycopg, documents, _ = build_fake_psycopg()
+
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
+            with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
+                storage._reset_storage_backend_cache()
+                first = CommandControlStore(target)
+                first.set_roles_for_commands(1001, ["warn", "ban"], [10, 11], restrict_to_roles=True)
+                first.set_dashboard_editor_roles(1001, [11])
+
+                second = CommandControlStore(target)
+                warn_policy = second.get_policy(1001, "warn")
+                ban_policy = second.get_policy(1001, "ban")
+                editors = second.get_dashboard_editor_roles(1001)
+
+        self.assertEqual(warn_policy["allowed_role_ids"], [10, 11])
+        self.assertTrue(warn_policy["restrict_to_roles"])
+        self.assertEqual(ban_policy["allowed_role_ids"], [10, 11])
+        self.assertEqual(editors, [11])
+        self.assertIn(storage._normalize_document_key(target), documents)
 
 
 class CommandControlStoreSettingsTests(unittest.TestCase):
@@ -289,6 +349,13 @@ class CommandControlStoreSettingsTests(unittest.TestCase):
             self.billing.clear_guild_entitlement(1001)
             self.assertFalse(self.controls.is_premium_enabled(1001))
 
+    def test_set_roles_for_commands_updates_multiple_policies_in_one_call(self) -> None:
+        result = self.controls.set_roles_for_commands(1001, ["warn", "ban"], [10], restrict_to_roles=True)
+
+        self.assertEqual(sorted(result.keys()), ["ban", "warn"])
+        self.assertEqual(self.controls.get_policy(1001, "warn")["allowed_role_ids"], [10])
+        self.assertEqual(self.controls.get_policy(1001, "ban")["allowed_role_ids"], [10])
+
 
 class BillingStoreTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -357,9 +424,12 @@ class BillingStoreTests(unittest.TestCase):
         self.assertEqual(assignment["premium_user_id"], 5001)
 
 class FakePsycopgCursor:
-    def __init__(self, documents: dict[str, object]):
+    def __init__(self, documents: dict[str, object], command_logs: list[dict[str, object]]):
         self.documents = documents
+        self.command_logs = command_logs
         self._last_fetchone = None
+        self._last_fetchall: list[tuple[str]] = []
+        self.rowcount = 0
 
     def __enter__(self):
         return self
@@ -372,24 +442,84 @@ class FakePsycopgCursor:
         params = params or ()
         if normalized_query.startswith("create table if not exists servercore_documents"):
             self._last_fetchone = None
+            self._last_fetchall = []
+            self.rowcount = 0
+            return
+        if normalized_query.startswith("create table if not exists servercore_command_logs"):
+            self._last_fetchone = None
+            self._last_fetchall = []
+            self.rowcount = 0
+            return
+        if normalized_query.startswith("create index if not exists"):
+            self._last_fetchone = None
+            self._last_fetchall = []
+            self.rowcount = 0
+            return
+        if normalized_query.startswith("select 1"):
+            self._last_fetchone = (1,)
+            self._last_fetchall = []
+            self.rowcount = 1
             return
         if normalized_query.startswith("select payload::text from servercore_documents where document_key = %s"):
             payload = self.documents.get(params[0])
             self._last_fetchone = None if payload is None else (json.dumps(payload),)
+            self._last_fetchall = []
+            self.rowcount = 1 if payload is not None else 0
             return
         if normalized_query.startswith("insert into servercore_documents"):
             self.documents[params[0]] = json.loads(params[1])
             self._last_fetchone = None
+            self._last_fetchall = []
+            self.rowcount = 1
+            return
+        if normalized_query.startswith("insert into servercore_command_logs"):
+            payload = json.loads(params[7])
+            self.command_logs.append(
+                {
+                    "guild_id": int(params[0]),
+                    "timestamp": str(params[1]),
+                    "kind": params[2],
+                    "status": params[3],
+                    "category": params[4],
+                    "actor_name": params[5],
+                    "command_name": params[6],
+                    "payload": payload,
+                }
+            )
+            self._last_fetchone = None
+            self._last_fetchall = []
+            self.rowcount = 1
+            return
+        if normalized_query.startswith("select payload::text from servercore_command_logs where guild_id = %s"):
+            guild_id = int(params[0])
+            limit = int(params[-1])
+            rows = [entry for entry in self.command_logs if int(entry["guild_id"]) == guild_id]
+            rows.sort(key=lambda item: str(item.get("timestamp", "")), reverse=True)
+            self._last_fetchall = [(json.dumps(entry["payload"]),) for entry in rows[:limit]]
+            self._last_fetchone = None
+            self.rowcount = len(self._last_fetchall)
+            return
+        if normalized_query.startswith("delete from servercore_command_logs where timestamp < %s"):
+            cutoff = str(params[0])
+            before = len(self.command_logs)
+            self.command_logs[:] = [entry for entry in self.command_logs if str(entry.get("timestamp", "")) >= cutoff]
+            self.rowcount = before - len(self.command_logs)
+            self._last_fetchone = None
+            self._last_fetchall = []
             return
         raise AssertionError(f"Unexpected SQL: {query}")
 
     def fetchone(self):
         return self._last_fetchone
 
+    def fetchall(self):
+        return list(self._last_fetchall)
+
 
 class FakePsycopgConnection:
-    def __init__(self, documents: dict[str, object]):
+    def __init__(self, documents: dict[str, object], command_logs: list[dict[str, object]]):
         self.documents = documents
+        self.command_logs = command_logs
 
     def __enter__(self):
         return self
@@ -398,18 +528,22 @@ class FakePsycopgConnection:
         return False
 
     def cursor(self):
-        return FakePsycopgCursor(self.documents)
+        return FakePsycopgCursor(self.documents, self.command_logs)
+
+    def commit(self):
+        return None
 
 
 def build_fake_psycopg():
     documents: dict[str, object] = {}
+    command_logs: list[dict[str, object]] = []
 
     class FakePsycopgModule:
         @staticmethod
         def connect(dsn, autocommit=True, connect_timeout=5):
-            return FakePsycopgConnection(documents)
+            return FakePsycopgConnection(documents, command_logs)
 
-    return FakePsycopgModule(), documents
+    return FakePsycopgModule(), documents, command_logs
 
 
 if __name__ == "__main__":

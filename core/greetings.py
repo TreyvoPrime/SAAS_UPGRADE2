@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 from typing import Any
 
 import discord
@@ -23,54 +24,62 @@ class _SafeFormatDict(dict):
 class GreetingsStore:
     def __init__(self, path: Path | None = None):
         self.path = path or GREETING_DATA_PATH
-        self._data = read_json(self.path, {})
+        self._default: dict[str, Any] = {}
+        self._lock = threading.RLock()
+        self._data = read_json(self.path, self._default)
         self._migrate_legacy_welcome_channels()
 
     def _save(self) -> None:
         write_json(self.path, self._data)
 
+    def _refresh(self) -> None:
+        self._data = read_json(self.path, self._default)
+
     def _migrate_legacy_welcome_channels(self) -> None:
-        if self._data or not LEGACY_WELCOME_PATH.exists():
-            return
+        with self._lock:
+            if self._data or not LEGACY_WELCOME_PATH.exists():
+                return
 
-        legacy_data = read_json(LEGACY_WELCOME_PATH, {})
-        if not isinstance(legacy_data, dict):
-            return
+            legacy_data = read_json(LEGACY_WELCOME_PATH, {})
+            if not isinstance(legacy_data, dict):
+                return
 
-        migrated: dict[str, dict[str, Any]] = {}
-        for guild_id, channel_id in legacy_data.items():
-            try:
-                normalized_channel_id = int(channel_id)
-            except (TypeError, ValueError):
-                continue
+            migrated: dict[str, dict[str, Any]] = {}
+            for guild_id, channel_id in legacy_data.items():
+                try:
+                    normalized_channel_id = int(channel_id)
+                except (TypeError, ValueError):
+                    continue
 
-            migrated[str(guild_id)] = {
-                "welcome_channel_id": normalized_channel_id,
-                "welcome_message": DEFAULT_WELCOME_MESSAGE,
-                "leave_channel_id": None,
-                "leave_message": DEFAULT_LEAVE_MESSAGE,
-                "join_dm_enabled": False,
-                "join_dm_message": DEFAULT_JOIN_DM_MESSAGE,
-            }
+                migrated[str(guild_id)] = {
+                    "welcome_channel_id": normalized_channel_id,
+                    "welcome_message": DEFAULT_WELCOME_MESSAGE,
+                    "leave_channel_id": None,
+                    "leave_message": DEFAULT_LEAVE_MESSAGE,
+                    "join_dm_enabled": False,
+                    "join_dm_message": DEFAULT_JOIN_DM_MESSAGE,
+                }
 
-        if migrated:
-            self._data = migrated
-            self._save()
+            if migrated:
+                self._data = migrated
+                self._save()
 
     def _guild_key(self, guild_id: int) -> str:
         return str(guild_id)
 
     def get_guild(self, guild_id: int) -> dict[str, Any]:
-        guild_key = self._guild_key(guild_id)
-        state = self._data.get(guild_key, {})
-        return {
-            "welcome_channel_id": self._coerce_int(state.get("welcome_channel_id")),
-            "welcome_message": str(state.get("welcome_message") or DEFAULT_WELCOME_MESSAGE),
-            "leave_channel_id": self._coerce_int(state.get("leave_channel_id")),
-            "leave_message": str(state.get("leave_message") or DEFAULT_LEAVE_MESSAGE),
-            "join_dm_enabled": bool(state.get("join_dm_enabled", False)),
-            "join_dm_message": str(state.get("join_dm_message") or DEFAULT_JOIN_DM_MESSAGE),
-        }
+        with self._lock:
+            self._refresh()
+            guild_key = self._guild_key(guild_id)
+            state = self._data.get(guild_key, {})
+            return {
+                "welcome_channel_id": self._coerce_int(state.get("welcome_channel_id")),
+                "welcome_message": str(state.get("welcome_message") or DEFAULT_WELCOME_MESSAGE),
+                "leave_channel_id": self._coerce_int(state.get("leave_channel_id")),
+                "leave_message": str(state.get("leave_message") or DEFAULT_LEAVE_MESSAGE),
+                "join_dm_enabled": bool(state.get("join_dm_enabled", False)),
+                "join_dm_message": str(state.get("join_dm_message") or DEFAULT_JOIN_DM_MESSAGE),
+            }
 
     def update_guild(
         self,
@@ -83,24 +92,26 @@ class GreetingsStore:
         join_dm_enabled: bool | object = ...,
         join_dm_message: str | None | object = ...,
     ) -> dict[str, Any]:
-        current = self.get_guild(guild_id)
+        with self._lock:
+            self._refresh()
+            current = self.get_guild(guild_id)
 
-        if welcome_channel_id is not ...:
-            current["welcome_channel_id"] = self._coerce_int(welcome_channel_id)
-        if welcome_message is not ...:
-            current["welcome_message"] = self._normalize_message(welcome_message, DEFAULT_WELCOME_MESSAGE)
-        if leave_channel_id is not ...:
-            current["leave_channel_id"] = self._coerce_int(leave_channel_id)
-        if leave_message is not ...:
-            current["leave_message"] = self._normalize_message(leave_message, DEFAULT_LEAVE_MESSAGE)
-        if join_dm_enabled is not ...:
-            current["join_dm_enabled"] = bool(join_dm_enabled)
-        if join_dm_message is not ...:
-            current["join_dm_message"] = self._normalize_message(join_dm_message, DEFAULT_JOIN_DM_MESSAGE)
+            if welcome_channel_id is not ...:
+                current["welcome_channel_id"] = self._coerce_int(welcome_channel_id)
+            if welcome_message is not ...:
+                current["welcome_message"] = self._normalize_message(welcome_message, DEFAULT_WELCOME_MESSAGE)
+            if leave_channel_id is not ...:
+                current["leave_channel_id"] = self._coerce_int(leave_channel_id)
+            if leave_message is not ...:
+                current["leave_message"] = self._normalize_message(leave_message, DEFAULT_LEAVE_MESSAGE)
+            if join_dm_enabled is not ...:
+                current["join_dm_enabled"] = bool(join_dm_enabled)
+            if join_dm_message is not ...:
+                current["join_dm_message"] = self._normalize_message(join_dm_message, DEFAULT_JOIN_DM_MESSAGE)
 
-        self._data[self._guild_key(guild_id)] = current
-        self._save()
-        return current
+            self._data[self._guild_key(guild_id)] = current
+            self._save()
+            return current
 
     @staticmethod
     def _coerce_int(value: Any) -> int | None:

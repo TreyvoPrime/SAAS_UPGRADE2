@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from core.storage import read_json, write_json
+from core.storage import get_storage_backend, read_json, write_json
 
 
 class CommandLogStore:
@@ -14,6 +14,8 @@ class CommandLogStore:
         self.data = read_json(self.path, {"entries": []})
 
     def save(self) -> None:
+        if get_storage_backend() is not None:
+            return
         write_json(self.path, self.data)
 
     def append(self, entry: dict[str, Any]) -> None:
@@ -22,6 +24,10 @@ class CommandLogStore:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             **entry,
         }
+        backend = get_storage_backend()
+        if backend is not None:
+            backend.append_command_log(payload)
+            return
         entries.append(payload)
         if len(entries) > self.limit:
             self.data["entries"] = entries[-self.limit :]
@@ -38,6 +44,17 @@ class CommandLogStore:
         category: str | None = None,
         actor: str | None = None,
     ) -> list[dict[str, Any]]:
+        backend = get_storage_backend()
+        if backend is not None:
+            return backend.list_command_logs(
+                guild_id,
+                limit=limit,
+                query=query,
+                kind=kind,
+                status=status,
+                category=category,
+                actor=actor,
+            )
         guild_key = str(guild_id)
         entries = [
             entry for entry in self.data.get("entries", [])
