@@ -32,7 +32,6 @@ FREE_PREMIUM_COMPARISON_ROWS = [
     {"label": "Advanced autofeed controls", "free": False, "premium": True},
     {"label": "Advanced automation", "free": False, "premium": True},
     {"label": "Analytics", "free": False, "premium": True},
-    {"label": "Config export / import / presets", "free": False, "premium": True},
 ]
 
 

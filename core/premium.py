@@ -12,7 +12,6 @@ PREMIUM_FEATURES: dict[str, str] = {
     "advanced_serverguard": "Guardian presets, blacklist controls, whitelist controls, and exception tuning",
     "advanced_automation": "Recurring reminders, richer autofeed controls, and onboarding presets",
     "analytics": "Growth, moderation, command, ticket, and staff analytics",
-    "config_tools": "Config export, import, saved templates, and one-click presets",
     "premium_giveaways": "Role requirements, bonus entries, and advanced giveaway rules",
 }
 
