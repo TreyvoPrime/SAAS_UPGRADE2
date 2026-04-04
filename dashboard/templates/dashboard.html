@@ -96,56 +96,6 @@
                 </div>
             </section>
 
-            <section class="surface command-settings-panel config-preset-panel">
-                <div>
-                    <div class="eyebrow">Config Presets</div>
-                    <h3>Export, import, and reuse server setups</h3>
-                    <p>Save the current dashboard setup as a reusable preset, export it as JSON, or import it into another Premium server. Roles and channels are matched by name on import when the target server uses different Discord IDs.</p>
-                </div>
-                <div class="command-settings-actions config-preset-actions">
-                    {% if subscription.is_premium %}
-                    <label class="search-shell compact-setting-shell">
-                        <span>Preset name</span>
-                        <input id="config-template-name" class="search-input" type="text" maxlength="60" placeholder="Starter moderation preset">
-                    </label>
-                    <div class="defense-actions config-preset-button-row">
-                        <button type="button" class="ghost-button compact-button" id="save-config-template-button">Save preset</button>
-                        <button type="button" class="ghost-button compact-button" id="export-config-button">Export current config</button>
-                    </div>
-                    <label class="search-shell compact-setting-shell">
-                        <span>Saved presets</span>
-                        <select id="config-template-select" class="search-input">
-                            <option value="">Choose a saved preset</option>
-                            {% for template in subscription.config_templates %}
-                            <option value="{{ template.name }}">{{ template.name }}{% if template.source_guild_name %} - {{ template.source_guild_name }}{% endif %}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                    <div class="defense-actions config-preset-button-row">
-                        <button type="button" class="ghost-button compact-button" id="apply-config-template-button">Apply preset</button>
-                        <button type="button" class="primary-button compact-button" id="import-config-button">Import JSON</button>
-                    </div>
-                    <label class="search-shell config-textarea-shell">
-                        <span>Preset JSON</span>
-                        <textarea id="config-snapshot-textarea" class="search-input greeting-textarea" rows="8" placeholder='Paste exported JSON here or click "Export current config".'></textarea>
-                    </label>
-                    <div class="dashboard-access-summary" id="config-template-summary">
-                        {% if subscription.config_templates %}
-                            {{ subscription.config_templates|length }} saved preset{{ '' if subscription.config_templates|length == 1 else 's' }} ready across your Premium servers.
-                        {% else %}
-                            No saved presets yet. Save this server once, then reuse that setup across your other Premium servers.
-                        {% endif %}
-                    </div>
-                    {% else %}
-                    <div class="subscription-state-pill is-free">
-                        <strong>Premium feature</strong>
-                        <span>Config export, import, and reusable presets unlock once Premium is active for this server.</span>
-                    </div>
-                    <span class="dashboard-access-note">Turn Premium on above to start moving presets across servers.</span>
-                    {% endif %}
-                </div>
-            </section>
-
             <nav class="view-switcher" aria-label="Dashboard sections">
                 <a class="view-pill {% if current_view == 'commands' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}"><span class="view-pill-icon">CC</span><span>Command Control</span></a>
                 <a class="view-pill {% if current_view == 'defense' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense"><span class="view-pill-icon">SG</span><span>ServerGuard</span></a>
@@ -1354,14 +1304,6 @@
         const openBillingPageButton = document.getElementById("open-billing-page");
         const subscriptionPlanNote = document.getElementById("subscription-plan-note");
         const subscriptionHealthChip = document.getElementById("subscription-health-chip");
-        const configTemplateNameInput = document.getElementById("config-template-name");
-        const configTemplateSelect = document.getElementById("config-template-select");
-        const saveConfigTemplateButton = document.getElementById("save-config-template-button");
-        const exportConfigButton = document.getElementById("export-config-button");
-        const importConfigButton = document.getElementById("import-config-button");
-        const applyConfigTemplateButton = document.getElementById("apply-config-template-button");
-        const configSnapshotTextarea = document.getElementById("config-snapshot-textarea");
-        const configTemplateSummary = document.getElementById("config-template-summary");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
             disabled: document.querySelector('[data-stat="disabled"]'),
@@ -1369,7 +1311,6 @@
         };
         let lastKnownPremiumState = {{ "true" if subscription.is_premium else "false" }};
         let subscriptionRefreshInFlight = false;
-        let availableConfigTemplates = {{ subscription.config_templates|tojson }};
         const lockdownRoleModal = document.getElementById("lockdown-role-modal");
         const lockdownRoleModalTitle = document.getElementById("lockdown-role-modal-title");
         const lockdownRoleChecklist = document.getElementById("lockdown-role-checklist");
@@ -1678,89 +1619,6 @@
             }
 
             return response.json();
-        }
-
-        async function exportConfigSnapshot() {
-            const response = await fetch(`/api/guilds/${guildId}/config-export`, {
-                credentials: "same-origin"
-            });
-
-            if (handleUnauthorizedResponse(response)) {
-                throw new Error("Dashboard session expired");
-            }
-
-            if (!response.ok) {
-                let message = "Could not export this config";
-                try {
-                    const data = await response.json();
-                    message = data.detail || message;
-                } catch {}
-                showToast(message, "error");
-                throw new Error(message);
-            }
-
-            return response.json();
-        }
-
-        async function importConfigSnapshot(snapshot) {
-            const response = await fetch(`/api/guilds/${guildId}/config-import`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ snapshot })
-            });
-
-            if (!response.ok) {
-                let message = "Could not import this config";
-                try {
-                    const data = await response.json();
-                    message = data.detail || message;
-                } catch {}
-                showToast(message, "error");
-                throw new Error(message);
-            }
-
-            return response.json();
-        }
-
-        async function saveConfigTemplate(name) {
-            const response = await fetch(`/api/guilds/${guildId}/config-template`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name })
-            });
-
-            if (!response.ok) {
-                let message = "Could not save this preset";
-                try {
-                    const data = await response.json();
-                    message = data.detail || message;
-                } catch {}
-                showToast(message, "error");
-                throw new Error(message);
-            }
-
-            return response.json();
-        }
-
-        function syncConfigTemplateUi(subscription) {
-            if (!configTemplateSelect || !configTemplateSummary) return;
-            availableConfigTemplates = Array.isArray(subscription?.config_templates) ? subscription.config_templates : availableConfigTemplates;
-            const currentValue = configTemplateSelect.value;
-            configTemplateSelect.innerHTML = `<option value="">Choose a saved preset</option>`;
-            availableConfigTemplates.forEach((template) => {
-                const option = document.createElement("option");
-                option.value = template.name;
-                option.textContent = template.source_guild_name
-                    ? `${template.name} - ${template.source_guild_name}`
-                    : template.name;
-                configTemplateSelect.appendChild(option);
-            });
-            if (availableConfigTemplates.some((template) => template.name === currentValue)) {
-                configTemplateSelect.value = currentValue;
-            }
-            configTemplateSummary.textContent = availableConfigTemplates.length
-                ? `${availableConfigTemplates.length} saved preset${availableConfigTemplates.length === 1 ? "" : "s"} ready across your Premium servers.`
-                : "No saved presets yet. Save this server once, then reuse that setup across your other Premium servers.";
         }
 
         async function updateModerationSettings(payload) {
@@ -2088,28 +1946,6 @@
             if (subscriptionPlanNote) {
                 subscriptionPlanNote.hidden = !premiumOn;
                 subscriptionPlanNote.textContent = "Premium Active";
-            }
-            syncConfigTemplateUi(subscription);
-            if (configTemplateNameInput) {
-                configTemplateNameInput.disabled = !premiumOn;
-            }
-            if (configTemplateSelect) {
-                configTemplateSelect.disabled = !premiumOn;
-            }
-            if (saveConfigTemplateButton) {
-                saveConfigTemplateButton.disabled = !premiumOn;
-            }
-            if (exportConfigButton) {
-                exportConfigButton.disabled = !premiumOn;
-            }
-            if (importConfigButton) {
-                importConfigButton.disabled = !premiumOn;
-            }
-            if (applyConfigTemplateButton) {
-                applyConfigTemplateButton.disabled = !premiumOn;
-            }
-            if (configSnapshotTextarea) {
-                configSnapshotTextarea.disabled = !premiumOn;
             }
             lastKnownPremiumState = premiumOn;
             if (options.announceActivation && premiumOn && !previouslyPremium) {
@@ -2788,73 +2624,6 @@
             });
         }
 
-        saveConfigTemplateButton?.addEventListener("click", async () => {
-            const name = (configTemplateNameInput?.value || "").trim();
-            if (!name) {
-                showToast("Name the preset before saving it.", "error");
-                return;
-            }
-            try {
-                const result = await saveConfigTemplate(name);
-                availableConfigTemplates = Array.isArray(result.templates) ? result.templates : availableConfigTemplates;
-                syncConfigTemplateUi({ config_templates: availableConfigTemplates });
-                if (configTemplateNameInput) {
-                    configTemplateNameInput.value = "";
-                }
-                showToast(`Saved preset "${name}".`);
-            } catch {}
-        });
-
-        exportConfigButton?.addEventListener("click", async () => {
-            try {
-                const snapshot = await exportConfigSnapshot();
-                if (configSnapshotTextarea) {
-                    configSnapshotTextarea.value = JSON.stringify(snapshot, null, 2);
-                    configSnapshotTextarea.focus();
-                    configSnapshotTextarea.select();
-                }
-                showToast("Exported the current config to JSON.");
-            } catch {}
-        });
-
-        applyConfigTemplateButton?.addEventListener("click", async () => {
-            const selectedName = configTemplateSelect?.value || "";
-            if (!selectedName) {
-                showToast("Choose a saved preset first.", "error");
-                return;
-            }
-            const template = availableConfigTemplates.find((item) => item.name === selectedName);
-            if (!template?.snapshot) {
-                showToast("That preset is unavailable right now.", "error");
-                return;
-            }
-            try {
-                await importConfigSnapshot(template.snapshot);
-                showToast(`Applied preset "${selectedName}". Reloading this server...`);
-                setTimeout(() => window.location.reload(), 500);
-            } catch {}
-        });
-
-        importConfigButton?.addEventListener("click", async () => {
-            const raw = configSnapshotTextarea?.value || "";
-            if (!raw.trim()) {
-                showToast("Paste exported JSON before importing it.", "error");
-                return;
-            }
-            let parsed;
-            try {
-                parsed = JSON.parse(raw);
-            } catch {
-                showToast("That preset JSON is not valid.", "error");
-                return;
-            }
-            try {
-                await importConfigSnapshot(parsed);
-                showToast("Imported config preset. Reloading this server...");
-                setTimeout(() => window.location.reload(), 500);
-            } catch {}
-        });
-
         document.addEventListener("visibilitychange", () => {
             if (!document.hidden) {
                 refreshSubscriptionStatus({ announceActivation: true, silent: true }).catch(() => {});
@@ -2862,7 +2631,6 @@
         });
 
         updateStats();
-        syncConfigTemplateUi({ config_templates: availableConfigTemplates });
         updateSectionVisibility();
         refreshLogs();
         refreshDefenseSnapshot();

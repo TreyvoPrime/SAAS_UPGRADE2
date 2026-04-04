@@ -532,7 +532,7 @@ def create_dashboard_app(bot) -> FastAPI:
             "guardian_locked": not is_premium,
             "feature_count": len(PREMIUM_FEATURES),
             "features": [{"key": key, "label": label} for key, label in PREMIUM_FEATURES.items()],
-            "config_templates": controls.list_user_config_templates(viewer_user_id, guild_id),
+            "config_templates": controls.list_config_templates(guild_id),
             "billing_ready": guild_billing["billing_ready"],
             "checkout_ready": guild_billing["billing_ready"],
             "viewer_has_premium": is_premium,
@@ -1021,156 +1021,24 @@ def create_dashboard_app(bot) -> FastAPI:
             cases = [case for case in cases if str(case.get("action") or "").lower() == action_key]
         return cases[: max(1, min(limit, 500))]
 
-    def _role_refs(role_ids: list[int], role_lookup: dict[int, str]) -> list[dict]:
-        refs: list[dict] = []
-        for role_id in role_ids:
-            refs.append(
-                {
-                    "id": int(role_id),
-                    "name": role_lookup.get(role_id, f"Deleted ({role_id})"),
-                }
-            )
-        return refs
-
-    def _channel_ref(channel_id: int | None, channels: list[dict], fallback_label: str = "") -> dict | None:
-        if not channel_id:
-            return None
-        for channel in channels:
-            if int(channel["id"]) == int(channel_id):
-                return {
-                    "id": int(channel["id"]),
-                    "name": str(channel.get("name") or ""),
-                    "label": str(channel.get("label") or fallback_label or channel.get("name") or ""),
-                }
-        return {
-            "id": int(channel_id),
-            "name": "",
-            "label": fallback_label,
-        }
-
-    def _resolve_role_ids_from_snapshot(role_refs: list[dict] | list[int] | None, role_lookup: dict[int, str]) -> list[int]:
-        if not role_refs:
-            return []
-        target_by_name = {
-            str(name).strip().casefold(): role_id
-            for role_id, name in role_lookup.items()
-            if str(name).strip()
-        }
-        resolved: list[int] = []
-        for item in role_refs:
-            if isinstance(item, dict):
-                name = str(item.get("name") or "").strip()
-                if name and name.casefold() in target_by_name:
-                    resolved.append(target_by_name[name.casefold()])
-                    continue
-                raw_id = item.get("id")
-            else:
-                raw_id = item
-            try:
-                role_id = int(raw_id)
-            except (TypeError, ValueError):
-                continue
-            if role_id in role_lookup:
-                resolved.append(role_id)
-        return sorted(dict.fromkeys(resolved))
-
-    def _resolve_channel_id_from_snapshot(channel_ref: dict | int | str | None, channels: list[dict]) -> int | None:
-        if channel_ref in (None, "", False):
-            return None
-        if isinstance(channel_ref, dict):
-            names = [str(channel_ref.get("name") or "").strip(), str(channel_ref.get("label") or "").strip()]
-            for candidate in names:
-                if not candidate:
-                    continue
-                normalized = candidate.lstrip("#").casefold()
-                for channel in channels:
-                    if str(channel.get("name") or "").strip().casefold() == normalized:
-                        return int(channel["id"])
-                    if str(channel.get("label") or "").strip().lstrip("#").casefold() == normalized:
-                        return int(channel["id"])
-            raw_id = channel_ref.get("id")
-        else:
-            raw_id = channel_ref
-        try:
-            channel_id = int(raw_id)
-        except (TypeError, ValueError):
-            return None
-        return next((int(channel["id"]) for channel in channels if int(channel["id"]) == channel_id), None)
-
     def build_config_snapshot(guild_id: int) -> dict:
-        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
-        channels = guild_text_channels(guild_id)
-        commands = build_command_catalog(bot)
-        greetings = greetings_dashboard_summary(guild_id)
-        support = support_dashboard_summary(guild_id)
-        command_policies = []
-        for command in commands:
-            policy = bot.access_manager.controls.get_policy(guild_id, command["name"])
-            command_policies.append(
-                {
-                    "name": command["name"],
-                    "module": command["module"],
-                    "enabled": bool(policy["enabled"]),
-                    "restrict_to_roles": bool(policy["restrict_to_roles"]),
-                    "allowed_roles": _role_refs(policy["allowed_role_ids"], role_lookup),
-                }
-            )
-        server_defense = bot.server_defense.store.get_all(guild_id) if hasattr(bot, "server_defense") else {}
-        lockdown_state = server_defense.get("lockdown") if isinstance(server_defense, dict) else None
-        if isinstance(lockdown_state, dict):
-            lockdown_state = {
-                **lockdown_state,
-                "allowed_roles": _role_refs(lockdown_state.get("allowed_role_ids", []), role_lookup),
-            }
-            server_defense["lockdown"] = lockdown_state
         return {
-            "version": 2,
-            "exported_at": time.time(),
-            "source_guild_id": guild_id,
-            "source_guild_name": bot.get_guild(guild_id).name if bot.get_guild(guild_id) is not None else "Unknown server",
-            "dashboard_editor_roles": _role_refs(bot.access_manager.controls.get_dashboard_editor_roles(guild_id), role_lookup),
-            "autorole_roles": _role_refs(bot.access_manager.controls.get_autorole_role_ids(guild_id), role_lookup),
+            "subscription_tier": bot.access_manager.controls.get_subscription_tier(guild_id),
+            "dashboard_editor_role_ids": bot.access_manager.controls.get_dashboard_editor_roles(guild_id),
+            "autorole_role_ids": bot.access_manager.controls.get_autorole_role_ids(guild_id),
             "purge_settings": purge_settings_summary(guild_id),
             "moderation_settings": moderation_settings_summary(guild_id),
             "alert_settings": alert_settings_summary(guild_id),
-            "greetings": {
-                "welcome": {
-                    "channel": _channel_ref(greetings["welcome"]["channel_id"], channels, greetings["welcome"]["channel_name"]),
-                    "message": greetings["welcome"]["message"],
-                },
-                "leave": {
-                    "channel": _channel_ref(greetings["leave"]["channel_id"], channels, greetings["leave"]["channel_name"]),
-                    "message": greetings["leave"]["message"],
-                },
-                "join_dm": {
-                    "enabled": bool(greetings["join_dm"]["enabled"]),
-                    "message": greetings["join_dm"]["message"],
-                },
-            },
-            "support": {
-                "issue_types": support.get("issue_types", []),
-                "support_command_channel": _channel_ref(
-                    support.get("support_command_channel_id"),
-                    channels,
-                    support.get("support_command_channel_name", ""),
-                ),
-            },
-            "server_defense": server_defense,
-            "command_policies": command_policies,
+            "greetings": greetings_dashboard_summary(guild_id),
+            "support": support_dashboard_summary(guild_id),
+            "server_defense": bot.server_defense.get_dashboard_state(guild_id) if hasattr(bot, "server_defense") else {},
         }
 
     async def apply_config_snapshot(guild_id: int, snapshot: dict) -> None:
         controls = bot.access_manager.controls
-        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
-        channels = guild_text_channels(guild_id)
-        controls.set_dashboard_editor_roles(
-            guild_id,
-            _resolve_role_ids_from_snapshot(snapshot.get("dashboard_editor_roles"), role_lookup),
-        )
-        controls.set_autorole_role_ids(
-            guild_id,
-            _resolve_role_ids_from_snapshot(snapshot.get("autorole_roles"), role_lookup),
-        )
+        controls.set_subscription_tier(guild_id, str(snapshot.get("subscription_tier") or TIER_FREE))
+        controls.set_dashboard_editor_roles(guild_id, [int(role_id) for role_id in snapshot.get("dashboard_editor_role_ids", []) if str(role_id).isdigit()])
+        controls.set_autorole_role_ids(guild_id, [int(role_id) for role_id in snapshot.get("autorole_role_ids", []) if str(role_id).isdigit()])
 
         purge = snapshot.get("purge_settings") or {}
         controls.set_purge_settings(
@@ -1203,52 +1071,15 @@ def create_dashboard_app(bot) -> FastAPI:
             welcome = greetings.get("welcome") or {}
             leave = greetings.get("leave") or {}
             join_dm = greetings.get("join_dm") or {}
-            manager.set_welcome(
-                guild_id,
-                channel_id=_resolve_channel_id_from_snapshot(
-                    welcome.get("channel") or welcome.get("channel_id"),
-                    channels,
-                ),
-                message=welcome.get("message"),
-            )
-            manager.set_leave(
-                guild_id,
-                channel_id=_resolve_channel_id_from_snapshot(
-                    leave.get("channel") or leave.get("channel_id"),
-                    channels,
-                ),
-                message=leave.get("message"),
-            )
+            manager.set_welcome(guild_id, channel_id=welcome.get("channel_id"), message=welcome.get("message"))
+            manager.set_leave(guild_id, channel_id=leave.get("channel_id"), message=leave.get("message"))
             manager.set_join_dm(guild_id, enabled=join_dm.get("enabled"), message=join_dm.get("message"))
 
         ticket_store = getattr(bot, "ticket_store", None)
         support = snapshot.get("support") or {}
         if ticket_store is not None:
             ticket_store.set_issue_types(guild_id, support.get("issue_types", []))
-            ticket_store.set_support_command_channel_id(
-                guild_id,
-                _resolve_channel_id_from_snapshot(
-                    support.get("support_command_channel") or support.get("support_command_channel_id"),
-                    channels,
-                ),
-            )
-
-        command_policies = snapshot.get("command_policies") or []
-        command_catalog = {command["name"]: command for command in build_command_catalog(bot)}
-        for item in command_policies:
-            if not isinstance(item, dict):
-                continue
-            command_name = str(item.get("name") or "").strip()
-            if command_name not in command_catalog:
-                continue
-            if "enabled" in item:
-                controls.set_enabled(guild_id, command_name, bool(item.get("enabled")))
-            controls.set_roles(
-                guild_id,
-                command_name,
-                _resolve_role_ids_from_snapshot(item.get("allowed_roles"), role_lookup),
-                restrict_to_roles=bool(item.get("restrict_to_roles", False)),
-            )
+            ticket_store.set_support_command_channel_id(guild_id, support.get("support_command_channel_id"))
 
         server_defense = snapshot.get("server_defense") or {}
         if hasattr(bot, "server_defense") and isinstance(server_defense, dict):
@@ -1259,12 +1090,8 @@ def create_dashboard_app(bot) -> FastAPI:
                     continue
                 if feature_name not in {"linkblock", "inviteblock", "antispam", "antijoin", "mentionguard", "autofilter", "lockdown", "antiraid"}:
                     continue
-                patched_state = dict(state)
-                if feature_name == "lockdown":
-                    patched_state["allowed_role_ids"] = _resolve_role_ids_from_snapshot(state.get("allowed_roles") or state.get("allowed_role_ids"), role_lookup)
-                patched_state.pop("allowed_roles", None)
                 if hasattr(bot.server_defense.store, "patch_feature"):
-                    bot.server_defense.store.patch_feature(guild_id, feature_name, **patched_state)
+                    bot.server_defense.store.patch_feature(guild_id, feature_name, **state)
 
     def autofeed_dashboard_summary(guild_id: int) -> dict:
         store = getattr(bot, "autofeed_store", None)
@@ -2218,20 +2045,10 @@ def create_dashboard_app(bot) -> FastAPI:
     @app.post("/api/guilds/{guild_id}/config-template")
     async def save_config_template(request: Request, guild_id: int, payload: ConfigTemplatePayload):
         await require_same_origin(request)
-        selected_guild, _ = await require_guild_access(request, guild_id)
+        await require_guild_access(request, guild_id)
         if not bot.access_manager.controls.is_premium_enabled(guild_id):
             raise HTTPException(status_code=402, detail="Saved templates are part of ServerCore Premium right now.")
-        viewer_user_id = session_user_id(request)
-        if viewer_user_id is None:
-            templates = bot.access_manager.controls.save_config_template(guild_id, payload.name, build_config_snapshot(guild_id))
-        else:
-            templates = bot.access_manager.controls.save_user_config_template(
-                viewer_user_id,
-                guild_id,
-                selected_guild["name"],
-                payload.name,
-                build_config_snapshot(guild_id),
-            )
+        templates = bot.access_manager.controls.save_config_template(guild_id, payload.name, build_config_snapshot(guild_id))
         await log_dashboard_event(
             request,
             guild_id,
