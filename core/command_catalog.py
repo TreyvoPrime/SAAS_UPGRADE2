@@ -74,6 +74,7 @@ def build_command_catalog(bot: discord.Client) -> list[dict]:
         "modules.colors": "Colors",
         "modules.dashboardlink": "Dashboard",
         "modules.giveaway": "Giveaways",
+        "modules.help": "Help",
         "modules.lock": "ServerGuard",
         "modules.membercount": "Member Count",
         "modules.nickname": "Role Tools",
