@@ -388,6 +388,17 @@ class CommandControlStoreSettingsTests(unittest.TestCase):
         self.assertEqual(self.controls.get_policy(1001, "warn")["allowed_role_ids"], [10])
         self.assertEqual(self.controls.get_policy(1001, "ban")["allowed_role_ids"], [10])
 
+    def test_get_policies_reads_multiple_commands_in_one_snapshot(self) -> None:
+        self.controls.set_enabled(1001, "warn", False)
+        self.controls.set_roles_for_commands(1001, ["ban", "kick"], [10], restrict_to_roles=True)
+
+        policies = self.controls.get_policies(1001, ["warn", "ban", "kick"])
+
+        self.assertEqual(set(policies.keys()), {"warn", "ban", "kick"})
+        self.assertFalse(policies["warn"]["enabled"])
+        self.assertEqual(policies["ban"]["allowed_role_ids"], [10])
+        self.assertEqual(policies["kick"]["allowed_role_ids"], [10])
+
 
 class BillingStoreTests(unittest.TestCase):
     def setUp(self) -> None:

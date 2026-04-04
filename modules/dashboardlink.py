@@ -97,14 +97,9 @@ class DashboardCommands(commands.Cog):
 
         commands_list = build_command_catalog(self.bot)
         controls = self.bot.access_manager.controls
-        disabled_count = 0
-        restricted_count = 0
-        for command in commands_list:
-            policy = controls.get_policy(interaction.guild.id, command["name"])
-            if not policy["enabled"]:
-                disabled_count += 1
-            if policy["allowed_role_ids"]:
-                restricted_count += 1
+        policies = controls.get_policies(interaction.guild.id, [command["name"] for command in commands_list])
+        disabled_count = sum(1 for policy in policies.values() if not policy["enabled"])
+        restricted_count = sum(1 for policy in policies.values() if policy["allowed_role_ids"])
 
         embed = discord.Embed(
             title=f"{interaction.guild.name} Settings Summary",

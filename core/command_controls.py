@@ -71,6 +71,26 @@ class CommandControlStore:
             ),
         }
 
+    def get_policies(self, guild_id: int, command_names: list[str]) -> dict[str, dict[str, Any]]:
+        unique_commands = list(dict.fromkeys(str(name) for name in command_names if str(name).strip()))
+        with self._lock:
+            self._refresh()
+            policies = {command_name: dict(self._command_bucket(guild_id, command_name)) for command_name in unique_commands}
+        return {
+            command_name: {
+                "enabled": bool(policy.get("enabled", True)),
+                "restrict_to_roles": bool(policy.get("restrict_to_roles", False)),
+                "allowed_role_ids": sorted(
+                    {
+                        int(role_id)
+                        for role_id in policy.get("allowed_role_ids", [])
+                        if str(role_id).isdigit()
+                    }
+                ),
+            }
+            for command_name, policy in policies.items()
+        }
+
     def set_enabled(self, guild_id: int, command_name: str, enabled: bool) -> dict[str, Any]:
         with self._lock:
             self._refresh()
