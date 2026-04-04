@@ -128,6 +128,25 @@
             </section>
 
             {% if current_view == 'defense' %}
+            <section class="surface dashboard-access-panel">
+                <div>
+                    <div class="eyebrow">ServerGuard command access</div>
+                    <h3>Who can use ServerGuard commands</h3>
+                    <p>Manage one shared role list for the ServerGuard command group here. Saving here applies the same access to cleanup, lockdown, Guardian, and other ServerGuard commands.</p>
+                </div>
+                <div class="dashboard-access-actions">
+                    <div class="dashboard-access-summary" id="serverguard-access-summary">{{ serverguard_access_summary.summary }}</div>
+                    {% if serverguard_access_summary.is_mixed %}
+                    <span class="dashboard-access-note" id="serverguard-access-note">Some ServerGuard commands currently use different role rules. Saving here will standardize them.</span>
+                    {% else %}
+                    <span class="dashboard-access-note" id="serverguard-access-note">Using one shared role list across {{ serverguard_access_summary.command_count }} ServerGuard commands.</span>
+                    {% endif %}
+                    <button type="button" class="ghost-button" id="open-serverguard-access-modal">Edit ServerGuard roles</button>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if current_view == 'defense' %}
             <section class="surface defense-workspace">
                 {% set autofilter_card = defense_cards|selectattr("name", "equalto", "autofilter")|first %}
                 <div class="workspace-topline defense-topline">
@@ -1222,6 +1241,7 @@
         const roleModalTitle = document.getElementById("role-modal-title");
         const roleChecklist = document.getElementById("role-checklist");
         const roleSearch = document.getElementById("role-search");
+        const roleModalCopy = document.getElementById("role-modal-copy");
         const saveRoleSelectionButton = document.getElementById("save-role-selection");
         const clearRoleSelectionButton = document.getElementById("clear-role-selection");
         const dashboardAccessSummary = document.getElementById("dashboard-access-summary");
@@ -1230,6 +1250,8 @@
         const dashboardAccessRoleSearch = document.getElementById("dashboard-access-role-search");
         const saveDashboardAccessSelectionButton = document.getElementById("save-dashboard-access-selection");
         const clearDashboardAccessSelectionButton = document.getElementById("clear-dashboard-access-selection");
+        const serverguardAccessSummary = document.getElementById("serverguard-access-summary");
+        const serverguardAccessNote = document.getElementById("serverguard-access-note");
         const purgeLimitInput = document.getElementById("purge-limit-input");
         const purgeDefaultModeInput = document.getElementById("purge-default-mode");
         const purgeIncludePinnedToggle = document.getElementById("purge-include-pinned-toggle");
@@ -1298,6 +1320,7 @@
         const toastStack = document.getElementById("toast-stack");
         let activeModule = "{{ sections[0].slug if sections else 'all' }}";
         let activeRoleCommand = null;
+        let activeRoleModule = null;
         let activeDefenseCard = null;
 
         function showToast(message, tone = "success") {
@@ -1422,6 +1445,28 @@
                 } catch {}
                 showToast(message, "error");
                 throw new Error("Dashboard access update failed");
+            }
+
+            return response.json();
+        }
+
+        async function updateModuleAccess(moduleName, allowedRoleIds) {
+            const response = await fetch(`/api/guilds/${guildId}/module-access`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ module_name: moduleName, allowed_role_ids: allowedRoleIds })
+            });
+
+            if (!response.ok) {
+                let message = "Module access update failed";
+                try {
+                    const data = await response.json();
+                    if (data.detail) {
+                        message = data.detail;
+                    }
+                } catch {}
+                showToast(message, "error");
+                throw new Error("Module access update failed");
             }
 
             return response.json();
@@ -1661,7 +1706,11 @@
 
         function openRoleModal(card) {
             activeRoleCommand = card;
+            activeRoleModule = null;
             roleModalTitle.textContent = `Edit roles for /${card.dataset.command}`;
+            if (roleModalCopy) {
+                roleModalCopy.textContent = "Select the roles that can use this command. If you want the command open to everyone, use the Allow all button instead.";
+            }
             const selectedRoleIds = new Set(parseRoleIds(card).map(String));
             roleChecklist.querySelectorAll("[data-role-checkbox]").forEach((checkbox) => {
                 checkbox.checked = selectedRoleIds.has(checkbox.value);
@@ -1673,8 +1722,27 @@
             roleModal.hidden = false;
         }
 
+        function openModuleRoleModal(moduleName, selectedRoleIds = [], options = {}) {
+            activeRoleCommand = null;
+            activeRoleModule = moduleName;
+            roleModalTitle.textContent = `Edit roles for ${moduleName}`;
+            if (roleModalCopy) {
+                roleModalCopy.textContent = options.copy || "Select the roles that should be able to use every command in this module. Saving here applies one shared role list across the whole module.";
+            }
+            const selectedRoleIdSet = new Set((selectedRoleIds || []).map(String));
+            roleChecklist.querySelectorAll("[data-role-checkbox]").forEach((checkbox) => {
+                checkbox.checked = selectedRoleIdSet.has(checkbox.value);
+            });
+            roleSearch.value = "";
+            roleChecklist.querySelectorAll(".role-option").forEach((option) => {
+                option.hidden = false;
+            });
+            roleModal.hidden = false;
+        }
+
         function closeRoleModal() {
             activeRoleCommand = null;
+            activeRoleModule = null;
             roleModal.hidden = true;
         }
 
@@ -2015,6 +2083,15 @@
         });
 
         document.getElementById("open-dashboard-access-modal")?.addEventListener("click", openDashboardAccessModal);
+        document.getElementById("open-serverguard-access-modal")?.addEventListener("click", () => {
+            openModuleRoleModal(
+                "ServerGuard",
+                {{ serverguard_access_summary.allowed_role_ids|tojson if current_view == 'defense' else '[]' }},
+                {
+                    copy: {{ ("Some ServerGuard commands currently use different role rules. Saving here will apply one shared role list to all of them." if serverguard_access_summary.is_mixed else "Select the roles that should be able to use every ServerGuard command. Leave it empty if you want ServerGuard to rely on the built-in Discord checks instead.")|tojson if current_view == 'defense' else '""' }}
+                }
+            );
+        });
 
         document.querySelectorAll("[data-lockdown-role-editor]").forEach((button) => {
             button.addEventListener("click", () => {
@@ -2070,21 +2147,49 @@
         });
 
         saveRoleSelectionButton?.addEventListener("click", async () => {
-            if (!activeRoleCommand) return;
             const selectedIds = Array.from(roleChecklist.querySelectorAll("[data-role-checkbox]:checked")).map((checkbox) => checkbox.value);
 
             try {
-                const result = await updateCommandPolicy(activeRoleCommand.dataset.command, { allowed_role_ids: selectedIds });
-                activeRoleCommand.dataset.roleIds = selectedIds.join(",");
-                activeRoleCommand.querySelector("[data-role-summary]").textContent = result.restrict_to_roles
-                    ? (result.allowed_role_names.length ? result.allowed_role_names.join(", ") : "No roles selected")
-                    : "All roles that already pass native Discord checks";
-                showToast(
-                    result.restrict_to_roles
-                        ? `Updated roles for /${activeRoleCommand.dataset.command}.`
-                        : `/${activeRoleCommand.dataset.command} now uses built-in Discord checks.`
-                );
-                updateStats();
+                if (activeRoleCommand) {
+                    const result = await updateCommandPolicy(activeRoleCommand.dataset.command, { allowed_role_ids: selectedIds });
+                    activeRoleCommand.dataset.roleIds = selectedIds.join(",");
+                    activeRoleCommand.querySelector("[data-role-summary]").textContent = result.restrict_to_roles
+                        ? (result.allowed_role_names.length ? result.allowed_role_names.join(", ") : "No roles selected")
+                        : "All roles that already pass native Discord checks";
+                    showToast(
+                        result.restrict_to_roles
+                            ? `Updated roles for /${activeRoleCommand.dataset.command}.`
+                            : `/${activeRoleCommand.dataset.command} now uses built-in Discord checks.`
+                    );
+                    updateStats();
+                } else if (activeRoleModule) {
+                    const result = await updateModuleAccess(activeRoleModule, selectedIds);
+                    if (serverguardAccessSummary && activeRoleModule === "ServerGuard") {
+                        serverguardAccessSummary.textContent = result.summary;
+                    }
+                    if (serverguardAccessNote && activeRoleModule === "ServerGuard") {
+                        serverguardAccessNote.textContent = result.is_mixed
+                            ? "Some ServerGuard commands still differ right now."
+                            : `Using one shared role list across ${result.command_count} ServerGuard commands.`;
+                    }
+                    document.querySelectorAll('[data-command-card][data-module="serverguard"]').forEach((card) => {
+                        card.dataset.roleIds = (result.allowed_role_ids || []).join(",");
+                        const summary = card.querySelector("[data-role-summary]");
+                        if (summary) {
+                            summary.textContent = result.restrict_to_roles
+                                ? (result.allowed_role_names.length ? result.allowed_role_names.join(", ") : "No roles selected")
+                                : "All roles that already pass native Discord checks";
+                        }
+                    });
+                    showToast(
+                        result.restrict_to_roles
+                            ? `Updated ${activeRoleModule} command roles.`
+                            : `${activeRoleModule} now uses built-in Discord checks.`
+                    );
+                    updateStats();
+                } else {
+                    return;
+                }
                 closeRoleModal();
             } catch {}
         });

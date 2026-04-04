@@ -43,6 +43,11 @@ class CommandPolicyPayload(BaseModel):
     allowed_role_ids: list[int] | None = None
 
 
+class ModuleAccessPayload(BaseModel):
+    module_name: str = Field(min_length=1)
+    allowed_role_ids: list[int] = Field(default_factory=list)
+
+
 class DashboardAccessPayload(BaseModel):
     editor_role_ids: list[int] = Field(default_factory=list)
 
@@ -1411,6 +1416,49 @@ def create_dashboard_app(bot) -> FastAPI:
         rows.sort(key=lambda item: (item["module"].lower(), item["name"]))
         return rows, module_cards
 
+    def module_access_summary(guild_id: int, module_name: str) -> dict:
+        controls = bot.access_manager.controls
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        module_commands = [command for command in build_command_catalog(bot) if command["module"] == module_name]
+        command_names = [command["name"] for command in module_commands]
+        role_sets: list[tuple[int, ...]] = []
+        restrict_flags: list[bool] = []
+        union_role_ids: set[int] = set()
+
+        for command_name in command_names:
+            policy = controls.get_policy(guild_id, command_name)
+            role_ids = tuple(policy["allowed_role_ids"])
+            role_sets.append(role_ids)
+            restrict_flags.append(bool(policy.get("restrict_to_roles")))
+            union_role_ids.update(role_ids)
+
+        unique_role_sets = {role_set for role_set in role_sets}
+        unique_restrict_flags = set(restrict_flags)
+        is_mixed = len(unique_role_sets) > 1 or len(unique_restrict_flags) > 1
+        uniform_restrict = restrict_flags[0] if restrict_flags else False
+        uniform_role_ids = list(role_sets[0]) if role_sets and len(unique_role_sets) == 1 else sorted(union_role_ids)
+        role_names = [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in uniform_role_ids]
+
+        if not command_names:
+            summary = "No ServerGuard commands found"
+        elif is_mixed:
+            summary = "Mixed command role access is configured right now"
+        elif uniform_restrict:
+            summary = ", ".join(role_names) if role_names else "No roles selected"
+        else:
+            summary = "All roles that already pass native Discord checks"
+
+        return {
+            "module_name": module_name,
+            "command_names": command_names,
+            "command_count": len(command_names),
+            "allowed_role_ids": uniform_role_ids,
+            "allowed_role_names": role_names,
+            "restrict_to_roles": uniform_restrict,
+            "is_mixed": is_mixed,
+            "summary": summary,
+        }
+
     def help_catalog_sections() -> tuple[list[dict], dict[str, int]]:
         grouped: dict[str, list[dict]] = defaultdict(list)
         commands = build_command_catalog(bot)
@@ -1497,6 +1545,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "can_manage_editor_roles": selected_guild["can_manage_editor_roles"],
                 "defense_cards": defense_summary["cards"],
                 "defense_summary": defense_summary,
+                "serverguard_access_summary": module_access_summary(guild_id, "ServerGuard"),
                 "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
                 "greetings_summary": greetings_summary,
                 "support_summary": support_summary,
@@ -1926,6 +1975,36 @@ def create_dashboard_app(bot) -> FastAPI:
                 "restrict_to_roles": bool(policy.get("restrict_to_roles")),
             }
         )
+
+    @app.post("/api/guilds/{guild_id}/module-access")
+    async def update_module_access(request: Request, guild_id: int, payload: ModuleAccessPayload):
+        await require_same_origin(request)
+        await require_guild_access(request, guild_id)
+
+        commands = [command for command in build_command_catalog(bot) if command["module"] == payload.module_name]
+        if not commands:
+            raise HTTPException(status_code=404, detail="Unknown module")
+
+        valid_role_ids = {role["id"] for role in guild_roles(guild_id)}
+        safe_role_ids = [role_id for role_id in payload.allowed_role_ids if role_id in valid_role_ids]
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+
+        for command in commands:
+            bot.access_manager.controls.set_roles(guild_id, command["name"], safe_role_ids)
+
+        summary = module_access_summary(guild_id, payload.module_name)
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Module Access Updated",
+            description=f"Updated role access for the {payload.module_name} module.",
+            fields=[
+                ("Module", payload.module_name, True),
+                ("Commands", str(summary["command_count"]), True),
+                ("Allowed Roles", summary["summary"], False),
+            ],
+        )
+        return JSONResponse(summary)
 
     @app.get("/api/guilds/{guild_id}/defense-state")
     async def get_defense_state(request: Request, guild_id: int):

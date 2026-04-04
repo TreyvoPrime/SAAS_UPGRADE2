@@ -302,6 +302,7 @@ class DashboardRouteTests(unittest.TestCase):
             "dashboard.app.build_command_catalog",
             return_value=[
                 {"name": "warn", "description": "Warn a member", "module": "ServerGuard", "tier": "Free"},
+                {"name": "purge", "description": "Clean up messages", "module": "ServerGuard", "tier": "Free"},
                 {"name": "ticketclaim", "description": "Claim a ticket", "module": "Support", "tier": "Free"},
                 {"name": "poll", "description": "Create a poll", "module": "Polls", "tier": "Free"},
             ],
@@ -433,6 +434,19 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertFalse(policy["enabled"])
         self.assertEqual(policy["allowed_role_ids"], [10])
         self.assertTrue(policy["restrict_to_roles"])
+
+    def test_module_access_route_updates_every_serverguard_command(self) -> None:
+        self._authenticate()
+        response = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/module-access",
+            json={"module_name": "ServerGuard", "allowed_role_ids": [10]},
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.bot.command_controls.get_policy(self.bot.guild.id, "warn")["allowed_role_ids"], [10])
+        self.assertEqual(self.bot.command_controls.get_policy(self.bot.guild.id, "purge")["allowed_role_ids"], [10])
+        self.assertEqual(response.json()["summary"], "Moderators")
 
     def test_support_settings_route_saves_issue_types_and_command_channel(self) -> None:
         self._authenticate()
@@ -702,6 +716,19 @@ class DashboardRouteTests(unittest.TestCase):
 
         self.assertEqual(blocked.status_code, 402)
         self.assertEqual(allowed.status_code, 200)
+
+    def test_defense_page_renders_serverguard_command_access_panel(self) -> None:
+        self._authenticate()
+        self.bot.command_controls.set_setup_wizard_completed(self.bot.guild.id, True)
+        self.bot.command_controls.set_roles(self.bot.guild.id, "warn", [10], restrict_to_roles=True)
+        self.bot.command_controls.set_roles(self.bot.guild.id, "purge", [10], restrict_to_roles=True)
+
+        response = self.client.get(f"/dashboard/{self.bot.guild.id}/defense")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ServerGuard command access", response.text)
+        self.assertIn("Edit ServerGuard roles", response.text)
+        self.assertIn("Moderators", response.text)
 
     def test_premium_log_search_and_export_require_premium(self) -> None:
         self._authenticate()
