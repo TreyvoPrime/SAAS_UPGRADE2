@@ -2083,15 +2083,13 @@
         });
 
         document.getElementById("open-dashboard-access-modal")?.addEventListener("click", openDashboardAccessModal);
+        {% if current_view == 'defense' %}
+        const serverguardAccessRoleIds = {{ serverguard_access_summary.allowed_role_ids|tojson }};
+        const serverguardAccessCopy = {{ ("Some ServerGuard commands currently use different role rules. Saving here will apply one shared role list to all of them." if serverguard_access_summary.is_mixed else "Select the roles that should be able to use every ServerGuard command. Leave it empty if you want ServerGuard to rely on the built-in Discord checks instead.")|tojson }};
         document.getElementById("open-serverguard-access-modal")?.addEventListener("click", () => {
-            openModuleRoleModal(
-                "ServerGuard",
-                {{ serverguard_access_summary.allowed_role_ids|tojson if current_view == 'defense' else '[]' }},
-                {
-                    copy: {{ ("Some ServerGuard commands currently use different role rules. Saving here will apply one shared role list to all of them." if serverguard_access_summary.is_mixed else "Select the roles that should be able to use every ServerGuard command. Leave it empty if you want ServerGuard to rely on the built-in Discord checks instead.")|tojson if current_view == 'defense' else '""' }}
-                }
-            );
+            openModuleRoleModal("ServerGuard", serverguardAccessRoleIds, { copy: serverguardAccessCopy });
         });
+        {% endif %}
 
         document.querySelectorAll("[data-lockdown-role-editor]").forEach((button) => {
             button.addEventListener("click", () => {
