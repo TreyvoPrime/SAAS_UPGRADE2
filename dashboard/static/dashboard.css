@@ -5375,6 +5375,7 @@ textarea.search-input {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: flex-start;
     border-radius: 14px;
 }
 
@@ -5400,8 +5401,8 @@ textarea.search-input {
 
 .billing-plan-stack {
     display: grid;
-    grid-template-rows: auto 18px auto;
-    gap: 14px;
+    grid-template-rows: auto 8px auto;
+    gap: 8px;
     align-content: start;
 }
 
@@ -5460,8 +5461,10 @@ textarea.search-input {
 }
 
 .billing-jump-button {
-    margin-top: 12px;
+    margin-top: 10px;
     align-self: flex-start;
+    min-height: 30px;
+    padding: 0 12px;
 }
 
 .billing-metric-price {
@@ -5747,7 +5750,7 @@ textarea.search-input {
 
     .billing-plan-stack {
         grid-template-rows: auto auto auto;
-        gap: 14px;
+        gap: 8px;
         height: auto;
     }
 
