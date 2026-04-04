@@ -380,9 +380,10 @@
                     </section>
                 </div>
 
-                <footer class="setup-footer">
+<footer class="setup-footer">
                     <button type="button" class="ghost-button" id="setup-back-button" disabled>Back</button>
                     <div class="setup-footer-copy" id="setup-footer-copy">Step 1 of 5 · Changes save automatically</div>
+                    <button type="button" class="ghost-button" id="setup-skip-button">Skip setup</button>
                     <button type="button" class="primary-button" id="setup-next-button">Continue</button>
                     <button type="button" class="primary-button" id="setup-finish-button" hidden>Finish setup</button>
                 </footer>
@@ -396,6 +397,7 @@
         const panels = Array.from(document.querySelectorAll("[data-setup-step]"));
         const triggers = Array.from(document.querySelectorAll("[data-setup-step-trigger]"));
         const backButton = document.getElementById("setup-back-button");
+        const skipButton = document.getElementById("setup-skip-button");
         const nextButton = document.getElementById("setup-next-button");
         const finishButton = document.getElementById("setup-finish-button");
         const footerCopy = document.getElementById("setup-footer-copy");
@@ -632,6 +634,7 @@
         });
 
         backButton?.addEventListener("click", () => setActiveStep(currentStep - 1));
+        skipButton?.addEventListener("click", finishSetup);
         nextButton?.addEventListener("click", () => {
             if (currentStep >= panels.length - 1) {
                 finishSetup();

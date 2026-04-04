@@ -918,6 +918,7 @@ class DashboardRouteTests(unittest.TestCase):
         setup_page = self.client.get(f"/dashboard/{self.bot.guild.id}/setup")
 
         self.assertEqual(setup_page.status_code, 200)
+        self.assertIn('id="setup-skip-button">Skip setup</button>', setup_page.text)
         self.assertIn('id="wizard-moderation-allow-all" type="checkbox" checked', setup_page.text)
         self.assertIn('value="11" data-role-group="welcome" checked', setup_page.text)
         self.assertIn('value="10" data-role-group="support" checked', setup_page.text)
