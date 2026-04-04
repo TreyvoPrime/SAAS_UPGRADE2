@@ -97,12 +97,15 @@
             </section>
 
             <nav class="view-switcher" aria-label="Dashboard sections">
-                <a class="view-pill {% if current_view == 'commands' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}"><span class="view-pill-icon">CC</span><span>Command Control</span></a>
-                <a class="view-pill {% if current_view == 'defense' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/defense"><span class="view-pill-icon">SG</span><span>ServerGuard</span></a>
-                <a class="view-pill {% if current_view == 'greetings' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/greetings"><span class="view-pill-icon">WL</span><span>Welcome/Leave</span></a>
-                <a class="view-pill {% if current_view == 'support' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/support"><span class="view-pill-icon">SP</span><span>Support</span></a>
-                <a class="view-pill {% if current_view == 'autofeed' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/autofeed"><span class="view-pill-icon">AF</span><span>Autofeed</span></a>
-                <a class="view-pill {% if current_view == 'giveaways' %}is-active{% endif %}" href="/dashboard/{{ selected_guild.id }}/giveaways"><span class="view-pill-icon">GW</span><span>Giveaways</span></a>
+                {% for item in view_nav_items %}
+                <a class="view-pill {% if item.is_active %}is-active{% endif %}" href="{{ item.href }}">
+                    <span class="view-pill-icon">{{ item.icon }}</span>
+                    <span class="view-pill-copy">
+                        <strong>{{ item.label }}</strong>
+                        <em>{{ item.access_summary }}</em>
+                    </span>
+                </a>
+                {% endfor %}
             </nav>
 
             <section class="surface dashboard-access-panel">
@@ -126,6 +129,27 @@
                     {% endif %}
                 </div>
             </section>
+
+            {% if current_view != 'commands' %}
+            <section class="surface dashboard-access-panel section-access-panel">
+                <div>
+                    <div class="eyebrow">Section access</div>
+                    <h3>{{ page_access_summary.title }}</h3>
+                    <p>{{ page_access_summary.description }}</p>
+                </div>
+                <div class="dashboard-access-actions">
+                    <div class="dashboard-access-summary">
+                        {{ page_access_summary.summary }}
+                    </div>
+                    {% if page_access_summary.edit_url %}
+                    <a class="ghost-button compact-button" href="{{ page_access_summary.edit_url }}">{{ page_access_summary.edit_label }}</a>
+                    {% elif can_manage_editor_roles %}
+                    <button type="button" class="ghost-button compact-button" id="open-section-dashboard-access-modal">{{ page_access_summary.edit_label }}</button>
+                    {% endif %}
+                    <span class="dashboard-access-note">{{ page_access_summary.edit_hint }}</span>
+                </div>
+            </section>
+            {% endif %}
 
             {% if current_view == 'defense' %}
             <section class="surface defense-workspace">
@@ -2015,6 +2039,7 @@
         });
 
         document.getElementById("open-dashboard-access-modal")?.addEventListener("click", openDashboardAccessModal);
+        document.getElementById("open-section-dashboard-access-modal")?.addEventListener("click", openDashboardAccessModal);
 
         document.querySelectorAll("[data-lockdown-role-editor]").forEach((button) => {
             button.addEventListener("click", () => {

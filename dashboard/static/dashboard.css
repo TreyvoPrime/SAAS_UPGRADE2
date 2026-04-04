@@ -3889,11 +3889,8 @@ body,
     white-space: normal;
 }
 
-.view-pill span:last-child {
+.view-pill-copy {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .view-pill:hover,
@@ -4677,15 +4674,36 @@ body,
 }
 
 .view-pill {
-    min-height: 42px;
-    padding: 0 12px;
+    min-height: 54px;
+    padding: 8px 12px;
     border-radius: 10px;
     gap: 8px;
+    align-items: flex-start;
 }
 
-.view-pill span:last-child {
+.view-pill-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.view-pill-copy strong {
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.view-pill-copy em {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-style: normal;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    color: var(--muted);
 }
 
 .view-pill-icon {
