@@ -75,32 +75,28 @@
                 <div class="setup-progress-strip">
                     <div class="setup-progress-copy">
                         <div class="eyebrow">Server setup</div>
-                        <strong id="setup-progress-title">Step 1 of 6</strong>
-                        <span id="setup-progress-label">Dashboard</span>
+                        <strong id="setup-progress-title">Step 1 of 5</strong>
+                        <span id="setup-progress-label">Moderation</span>
                     </div>
                     <div class="setup-progress" id="setup-progress" aria-label="Setup progress">
-                        <button type="button" class="setup-step-pill is-active" data-setup-step-trigger="0" aria-label="Go to dashboard access setup">
+                        <button type="button" class="setup-step-pill is-active" data-setup-step-trigger="0" aria-label="Go to moderation setup">
                             <span class="setup-step-index">1</span>
-                            <span class="setup-step-text">Dashboard</span>
-                        </button>
-                        <button type="button" class="setup-step-pill" data-setup-step-trigger="1" aria-label="Go to moderation setup">
-                            <span class="setup-step-index">2</span>
                             <span class="setup-step-text">Moderation</span>
                         </button>
-                        <button type="button" class="setup-step-pill" data-setup-step-trigger="2" aria-label="Go to welcome setup">
-                            <span class="setup-step-index">3</span>
+                        <button type="button" class="setup-step-pill" data-setup-step-trigger="1" aria-label="Go to welcome setup">
+                            <span class="setup-step-index">2</span>
                             <span class="setup-step-text">Welcome</span>
                         </button>
-                        <button type="button" class="setup-step-pill" data-setup-step-trigger="3" aria-label="Go to autorole setup">
-                            <span class="setup-step-index">4</span>
+                        <button type="button" class="setup-step-pill" data-setup-step-trigger="2" aria-label="Go to autorole setup">
+                            <span class="setup-step-index">3</span>
                             <span class="setup-step-text">Autoroles</span>
                         </button>
-                        <button type="button" class="setup-step-pill" data-setup-step-trigger="4" aria-label="Go to support setup">
-                            <span class="setup-step-index">5</span>
+                        <button type="button" class="setup-step-pill" data-setup-step-trigger="3" aria-label="Go to support setup">
+                            <span class="setup-step-index">4</span>
                             <span class="setup-step-text">Support</span>
                         </button>
-                        <button type="button" class="setup-step-pill" data-setup-step-trigger="5" aria-label="Go to community setup">
-                            <span class="setup-step-index">6</span>
+                        <button type="button" class="setup-step-pill" data-setup-step-trigger="4" aria-label="Go to community setup">
+                            <span class="setup-step-index">5</span>
                             <span class="setup-step-text">Community</span>
                         </button>
                     </div>
@@ -111,37 +107,6 @@
                         <div class="setup-panel-head">
                             <div>
                                 <div class="eyebrow">Step 1</div>
-                                <h3>Choose who can manage the dashboard</h3>
-                                <p>Owners and members with Manage Server always keep access. Add extra staff roles here if they should be able to change dashboard settings too.</p>
-                            </div>
-                            <div class="setup-summary-card">
-                                <strong>Dashboard editors</strong>
-                                <span id="setup-dashboard-summary">{{ setup_summary.dashboard.summary }}</span>
-                            </div>
-                        </div>
-
-                        <section class="setup-role-group">
-                            <div class="setup-role-head">
-                                <div>
-                                    <h4>Extra dashboard manager roles</h4>
-                                    <p>These roles can open and change dashboard pages in addition to the owner and members with Manage Server.</p>
-                                </div>
-                            </div>
-                            <div class="setup-checklist" id="wizard-dashboard-roles">
-                                {% for role in roles %}
-                                <label class="role-option">
-                                    <input type="checkbox" value="{{ role.id }}" data-role-group="dashboard" {% if role.id in setup_summary.dashboard.editor_role_ids %}checked{% endif %}>
-                                    <span>{{ role.name }}</span>
-                                </label>
-                                {% endfor %}
-                            </div>
-                        </section>
-                    </section>
-
-                    <section class="setup-panel" data-setup-step="1">
-                        <div class="setup-panel-head">
-                            <div>
-                                <div class="eyebrow">Step 2</div>
                                 <h3>Choose moderation access</h3>
                                 <p>Set the moderation defaults first, then choose which roles should be able to use staff commands.</p>
                             </div>
@@ -185,10 +150,10 @@
                         </section>
                     </section>
 
-                    <section class="setup-panel" data-setup-step="2">
+                    <section class="setup-panel" data-setup-step="1">
                         <div class="setup-panel-head">
                             <div>
-                                <div class="eyebrow">Step 3</div>
+                                <div class="eyebrow">Step 2</div>
                                 <h3>Shape the join and leave experience</h3>
                                 <p>Choose where messages go and write what people should see when they join, leave, or receive a welcome DM.</p>
                             </div>
@@ -245,10 +210,10 @@
                         </section>
                     </section>
 
-                    <section class="setup-panel" data-setup-step="3">
+                    <section class="setup-panel" data-setup-step="2">
                         <div class="setup-panel-head">
                             <div>
-                                <div class="eyebrow">Step 4</div>
+                                <div class="eyebrow">Step 3</div>
                                 <h3>Pick roles new members should receive automatically</h3>
                                 <p>Choose the starter roles new members should receive as soon as they join.</p>
                             </div>
@@ -276,10 +241,10 @@
                         </section>
                     </section>
 
-                    <section class="setup-panel" data-setup-step="4">
+                    <section class="setup-panel" data-setup-step="3">
                         <div class="setup-panel-head">
                             <div>
-                                <div class="eyebrow">Step 5</div>
+                                <div class="eyebrow">Step 4</div>
                                 <h3>Set up support</h3>
                                 <p>Pick who should manage tickets and decide which issue types members can choose from.</p>
                             </div>
@@ -326,10 +291,10 @@
                         </label>
                     </section>
 
-                    <section class="setup-panel" data-setup-step="5">
+                    <section class="setup-panel" data-setup-step="4">
                         <div class="setup-panel-head">
                             <div>
-                                <div class="eyebrow">Step 6</div>
+                                <div class="eyebrow">Step 5</div>
                                 <h3>Set community tools to the right access level</h3>
                                 <p>Choose whether community tools should be open to everyone or limited to trusted roles.</p>
                             </div>
@@ -390,13 +355,12 @@
         const footerCopy = document.getElementById("setup-footer-copy");
         const progressTitle = document.getElementById("setup-progress-title");
         const progressLabel = document.getElementById("setup-progress-label");
-        const dashboardSummary = document.getElementById("setup-dashboard-summary");
         const moderationSummary = document.getElementById("setup-moderation-summary");
         const welcomeChannelSummary = document.getElementById("setup-welcome-channel-summary");
         const autoroleSummary = document.getElementById("setup-autorole-summary");
         const supportSummary = document.getElementById("setup-support-summary");
         const communitySummary = document.getElementById("setup-community-summary");
-        const stepLabels = ["Dashboard", "Moderation", "Welcome", "Autoroles", "Support", "Community"];
+        const stepLabels = ["Moderation", "Welcome", "Autoroles", "Support", "Community"];
         let currentStep = 0;
         let autosaveTimer = null;
         let autosaveInFlight = false;
@@ -446,9 +410,6 @@
         }
 
         function syncSetupSummaries() {
-            if (dashboardSummary) {
-                dashboardSummary.textContent = selectedRoleNames("dashboard").join(", ") || "Owner and Manage Server members only";
-            }
             if (moderationSummary) {
                 moderationSummary.textContent = document.getElementById("wizard-moderation-allow-all")?.checked
                     ? "Open to everyone"
@@ -505,7 +466,6 @@
 
         function buildPayload() {
             return {
-                dashboard_editor_role_ids: Array.from(document.querySelectorAll('[data-role-group="dashboard"]:checked')).map((input) => Number(input.value)),
                 moderation_confirmation_enabled: Boolean(document.getElementById("wizard-moderation-confirmation")?.checked),
                 default_timeout_minutes: Number(document.getElementById("wizard-timeout-minutes")?.value || "10"),
                 moderation_allow_everyone: Boolean(document.getElementById("wizard-moderation-allow-all")?.checked),

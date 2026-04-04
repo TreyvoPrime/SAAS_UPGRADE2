@@ -105,7 +105,6 @@ class ConfigImportPayload(BaseModel):
 
 
 class SetupWizardPayload(BaseModel):
-    dashboard_editor_role_ids: list[int] = Field(default_factory=list)
     moderation_confirmation_enabled: bool
     default_timeout_minutes: int = Field(ge=1, le=40320)
     moderation_allow_everyone: bool = False
@@ -746,8 +745,6 @@ def create_dashboard_app(bot) -> FastAPI:
         return {
             "editor_role_ids": editor_role_ids,
             "editor_role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in editor_role_ids],
-            "summary": ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in editor_role_ids)
-            or "Owner and Manage Server members only",
         }
 
     def purge_settings_summary(guild_id: int) -> dict:
@@ -1355,138 +1352,17 @@ def create_dashboard_app(bot) -> FastAPI:
             "role_names": [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in role_ids_sorted],
             "allow_all": allow_all,
             "command_names": command_names,
-            "summary": ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in role_ids_sorted)
-            if role_ids_sorted
-            else "No roles selected",
         }
 
     def setup_wizard_summary(guild_id: int) -> dict:
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         return {
             "completed": bot.access_manager.controls.is_setup_wizard_completed(guild_id),
-            "dashboard": dashboard_access_summary(guild_id),
             "moderation": setup_role_group_summary(guild_id, "moderation", role_lookup),
             "support": setup_role_group_summary(guild_id, "support", role_lookup),
             "community": setup_role_group_summary(guild_id, "community", role_lookup),
             "autorole": autorole_settings_summary(guild_id),
         }
-
-    view_access_groups = {
-        "commands": {
-            "title": "Command Control access",
-            "description": "These roles can open the dashboard, and each command can still be narrowed further below.",
-            "mode": "dashboard",
-        },
-        "defense": {
-            "title": "ServerGuard access",
-            "description": "Guardian, lockdown, and response controls follow the dashboard editor roles on this page.",
-            "mode": "dashboard",
-        },
-        "greetings": {
-            "title": "Welcome and Leave access",
-            "description": "Join and leave settings follow the dashboard editor roles on this page.",
-            "mode": "dashboard",
-        },
-        "support": {
-            "title": "Support access",
-            "description": "Ticket setup on this page follows dashboard editor roles. Ticket commands in Discord follow the support roles from setup or command control.",
-            "mode": "setup_group",
-            "group": "support",
-        },
-        "giveaways": {
-            "title": "Giveaway access",
-            "description": "Discord giveaway commands follow the community roles from setup or command control.",
-            "mode": "command_names",
-            "command_names": ["giveaway create", "giveaway end", "giveaway list", "giveaway reroll"],
-        },
-        "autofeed": {
-            "title": "Autofeed access",
-            "description": "Discord autofeed commands follow the community roles from setup or command control.",
-            "mode": "command_names",
-            "command_names": ["autofeed create", "autofeed edit", "autofeed delete", "autofeed pause", "autofeed resume"],
-        },
-    }
-
-    def command_access_summary(guild_id: int, command_names: list[str], role_lookup: dict[int, str]) -> dict:
-        controls = bot.access_manager.controls
-        role_ids: set[int] = set()
-        allow_all = True
-        for command_name in command_names:
-            policy = controls.get_policy(guild_id, command_name)
-            role_ids.update(policy["allowed_role_ids"])
-            if policy.get("restrict_to_roles"):
-                allow_all = False
-        role_ids_sorted = sorted(role_ids)
-        role_names = [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in role_ids_sorted]
-        return {
-            "allow_all": allow_all,
-            "role_ids": role_ids_sorted,
-            "role_names": role_names,
-            "summary": "All roles that already pass native Discord checks"
-            if allow_all
-            else (", ".join(role_names) if role_names else "No roles selected"),
-        }
-
-    def page_access_summary(guild_id: int, current_view: str) -> dict:
-        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
-        config = view_access_groups.get(current_view)
-        if not config:
-            return {
-                "title": "Access",
-                "description": "Review who can manage this section.",
-                "summary": dashboard_access_summary(guild_id)["summary"],
-                "role_names": dashboard_access_summary(guild_id)["editor_role_names"],
-                "allow_all": False,
-                "edit_hint": "Use the dashboard access control above to update editor roles.",
-                "edit_label": "Edit dashboard roles",
-                "edit_url": None,
-            }
-
-        if config["mode"] == "dashboard":
-            dashboard_access = dashboard_access_summary(guild_id)
-            return {
-                "title": config["title"],
-                "description": config["description"],
-                "summary": dashboard_access["summary"],
-                "role_names": dashboard_access["editor_role_names"],
-                "allow_all": False,
-                "edit_hint": "Use the dashboard access control above to update editor roles.",
-                "edit_label": "Edit dashboard roles",
-                "edit_url": None,
-            }
-
-        access = (
-            setup_role_group_summary(guild_id, config["group"], role_lookup)
-            if config["mode"] == "setup_group"
-            else command_access_summary(guild_id, config["command_names"], role_lookup)
-        )
-        return {
-            "title": config["title"],
-            "description": config["description"],
-            "summary": "Open to everyone" if access["allow_all"] else access["summary"],
-            "role_names": access["role_names"],
-            "allow_all": access["allow_all"],
-            "edit_hint": "Use Setup Wizard or Command Control to change the Discord roles for these commands.",
-            "edit_label": "Open command roles",
-            "edit_url": f"/dashboard/{guild_id}",
-        }
-
-    def dashboard_view_nav(guild_id: int, current_view: str) -> list[dict]:
-        items = [
-            {"key": "commands", "label": "Command Control", "icon": "CC", "href": f"/dashboard/{guild_id}"},
-            {"key": "defense", "label": "ServerGuard", "icon": "SG", "href": f"/dashboard/{guild_id}/defense"},
-            {"key": "greetings", "label": "Welcome/Leave", "icon": "WL", "href": f"/dashboard/{guild_id}/greetings"},
-            {"key": "support", "label": "Support", "icon": "SP", "href": f"/dashboard/{guild_id}/support"},
-            {"key": "autofeed", "label": "Autofeed", "icon": "AF", "href": f"/dashboard/{guild_id}/autofeed"},
-            {"key": "giveaways", "label": "Giveaways", "icon": "GW", "href": f"/dashboard/{guild_id}/giveaways"},
-        ]
-        for item in items:
-            if item["key"] == "commands":
-                item["access_summary"] = "Roles vary by command"
-            else:
-                item["access_summary"] = page_access_summary(guild_id, item["key"])["summary"]
-            item["is_active"] = item["key"] == current_view
-        return items
 
     def guild_command_rows(guild_id: int) -> tuple[list[dict], list[dict]]:
         roles = guild_roles(guild_id)
@@ -1608,7 +1484,6 @@ def create_dashboard_app(bot) -> FastAPI:
                 "user": session_user(request),
                 "guilds": guilds,
                 "selected_guild": selected_guild,
-                "view_nav_items": dashboard_view_nav(guild_id, current_view),
                 "commands": commands,
                 "sections": module_cards,
                 "modules": module_cards,
@@ -1620,7 +1495,6 @@ def create_dashboard_app(bot) -> FastAPI:
                 "dashboard_editor_role_ids": access_summary["editor_role_ids"],
                 "dashboard_editor_role_names": access_summary["editor_role_names"],
                 "can_manage_editor_roles": selected_guild["can_manage_editor_roles"],
-                "page_access_summary": page_access_summary(guild_id, current_view),
                 "defense_cards": defense_summary["cards"],
                 "defense_summary": defense_summary,
                 "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
@@ -2450,12 +2324,6 @@ def create_dashboard_app(bot) -> FastAPI:
         support_role_ids = clean_role_ids(payload.support_role_ids)
         community_role_ids = clean_role_ids(payload.community_role_ids)
         autorole_role_ids = clean_role_ids(payload.autorole_role_ids)
-        dashboard_editor_role_ids = clean_role_ids(payload.dashboard_editor_role_ids)
-
-        if dashboard_editor_role_ids:
-            bot.access_manager.controls.set_dashboard_editor_roles(guild_id, dashboard_editor_role_ids)
-        else:
-            bot.access_manager.controls.set_dashboard_editor_roles(guild_id, [])
 
         bot.access_manager.controls.set_moderation_settings(
             guild_id,
@@ -2525,11 +2393,6 @@ def create_dashboard_app(bot) -> FastAPI:
                 title="Setup Completed",
                 description="Saved the setup choices from the dashboard.",
                 fields=[
-                    (
-                        "Dashboard Editors",
-                        ", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in dashboard_editor_role_ids) or "Owner and Manage Server only",
-                        False,
-                    ),
                     (
                         "Moderation Access",
                         "Allow everyone"

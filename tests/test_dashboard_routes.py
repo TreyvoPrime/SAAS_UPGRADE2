@@ -790,7 +790,6 @@ class DashboardRouteTests(unittest.TestCase):
         response = self.client.post(
             f"/api/guilds/{self.bot.guild.id}/setup-wizard",
             json={
-                "dashboard_editor_role_ids": [11],
                 "moderation_confirmation_enabled": True,
                 "default_timeout_minutes": 15,
                 "moderation_allow_everyone": False,
@@ -820,7 +819,6 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(moderation_policy["allowed_role_ids"], [])
         self.assertTrue(support_policy["restrict_to_roles"])
         self.assertEqual(support_policy["allowed_role_ids"], [10])
-        self.assertEqual(self.bot.command_controls.get_dashboard_editor_roles(self.bot.guild.id), [11])
         self.assertEqual(self.bot.command_controls.get_autorole_role_ids(self.bot.guild.id), [11])
         self.assertEqual(self.bot.ticket_store.get_support_command_channel_id(self.bot.guild.id), 3002)
         self.assertTrue(self.bot.command_controls.is_setup_wizard_completed(self.bot.guild.id))
@@ -831,7 +829,6 @@ class DashboardRouteTests(unittest.TestCase):
         draft_response = self.client.post(
             f"/api/guilds/{self.bot.guild.id}/setup-wizard",
             json={
-                "dashboard_editor_role_ids": [11],
                 "moderation_confirmation_enabled": True,
                 "default_timeout_minutes": 20,
                 "moderation_allow_everyone": True,
@@ -860,24 +857,10 @@ class DashboardRouteTests(unittest.TestCase):
         setup_page = self.client.get(f"/dashboard/{self.bot.guild.id}/setup")
 
         self.assertEqual(setup_page.status_code, 200)
-        self.assertIn('value="11" data-role-group="dashboard" checked', setup_page.text)
         self.assertIn('id="wizard-moderation-allow-all" type="checkbox" checked', setup_page.text)
         self.assertIn('value="10" data-role-group="support" checked', setup_page.text)
         self.assertIn('value="11" data-role-group="community" checked', setup_page.text)
         self.assertIn('value="11" data-role-group="autorole" checked', setup_page.text)
-
-    def test_support_page_shows_role_access_summary_from_setup_roles(self) -> None:
-        self._authenticate()
-        self.bot.command_controls.set_setup_wizard_completed(self.bot.guild.id, True)
-        self.bot.command_controls.set_roles(self.bot.guild.id, "ticketclaim", [10], restrict_to_roles=True)
-        self.bot.command_controls.set_roles(self.bot.guild.id, "ticketpriority", [10], restrict_to_roles=True)
-
-        response = self.client.get(f"/dashboard/{self.bot.guild.id}/support")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("Section access", response.text)
-        self.assertIn("Use Setup Wizard or Command Control to change the Discord roles for these commands.", response.text)
-        self.assertIn("Moderators", response.text)
 
     def test_logout_clears_dashboard_session(self) -> None:
         self._authenticate()
