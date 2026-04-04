@@ -448,6 +448,19 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(self.bot.command_controls.get_policy(self.bot.guild.id, "purge")["allowed_role_ids"], [10])
         self.assertEqual(response.json()["summary"], "Moderators")
 
+    def test_pillar_access_route_updates_every_welcome_command(self) -> None:
+        self._authenticate()
+        response = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/pillar-access",
+            json={"pillar_key": "greetings", "allowed_role_ids": [11]},
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.bot.command_controls.get_policy(self.bot.guild.id, "setwelcome")["allowed_role_ids"], [11])
+        self.assertEqual(self.bot.command_controls.get_policy(self.bot.guild.id, "welcomestatus")["allowed_role_ids"], [11])
+        self.assertEqual(response.json()["summary"], "Helpers")
+
     def test_support_settings_route_saves_issue_types_and_command_channel(self) -> None:
         self._authenticate()
         response = self.client.post(
@@ -821,8 +834,14 @@ class DashboardRouteTests(unittest.TestCase):
                 "default_timeout_minutes": 15,
                 "moderation_allow_everyone": False,
                 "moderation_role_ids": [],
+                "welcome_allow_everyone": False,
+                "welcome_role_ids": [11],
                 "support_allow_everyone": False,
                 "support_role_ids": [10],
+                "giveaway_allow_everyone": False,
+                "giveaway_role_ids": [10],
+                "autofeed_allow_everyone": False,
+                "autofeed_role_ids": [11],
                 "community_allow_everyone": False,
                 "community_role_ids": [11],
                 "autorole_role_ids": [11],
@@ -841,11 +860,20 @@ class DashboardRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         moderation_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "warn")
+        welcome_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "setwelcome")
         support_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "ticketclaim")
+        giveaway_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "giveaway create")
+        autofeed_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "autofeed create")
         self.assertTrue(moderation_policy["restrict_to_roles"])
         self.assertEqual(moderation_policy["allowed_role_ids"], [])
+        self.assertTrue(welcome_policy["restrict_to_roles"])
+        self.assertEqual(welcome_policy["allowed_role_ids"], [11])
         self.assertTrue(support_policy["restrict_to_roles"])
         self.assertEqual(support_policy["allowed_role_ids"], [10])
+        self.assertTrue(giveaway_policy["restrict_to_roles"])
+        self.assertEqual(giveaway_policy["allowed_role_ids"], [10])
+        self.assertTrue(autofeed_policy["restrict_to_roles"])
+        self.assertEqual(autofeed_policy["allowed_role_ids"], [11])
         self.assertEqual(self.bot.command_controls.get_autorole_role_ids(self.bot.guild.id), [11])
         self.assertEqual(self.bot.ticket_store.get_support_command_channel_id(self.bot.guild.id), 3002)
         self.assertTrue(self.bot.command_controls.is_setup_wizard_completed(self.bot.guild.id))
@@ -860,8 +888,14 @@ class DashboardRouteTests(unittest.TestCase):
                 "default_timeout_minutes": 20,
                 "moderation_allow_everyone": True,
                 "moderation_role_ids": [],
+                "welcome_allow_everyone": False,
+                "welcome_role_ids": [11],
                 "support_allow_everyone": False,
                 "support_role_ids": [10],
+                "giveaway_allow_everyone": False,
+                "giveaway_role_ids": [10],
+                "autofeed_allow_everyone": False,
+                "autofeed_role_ids": [11],
                 "community_allow_everyone": False,
                 "community_role_ids": [11],
                 "autorole_role_ids": [11],
@@ -885,8 +919,10 @@ class DashboardRouteTests(unittest.TestCase):
 
         self.assertEqual(setup_page.status_code, 200)
         self.assertIn('id="wizard-moderation-allow-all" type="checkbox" checked', setup_page.text)
+        self.assertIn('value="11" data-role-group="welcome" checked', setup_page.text)
         self.assertIn('value="10" data-role-group="support" checked', setup_page.text)
-        self.assertIn('value="11" data-role-group="community" checked', setup_page.text)
+        self.assertIn('value="10" data-role-group="giveaway" checked', setup_page.text)
+        self.assertIn('value="11" data-role-group="autofeed" checked', setup_page.text)
         self.assertIn('value="11" data-role-group="autorole" checked', setup_page.text)
 
     def test_logout_clears_dashboard_session(self) -> None:

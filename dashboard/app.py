@@ -48,6 +48,11 @@ class ModuleAccessPayload(BaseModel):
     allowed_role_ids: list[int] = Field(default_factory=list)
 
 
+class PillarAccessPayload(BaseModel):
+    pillar_key: str = Field(min_length=1)
+    allowed_role_ids: list[int] = Field(default_factory=list)
+
+
 class DashboardAccessPayload(BaseModel):
     editor_role_ids: list[int] = Field(default_factory=list)
 
@@ -114,8 +119,14 @@ class SetupWizardPayload(BaseModel):
     default_timeout_minutes: int = Field(ge=1, le=40320)
     moderation_allow_everyone: bool = False
     moderation_role_ids: list[int] = Field(default_factory=list)
+    welcome_allow_everyone: bool = False
+    welcome_role_ids: list[int] = Field(default_factory=list)
     support_allow_everyone: bool = False
     support_role_ids: list[int] = Field(default_factory=list)
+    giveaway_allow_everyone: bool = False
+    giveaway_role_ids: list[int] = Field(default_factory=list)
+    autofeed_allow_everyone: bool = False
+    autofeed_role_ids: list[int] = Field(default_factory=list)
     community_allow_everyone: bool = False
     community_role_ids: list[int] = Field(default_factory=list)
     autorole_role_ids: list[int] = Field(default_factory=list)
@@ -1312,7 +1323,16 @@ def create_dashboard_app(bot) -> FastAPI:
             "history",
             "staffnotes add",
             "staffnotes view",
-            "staffnotes remove",
+                "staffnotes remove",
+        ],
+        "welcome": [
+            "setwelcome",
+            "setleave",
+            "clearwelcome",
+            "clearleave",
+            "setjoindm",
+            "welcomestatus",
+            "previewgreeting",
         ],
         "support": [
             "ticketissue add",
@@ -1322,20 +1342,28 @@ def create_dashboard_app(bot) -> FastAPI:
             "ticketpriority",
             "tickettranscript",
             "closeticket",
+            "ticketnote add",
+            "ticketnote view",
+            "setsupportchannel",
         ],
-        "community": [
-            "poll",
-            "pollresults",
-            "endpoll",
+        "giveaways": [
             "giveaway create",
             "giveaway end",
             "giveaway list",
             "giveaway reroll",
+        ],
+        "autofeed": [
             "autofeed create",
             "autofeed edit",
             "autofeed delete",
             "autofeed pause",
             "autofeed resume",
+            "autofeed list",
+        ],
+        "community": [
+            "poll",
+            "pollresults",
+            "endpoll",
             "remind",
         ],
     }
@@ -1364,7 +1392,10 @@ def create_dashboard_app(bot) -> FastAPI:
         return {
             "completed": bot.access_manager.controls.is_setup_wizard_completed(guild_id),
             "moderation": setup_role_group_summary(guild_id, "moderation", role_lookup),
+            "welcome": setup_role_group_summary(guild_id, "welcome", role_lookup),
             "support": setup_role_group_summary(guild_id, "support", role_lookup),
+            "giveaways": setup_role_group_summary(guild_id, "giveaways", role_lookup),
+            "autofeed": setup_role_group_summary(guild_id, "autofeed", role_lookup),
             "community": setup_role_group_summary(guild_id, "community", role_lookup),
             "autorole": autorole_settings_summary(guild_id),
         }
@@ -1459,6 +1490,104 @@ def create_dashboard_app(bot) -> FastAPI:
             "summary": summary,
         }
 
+    pillar_access_groups = {
+        "defense": {
+            "label": "ServerGuard",
+            "title": "Who can use ServerGuard commands",
+            "eyebrow": "ServerGuard command access",
+            "description": "Manage one shared role list for the ServerGuard command group here. Saving here applies the same access to cleanup, lockdown, Guardian, and other ServerGuard commands.",
+            "summary_kind": "module",
+            "module_name": "ServerGuard",
+        },
+        "greetings": {
+            "label": "Welcome/Leave",
+            "title": "Who can use Welcome/Leave commands",
+            "eyebrow": "Welcome/Leave command access",
+            "description": "Manage one shared role list for the welcome, leave, and join-DM command group here.",
+            "summary_kind": "commands",
+            "command_names": setup_command_groups["welcome"],
+        },
+        "support": {
+            "label": "Support",
+            "title": "Who can use Support commands",
+            "eyebrow": "Support command access",
+            "description": "Manage one shared role list for the support command group here. Saving here applies the same access to ticket issue setup, claims, notes, transcripts, close actions, and support-channel management.",
+            "summary_kind": "commands",
+            "command_names": setup_command_groups["support"],
+        },
+        "autofeed": {
+            "label": "Autofeed",
+            "title": "Who can use Autofeed commands",
+            "eyebrow": "Autofeed command access",
+            "description": "Manage one shared role list for the Autofeed command group here.",
+            "summary_kind": "commands",
+            "command_names": setup_command_groups["autofeed"],
+        },
+        "giveaways": {
+            "label": "Giveaways",
+            "title": "Who can use Giveaway commands",
+            "eyebrow": "Giveaway command access",
+            "description": "Manage one shared role list for the giveaway command group here.",
+            "summary_kind": "commands",
+            "command_names": setup_command_groups["giveaways"],
+        },
+    }
+
+    def command_group_access_summary(guild_id: int, label: str, command_names: list[str]) -> dict:
+        controls = bot.access_manager.controls
+        role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        role_sets: list[tuple[int, ...]] = []
+        restrict_flags: list[bool] = []
+        union_role_ids: set[int] = set()
+        filtered_command_names: list[str] = []
+
+        for command_name in command_names:
+            filtered_command_names.append(command_name)
+            policy = controls.get_policy(guild_id, command_name)
+            role_ids = tuple(policy["allowed_role_ids"])
+            role_sets.append(role_ids)
+            restrict_flags.append(bool(policy.get("restrict_to_roles")))
+            union_role_ids.update(role_ids)
+
+        unique_role_sets = {role_set for role_set in role_sets}
+        unique_restrict_flags = set(restrict_flags)
+        is_mixed = len(unique_role_sets) > 1 or len(unique_restrict_flags) > 1
+        uniform_restrict = restrict_flags[0] if restrict_flags else False
+        uniform_role_ids = list(role_sets[0]) if role_sets and len(unique_role_sets) == 1 else sorted(union_role_ids)
+        role_names = [role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in uniform_role_ids]
+
+        if not filtered_command_names:
+            summary = f"No {label} commands found"
+        elif is_mixed:
+            summary = "Mixed command role access is configured right now"
+        elif uniform_restrict:
+            summary = ", ".join(role_names) if role_names else "No roles selected"
+        else:
+            summary = "All roles that already pass native Discord checks"
+
+        return {
+            "label": label,
+            "command_names": filtered_command_names,
+            "command_count": len(filtered_command_names),
+            "allowed_role_ids": uniform_role_ids,
+            "allowed_role_names": role_names,
+            "restrict_to_roles": uniform_restrict,
+            "is_mixed": is_mixed,
+            "summary": summary,
+        }
+
+    def pillar_access_summary(guild_id: int, current_view: str) -> dict | None:
+        config = pillar_access_groups.get(current_view)
+        if not config:
+            return None
+
+        summary = (
+            module_access_summary(guild_id, config["module_name"])
+            if config["summary_kind"] == "module"
+            else command_group_access_summary(guild_id, config["label"], config["command_names"])
+        )
+        return {**config, **summary}
+
     def help_catalog_sections() -> tuple[list[dict], dict[str, int]]:
         grouped: dict[str, list[dict]] = defaultdict(list)
         commands = build_command_catalog(bot)
@@ -1545,7 +1674,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "can_manage_editor_roles": selected_guild["can_manage_editor_roles"],
                 "defense_cards": defense_summary["cards"],
                 "defense_summary": defense_summary,
-                "serverguard_access_summary": module_access_summary(guild_id, "ServerGuard"),
+                "pillar_access_summary": pillar_access_summary(guild_id, current_view),
                 "can_manage_lockdown_roles": selected_guild["can_manage_editor_roles"],
                 "greetings_summary": greetings_summary,
                 "support_summary": support_summary,
@@ -2006,6 +2135,40 @@ def create_dashboard_app(bot) -> FastAPI:
         )
         return JSONResponse(summary)
 
+    @app.post("/api/guilds/{guild_id}/pillar-access")
+    async def update_pillar_access(request: Request, guild_id: int, payload: PillarAccessPayload):
+        await require_same_origin(request)
+        await require_guild_access(request, guild_id)
+
+        config = pillar_access_groups.get(payload.pillar_key)
+        if not config:
+            raise HTTPException(status_code=404, detail="Unknown pillar")
+
+        valid_role_ids = {role["id"] for role in guild_roles(guild_id)}
+        safe_role_ids = [role_id for role_id in payload.allowed_role_ids if role_id in valid_role_ids]
+
+        if config["summary_kind"] == "module":
+            commands = [command for command in build_command_catalog(bot) if command["module"] == config["module_name"]]
+            for command in commands:
+                bot.access_manager.controls.set_roles(guild_id, command["name"], safe_role_ids)
+        else:
+            for command_name in config["command_names"]:
+                bot.access_manager.controls.set_roles(guild_id, command_name, safe_role_ids)
+
+        summary = pillar_access_summary(guild_id, payload.pillar_key)
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Dashboard Pillar Access Updated",
+            description=f"Updated role access for the {config['label']} pillar.",
+            fields=[
+                ("Pillar", config["label"], True),
+                ("Commands", str(summary["command_count"]) if summary else "0", True),
+                ("Allowed Roles", summary["summary"] if summary else "None", False),
+            ],
+        )
+        return JSONResponse(summary or {})
+
     @app.get("/api/guilds/{guild_id}/defense-state")
     async def get_defense_state(request: Request, guild_id: int):
         await require_guild_access(request, guild_id)
@@ -2400,7 +2563,10 @@ def create_dashboard_app(bot) -> FastAPI:
             return channel_id if channel_id in valid_channel_ids else None
 
         moderation_role_ids = clean_role_ids(payload.moderation_role_ids)
+        welcome_role_ids = clean_role_ids(payload.welcome_role_ids)
         support_role_ids = clean_role_ids(payload.support_role_ids)
+        giveaway_role_ids = clean_role_ids(payload.giveaway_role_ids)
+        autofeed_role_ids = clean_role_ids(payload.autofeed_role_ids)
         community_role_ids = clean_role_ids(payload.community_role_ids)
         autorole_role_ids = clean_role_ids(payload.autorole_role_ids)
 
@@ -2418,12 +2584,33 @@ def create_dashboard_app(bot) -> FastAPI:
                 moderation_role_ids,
                 restrict_to_roles=not payload.moderation_allow_everyone,
             )
+        for command_name in setup_command_groups["welcome"]:
+            bot.access_manager.controls.set_roles(
+                guild_id,
+                command_name,
+                welcome_role_ids,
+                restrict_to_roles=not payload.welcome_allow_everyone,
+            )
         for command_name in setup_command_groups["support"]:
             bot.access_manager.controls.set_roles(
                 guild_id,
                 command_name,
                 support_role_ids,
                 restrict_to_roles=not payload.support_allow_everyone,
+            )
+        for command_name in setup_command_groups["giveaways"]:
+            bot.access_manager.controls.set_roles(
+                guild_id,
+                command_name,
+                giveaway_role_ids,
+                restrict_to_roles=not payload.giveaway_allow_everyone,
+            )
+        for command_name in setup_command_groups["autofeed"]:
+            bot.access_manager.controls.set_roles(
+                guild_id,
+                command_name,
+                autofeed_role_ids,
+                restrict_to_roles=not payload.autofeed_allow_everyone,
             )
         for command_name in setup_command_groups["community"]:
             bot.access_manager.controls.set_roles(
@@ -2480,6 +2667,13 @@ def create_dashboard_app(bot) -> FastAPI:
                         False,
                     ),
                     (
+                        "Welcome / Leave Access",
+                        "Allow everyone"
+                        if payload.welcome_allow_everyone
+                        else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in welcome_role_ids) or "No roles selected"),
+                        False,
+                    ),
+                    (
                         "Support Access",
                         "Allow everyone"
                         if payload.support_allow_everyone
@@ -2487,6 +2681,20 @@ def create_dashboard_app(bot) -> FastAPI:
                         False,
                     ),
                     ("Support Channel", next((channel["label"] for channel in guild_text_channels(guild_id) if channel["id"] == clean_channel_id(payload.support_command_channel_id)), "Any channel"), False),
+                    (
+                        "Giveaway Access",
+                        "Allow everyone"
+                        if payload.giveaway_allow_everyone
+                        else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in giveaway_role_ids) or "No roles selected"),
+                        False,
+                    ),
+                    (
+                        "Autofeed Access",
+                        "Allow everyone"
+                        if payload.autofeed_allow_everyone
+                        else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in autofeed_role_ids) or "No roles selected"),
+                        False,
+                    ),
                     (
                         "Community Access",
                         "Allow everyone"

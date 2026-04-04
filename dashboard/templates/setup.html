@@ -155,11 +155,11 @@
                             <div>
                                 <div class="eyebrow">Step 2</div>
                                 <h3>Shape the join and leave experience</h3>
-                                <p>Choose where messages go and write what people should see when they join, leave, or receive a welcome DM.</p>
+                                <p>Choose where messages go, write what people should see, and decide which roles should be able to manage Welcome/Leave commands.</p>
                             </div>
                             <div class="setup-summary-card">
-                                <strong>Welcome channel</strong>
-                                <span id="setup-welcome-channel-summary">{{ greetings_summary.welcome.channel_name }}</span>
+                                <strong>Welcome/Leave access</strong>
+                                <span id="setup-welcome-access-summary">{{ "Open to everyone" if setup_summary.welcome.allow_all else (setup_summary.welcome.role_names|join(", ") if setup_summary.welcome.role_names else "No roles selected") }}</span>
                             </div>
                         </div>
 
@@ -207,6 +207,27 @@
                                 <span>Join DM message</span>
                                 <textarea id="wizard-join-dm-message" class="search-input greeting-textarea" rows="4">{{ greetings_summary.join_dm.message }}</textarea>
                             </label>
+                        </section>
+
+                        <section class="setup-role-group">
+                            <div class="setup-role-head">
+                                <div>
+                                    <h4>Who can manage Welcome/Leave commands</h4>
+                                    <p>Choose the roles that should manage welcome messages, leave messages, join guide DMs, and greeting previews.</p>
+                                </div>
+                                <label class="toggle compact-toggle">
+                                    <input id="wizard-welcome-allow-all" type="checkbox" {% if setup_summary.welcome.allow_all %}checked{% endif %}>
+                                    <span>Allow everyone</span>
+                                </label>
+                            </div>
+                            <div class="setup-checklist" id="wizard-welcome-roles">
+                                {% for role in roles %}
+                                <label class="role-option">
+                                    <input type="checkbox" value="{{ role.id }}" data-role-group="welcome" {% if role.id in setup_summary.welcome.role_ids %}checked{% endif %}>
+                                    <span>{{ role.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
                         </section>
                     </section>
 
@@ -295,30 +316,55 @@
                         <div class="setup-panel-head">
                             <div>
                                 <div class="eyebrow">Step 5</div>
-                                <h3>Set community tools to the right access level</h3>
-                                <p>Choose whether community tools should be open to everyone or limited to trusted roles.</p>
+                                <h3>Set giveaway and autofeed access</h3>
+                                <p>Choose whether these niche management tools should be open to everyone or limited to trusted roles.</p>
                             </div>
                             <div class="setup-summary-card">
-                                <strong>Community tool access</strong>
-                                <span id="setup-community-summary">{{ "Open to everyone" if setup_summary.community.allow_all else (setup_summary.community.role_names|join(", ") if setup_summary.community.role_names else "No roles selected") }}</span>
+                                <strong>Giveaway access</strong>
+                                <span id="setup-giveaway-summary">{{ "Open to everyone" if setup_summary.giveaways.allow_all else (setup_summary.giveaways.role_names|join(", ") if setup_summary.giveaways.role_names else "No roles selected") }}</span>
                             </div>
                         </div>
 
                         <section class="setup-role-group">
                             <div class="setup-role-head">
                                 <div>
-                                    <h4>Who can use community management commands</h4>
-                                    <p>Choose the roles that should manage polls, giveaways, autofeed, and reminders.</p>
+                                    <h4>Who can use giveaway commands</h4>
+                                    <p>Choose the roles that should create giveaways, end them early, list them, and reroll winners.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
-                                    <input id="wizard-community-allow-all" type="checkbox" {% if setup_summary.community.allow_all %}checked{% endif %}>
+                                    <input id="wizard-giveaway-allow-all" type="checkbox" {% if setup_summary.giveaways.allow_all %}checked{% endif %}>
                                     <span>Allow everyone</span>
                                 </label>
                             </div>
-                            <div class="setup-checklist" id="wizard-community-roles">
+                            <div class="setup-checklist" id="wizard-giveaway-roles">
                                 {% for role in roles %}
                                 <label class="role-option">
-                                    <input type="checkbox" value="{{ role.id }}" data-role-group="community" {% if role.id in setup_summary.community.role_ids %}checked{% endif %}>
+                                    <input type="checkbox" value="{{ role.id }}" data-role-group="giveaway" {% if role.id in setup_summary.giveaways.role_ids %}checked{% endif %}>
+                                    <span>{{ role.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="setup-role-group">
+                            <div class="setup-role-head">
+                                <div>
+                                    <h4>Who can use autofeed commands</h4>
+                                    <p>Choose the roles that should create, edit, pause, resume, list, and delete autofeeds.</p>
+                                </div>
+                                <div class="setup-summary-card compact-summary-card">
+                                    <strong>Autofeed access</strong>
+                                    <span id="setup-autofeed-summary">{{ "Open to everyone" if setup_summary.autofeed.allow_all else (setup_summary.autofeed.role_names|join(", ") if setup_summary.autofeed.role_names else "No roles selected") }}</span>
+                                </div>
+                                <label class="toggle compact-toggle">
+                                    <input id="wizard-autofeed-allow-all" type="checkbox" {% if setup_summary.autofeed.allow_all %}checked{% endif %}>
+                                    <span>Allow everyone</span>
+                                </label>
+                            </div>
+                            <div class="setup-checklist" id="wizard-autofeed-roles">
+                                {% for role in roles %}
+                                <label class="role-option">
+                                    <input type="checkbox" value="{{ role.id }}" data-role-group="autofeed" {% if role.id in setup_summary.autofeed.role_ids %}checked{% endif %}>
                                     <span>{{ role.name }}</span>
                                 </label>
                                 {% endfor %}
@@ -356,10 +402,13 @@
         const progressTitle = document.getElementById("setup-progress-title");
         const progressLabel = document.getElementById("setup-progress-label");
         const moderationSummary = document.getElementById("setup-moderation-summary");
-        const welcomeChannelSummary = document.getElementById("setup-welcome-channel-summary");
+        const welcomeAccessSummary = document.getElementById("setup-welcome-access-summary");
         const autoroleSummary = document.getElementById("setup-autorole-summary");
         const supportSummary = document.getElementById("setup-support-summary");
-        const communitySummary = document.getElementById("setup-community-summary");
+        const giveawaySummary = document.getElementById("setup-giveaway-summary");
+        const autofeedSummary = document.getElementById("setup-autofeed-summary");
+        const existingCommunityAllowAll = {{ 'true' if setup_summary.community.allow_all else 'false' }};
+        const existingCommunityRoleIds = {{ setup_summary.community.role_ids|tojson }};
         const stepLabels = ["Moderation", "Welcome", "Autoroles", "Support", "Community"];
         let currentStep = 0;
         let autosaveTimer = null;
@@ -420,16 +469,23 @@
                     ? "Open to everyone"
                     : (selectedRoleNames("support").join(", ") || "No roles selected");
             }
-            if (communitySummary) {
-                communitySummary.textContent = document.getElementById("wizard-community-allow-all")?.checked
+            if (welcomeAccessSummary) {
+                welcomeAccessSummary.textContent = document.getElementById("wizard-welcome-allow-all")?.checked
                     ? "Open to everyone"
-                    : (selectedRoleNames("community").join(", ") || "No roles selected");
+                    : (selectedRoleNames("welcome").join(", ") || "No roles selected");
+            }
+            if (giveawaySummary) {
+                giveawaySummary.textContent = document.getElementById("wizard-giveaway-allow-all")?.checked
+                    ? "Open to everyone"
+                    : (selectedRoleNames("giveaway").join(", ") || "No roles selected");
+            }
+            if (autofeedSummary) {
+                autofeedSummary.textContent = document.getElementById("wizard-autofeed-allow-all")?.checked
+                    ? "Open to everyone"
+                    : (selectedRoleNames("autofeed").join(", ") || "No roles selected");
             }
             if (autoroleSummary) {
                 autoroleSummary.textContent = selectedRoleNames("autorole").join(", ") || "No autoroles selected yet";
-            }
-            if (welcomeChannelSummary) {
-                welcomeChannelSummary.textContent = selectedChannelLabel("wizard-welcome-channel", "No welcome channel");
             }
         }
 
@@ -470,10 +526,16 @@
                 default_timeout_minutes: Number(document.getElementById("wizard-timeout-minutes")?.value || "10"),
                 moderation_allow_everyone: Boolean(document.getElementById("wizard-moderation-allow-all")?.checked),
                 moderation_role_ids: checkedRoleIds("moderation", "wizard-moderation-allow-all"),
+                welcome_allow_everyone: Boolean(document.getElementById("wizard-welcome-allow-all")?.checked),
+                welcome_role_ids: checkedRoleIds("welcome", "wizard-welcome-allow-all"),
                 support_allow_everyone: Boolean(document.getElementById("wizard-support-allow-all")?.checked),
                 support_role_ids: checkedRoleIds("support", "wizard-support-allow-all"),
-                community_allow_everyone: Boolean(document.getElementById("wizard-community-allow-all")?.checked),
-                community_role_ids: checkedRoleIds("community", "wizard-community-allow-all"),
+                giveaway_allow_everyone: Boolean(document.getElementById("wizard-giveaway-allow-all")?.checked),
+                giveaway_role_ids: checkedRoleIds("giveaway", "wizard-giveaway-allow-all"),
+                autofeed_allow_everyone: Boolean(document.getElementById("wizard-autofeed-allow-all")?.checked),
+                autofeed_role_ids: checkedRoleIds("autofeed", "wizard-autofeed-allow-all"),
+                community_allow_everyone: existingCommunityAllowAll,
+                community_role_ids: existingCommunityRoleIds,
                 autorole_role_ids: Array.from(document.querySelectorAll('[data-role-group="autorole"]:checked')).map((input) => Number(input.value)),
                 welcome_channel_id: document.getElementById("wizard-welcome-channel")?.value || null,
                 welcome_message: document.getElementById("wizard-welcome-message")?.value || "",
@@ -580,8 +642,10 @@
         finishButton?.addEventListener("click", finishSetup);
 
         syncAllowAllToggle("wizard-moderation-allow-all", "moderation");
+        syncAllowAllToggle("wizard-welcome-allow-all", "welcome");
         syncAllowAllToggle("wizard-support-allow-all", "support");
-        syncAllowAllToggle("wizard-community-allow-all", "community");
+        syncAllowAllToggle("wizard-giveaway-allow-all", "giveaway");
+        syncAllowAllToggle("wizard-autofeed-allow-all", "autofeed");
         document.querySelectorAll('input[type="checkbox"], select').forEach((input) => {
             input.addEventListener("change", () => queueAutosave({ immediate: true }));
         });
