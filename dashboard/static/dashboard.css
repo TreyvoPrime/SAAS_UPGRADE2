@@ -4699,6 +4699,18 @@ body,
     padding: 16px 18px;
 }
 
+.config-preset-actions {
+    align-content: start;
+}
+
+.config-preset-button-row {
+    flex-wrap: wrap;
+}
+
+.config-textarea-shell {
+    grid-column: 1 / -1;
+}
+
 .dashboard-access-actions,
 .command-settings-actions {
     min-width: min(100%, 440px);

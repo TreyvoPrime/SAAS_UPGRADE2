@@ -807,6 +807,132 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(listing.json()["entries"][0]["target_user_name"], "EditorUser")
         self.assertEqual(exported.json()["entries"][0]["action"], "warn")
 
+    def test_config_export_import_and_template_require_premium(self) -> None:
+        self._authenticate()
+
+        blocked_export = self.client.get(f"/api/guilds/{self.bot.guild.id}/config-export")
+        blocked_import = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/config-import",
+            json={"snapshot": {}},
+            headers={"origin": "http://testserver"},
+        )
+        blocked_template = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/config-template",
+            json={"name": "Starter"},
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(blocked_export.status_code, 402)
+        self.assertEqual(blocked_import.status_code, 402)
+        self.assertEqual(blocked_template.status_code, 402)
+
+    def test_premium_config_templates_export_and_restore_server_state(self) -> None:
+        self._authenticate()
+        self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/subscription",
+            json={"tier": "premium"},
+            headers={"origin": "http://testserver"},
+        )
+        self.bot.command_controls.set_roles(self.bot.guild.id, "warn", [10], restrict_to_roles=True)
+        self.bot.command_controls.set_dashboard_editor_roles(self.bot.guild.id, [11])
+        self.bot.greetings_store.update_guild(
+            self.bot.guild.id,
+            welcome_channel_id=3001,
+            welcome_message="Welcome {user}",
+        )
+        self.bot.ticket_store.set_issue_types(self.bot.guild.id, ["Appeals", "Reports"])
+        self.bot.ticket_store.set_support_command_channel_id(self.bot.guild.id, 3002)
+        _, get_patch = self._http_patches()
+        with get_patch:
+            exported = self.client.get(f"/api/guilds/{self.bot.guild.id}/config-export")
+            saved = self.client.post(
+                f"/api/guilds/{self.bot.guild.id}/config-template",
+                json={"name": "Ops Starter"},
+                headers={"origin": "http://testserver"},
+            )
+
+        self.bot.command_controls.set_roles(self.bot.guild.id, "warn", [], restrict_to_roles=False)
+        self.bot.command_controls.set_dashboard_editor_roles(self.bot.guild.id, [])
+        self.bot.greetings_store.update_guild(
+            self.bot.guild.id,
+            welcome_channel_id=None,
+            welcome_message="Changed",
+        )
+        self.bot.ticket_store.set_issue_types(self.bot.guild.id, ["Changed"])
+        self.bot.ticket_store.set_support_command_channel_id(self.bot.guild.id, None)
+
+        with get_patch:
+            imported = self.client.post(
+                f"/api/guilds/{self.bot.guild.id}/config-import",
+                json={"snapshot": exported.json()},
+                headers={"origin": "http://testserver"},
+            )
+
+        self.assertEqual(exported.status_code, 200)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(imported.status_code, 200)
+        self.assertEqual(self.bot.command_controls.get_policy(self.bot.guild.id, "warn")["allowed_role_ids"], [10])
+        self.assertTrue(self.bot.command_controls.get_policy(self.bot.guild.id, "warn")["restrict_to_roles"])
+        self.assertEqual(self.bot.command_controls.get_dashboard_editor_roles(self.bot.guild.id), [11])
+        self.assertEqual(self.bot.greetings_store.get_guild(self.bot.guild.id)["welcome_channel_id"], 3001)
+        self.assertEqual(self.bot.greetings_store.get_guild(self.bot.guild.id)["welcome_message"], "Welcome {user}")
+        self.assertEqual(self.bot.ticket_store.get_issue_types(self.bot.guild.id), ["Appeals", "Reports"])
+        self.assertEqual(self.bot.ticket_store.get_support_command_channel_id(self.bot.guild.id), 3002)
+        self.assertEqual(saved.json()["templates"][0]["name"], "Ops Starter")
+
+    def test_config_import_maps_roles_and_channels_by_name(self) -> None:
+        self._authenticate()
+        self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/subscription",
+            json={"tier": "premium"},
+            headers={"origin": "http://testserver"},
+        )
+
+        snapshot = {
+            "dashboard_editor_roles": [{"id": 999, "name": "Helpers"}],
+            "autorole_roles": [{"id": 998, "name": "Moderators"}],
+            "greetings": {
+                "welcome": {"channel": {"id": 9999, "name": "general", "label": "#general"}, "message": "Hello"},
+                "leave": {"channel": {"id": 9998, "name": "support", "label": "#support"}, "message": "Bye"},
+                "join_dm": {"enabled": True, "message": "Read this first"},
+            },
+            "support": {
+                "issue_types": ["Reports"],
+                "support_command_channel": {"id": 7777, "name": "support", "label": "#support"},
+            },
+            "command_policies": [
+                {
+                    "name": "warn",
+                    "enabled": True,
+                    "restrict_to_roles": True,
+                    "allowed_roles": [{"id": 777, "name": "Moderators"}],
+                }
+            ],
+            "server_defense": {
+                "lockdown": {
+                    "enabled": True,
+                    "ends_at": None,
+                    "allowed_roles": [{"id": 555, "name": "Helpers"}],
+                    "snapshot": {},
+                }
+            },
+        }
+
+        imported = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/config-import",
+            json={"snapshot": snapshot},
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(imported.status_code, 200)
+        self.assertEqual(self.bot.command_controls.get_dashboard_editor_roles(self.bot.guild.id), [11])
+        self.assertEqual(self.bot.command_controls.get_autorole_role_ids(self.bot.guild.id), [10])
+        self.assertEqual(self.bot.command_controls.get_policy(self.bot.guild.id, "warn")["allowed_role_ids"], [10])
+        self.assertEqual(self.bot.greetings_store.get_guild(self.bot.guild.id)["welcome_channel_id"], 3001)
+        self.assertEqual(self.bot.greetings_store.get_guild(self.bot.guild.id)["leave_channel_id"], 3002)
+        self.assertEqual(self.bot.ticket_store.get_support_command_channel_id(self.bot.guild.id), 3002)
+        self.assertEqual(self.bot.server_defense_store.get_feature(self.bot.guild.id, "lockdown")["allowed_role_ids"], [11])
+
     def test_dashboard_editor_role_can_edit_settings_but_cannot_manage_editor_roles(self) -> None:
         self.bot.command_controls.set_dashboard_editor_roles(self.bot.guild.id, [11])
         self._authenticate(user_id="5002", owner=False, permissions=0)

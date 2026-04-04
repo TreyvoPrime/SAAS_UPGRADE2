@@ -29,7 +29,7 @@ class CommandControlStore:
 
     def __init__(self, path: str | Path = "dashboard_data/command_controls.json"):
         self.path = Path(path)
-        self._default = {"guilds": {}}
+        self._default = {"guilds": {}, "users": {}}
         self._lock = threading.RLock()
         self.data = read_json(self.path, self._default)
         self.billing_store = None
@@ -47,6 +47,10 @@ class CommandControlStore:
         guild_key = str(guild_id)
         guilds = self.data.setdefault("guilds", {})
         return guilds.setdefault(guild_key, {"commands": {}, "dashboard": {"editor_role_ids": []}})
+
+    def _user_bucket(self, user_id: int) -> dict[str, Any]:
+        users = self.data.setdefault("users", {})
+        return users.setdefault(str(user_id), {"config_templates": []})
 
     def _command_bucket(self, guild_id: int, command_name: str) -> dict[str, Any]:
         commands = self._guild_bucket(guild_id).setdefault("commands", {})
@@ -181,6 +185,7 @@ class CommandControlStore:
                         "name": str(item.get("name") or "Untitled")[:60],
                         "created_at": str(item.get("created_at") or ""),
                         "snapshot": item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {},
+                        "source_guild_id": int(item.get("source_guild_id", guild_id)) if str(item.get("source_guild_id", guild_id)).isdigit() else guild_id,
                     }
                 )
         return cleaned[:8]
@@ -200,6 +205,7 @@ class CommandControlStore:
                             "name": str(item.get("name") or "Untitled")[:60],
                             "created_at": str(item.get("created_at") or ""),
                             "snapshot": item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {},
+                            "source_guild_id": int(item.get("source_guild_id", guild_id)) if str(item.get("source_guild_id", guild_id)).isdigit() else guild_id,
                         }
                     )
             templates = [item for item in cleaned[:8] if item["name"].casefold() != str(name).strip().casefold()]
@@ -209,11 +215,86 @@ class CommandControlStore:
                     "name": str(name).strip()[:60] or "Untitled",
                     "created_at": datetime.now(UTC).isoformat(),
                     "snapshot": snapshot if isinstance(snapshot, dict) else {},
+                    "source_guild_id": int(guild_id),
                 },
             )
             dashboard_bucket["config_templates"] = templates[:8]
             self.save()
         return self.list_config_templates(guild_id)
+
+    def list_user_config_templates(self, user_id: int | None, guild_id: int | None = None) -> list[dict[str, Any]]:
+        if user_id is None:
+            return self.list_config_templates(guild_id or 0) if guild_id is not None else []
+        with self._lock:
+            self._refresh()
+            bucket = self._user_bucket(user_id)
+            templates = bucket.get("config_templates", [])
+            cleaned: list[dict[str, Any]] = []
+            if isinstance(templates, list):
+                for item in templates:
+                    if not isinstance(item, dict):
+                        continue
+                    cleaned.append(
+                        {
+                            "name": str(item.get("name") or "Untitled")[:60],
+                            "created_at": str(item.get("created_at") or ""),
+                            "snapshot": item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {},
+                            "source_guild_id": int(item.get("source_guild_id", guild_id or 0)) if str(item.get("source_guild_id", guild_id or 0)).isdigit() else (guild_id or 0),
+                            "source_guild_name": str(item.get("source_guild_name") or "Unknown server")[:80],
+                        }
+                    )
+            legacy = self.list_config_templates(guild_id) if guild_id is not None else []
+        merged: list[dict[str, Any]] = []
+        seen_names: set[str] = set()
+        for item in cleaned + legacy:
+            key = item["name"].casefold()
+            if key in seen_names:
+                continue
+            seen_names.add(key)
+            merged.append(item)
+        return merged[:12]
+
+    def save_user_config_template(
+        self,
+        user_id: int,
+        guild_id: int,
+        guild_name: str,
+        name: str,
+        snapshot: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        with self._lock:
+            self._refresh()
+            bucket = self._user_bucket(user_id)
+            templates = bucket.get("config_templates", [])
+            cleaned: list[dict[str, Any]] = []
+            if isinstance(templates, list):
+                for item in templates:
+                    if not isinstance(item, dict):
+                        continue
+                    cleaned.append(
+                        {
+                            "name": str(item.get("name") or "Untitled")[:60],
+                            "created_at": str(item.get("created_at") or ""),
+                            "snapshot": item.get("snapshot") if isinstance(item.get("snapshot"), dict) else {},
+                            "source_guild_id": int(item.get("source_guild_id", guild_id)) if str(item.get("source_guild_id", guild_id)).isdigit() else guild_id,
+                            "source_guild_name": str(item.get("source_guild_name") or guild_name)[:80],
+                        }
+                    )
+            normalized_name = str(name).strip()[:60] or "Untitled"
+            templates = [item for item in cleaned[:12] if item["name"].casefold() != normalized_name.casefold()]
+            templates.insert(
+                0,
+                {
+                    "name": normalized_name,
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "snapshot": snapshot if isinstance(snapshot, dict) else {},
+                    "source_guild_id": int(guild_id),
+                    "source_guild_name": str(guild_name)[:80] or "Unknown server",
+                },
+            )
+            bucket["config_templates"] = templates[:12]
+            self.save()
+        return self.list_user_config_templates(user_id, guild_id)
 
     def get_autorole_role_ids(self, guild_id: int) -> list[int]:
         with self._lock:
