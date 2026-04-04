@@ -5400,8 +5400,8 @@ textarea.search-input {
 
 .billing-plan-stack {
     display: grid;
-    grid-template-rows: auto 68px auto;
-    gap: 26px;
+    grid-template-rows: auto 18px auto;
+    gap: 14px;
     align-content: start;
 }
 
@@ -5457,6 +5457,11 @@ textarea.search-input {
 
 .billing-price-metric-card {
     min-width: 0;
+}
+
+.billing-jump-button {
+    margin-top: 12px;
+    align-self: flex-start;
 }
 
 .billing-metric-price {
@@ -5742,7 +5747,7 @@ textarea.search-input {
 
     .billing-plan-stack {
         grid-template-rows: auto auto auto;
-        gap: 26px;
+        gap: 14px;
         height: auto;
     }
 
