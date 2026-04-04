@@ -674,6 +674,7 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertIn("Premium is active for Audit Guild", response.text)
         self.assertIn("Refresh status", response.text)
         self.assertIn("Open billing in Discord", response.text)
+        self.assertIn("Unlimited custom commands, autoresponders, and role panels", response.text)
 
     def test_premium_server_renders_toggle_for_premium_command_cards(self) -> None:
         self._authenticate()

@@ -91,7 +91,6 @@
                     </div>
                     <div class="defense-actions subscription-toggle-row">
                         <a class="primary-button compact-button" href="{{ subscription.billing_url }}" id="open-billing-page" {% if subscription.is_premium %}hidden{% endif %}>Buy Premium</a>
-                        <span class="dashboard-access-note subscription-plan-note" id="subscription-plan-note" {% if not subscription.is_premium %}hidden{% endif %}>Premium Active</span>
                     </div>
                 </div>
             </section>
@@ -1302,7 +1301,6 @@
         const subscriptionStateTitle = document.getElementById("subscription-state-title");
         const subscriptionStateCopy = document.getElementById("subscription-state-copy");
         const openBillingPageButton = document.getElementById("open-billing-page");
-        const subscriptionPlanNote = document.getElementById("subscription-plan-note");
         const subscriptionHealthChip = document.getElementById("subscription-health-chip");
         const statItems = {
             commands: document.querySelector('[data-stat="commands"]'),
@@ -1942,10 +1940,6 @@
                 }
                 openBillingPageButton.textContent = "Buy Premium";
                 openBillingPageButton.hidden = premiumOn;
-            }
-            if (subscriptionPlanNote) {
-                subscriptionPlanNote.hidden = !premiumOn;
-                subscriptionPlanNote.textContent = "Premium Active";
             }
             lastKnownPremiumState = premiumOn;
             if (options.announceActivation && premiumOn && !previouslyPremium) {

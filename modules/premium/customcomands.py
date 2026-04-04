@@ -1,12 +1,14 @@
 from pathlib import Path
 
 import discord
-from discord.ext import commands
 from discord import app_commands
+from discord.ext import commands
+
+from core.premium import command_limit, guild_has_premium, limit_reached_message, usage_footer
 from core.storage import read_json, write_json
 
 DATA_FILE = Path("customcommands.json")
-MAX_CUSTOM_COMMANDS_PER_GUILD = 3  # free tier limit
+FREE_CUSTOM_COMMAND_LIMIT = 3
 
 
 def load_data() -> dict:
@@ -19,36 +21,65 @@ def save_data(data: dict) -> None:
 
 
 class CustomCommands(commands.Cog):
+    customcommand = app_commands.Group(
+        name="customcommand",
+        description="Create and manage simple custom prefix commands for your server",
+    )
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.data = load_data()
 
-    # ----------------------------
-    # DATA HELPERS
-    # ----------------------------
+    def _refresh(self) -> None:
+        self.data = load_data()
+
+    def _save(self) -> None:
+        save_data(self.data)
+
     def ensure_guild_entry(self, guild_id: int) -> None:
-        guild_id_str = str(guild_id)
-        if guild_id_str not in self.data:
-            self.data[guild_id_str] = {"commands": {}}
+        guild_key = str(guild_id)
+        if guild_key not in self.data:
+            self.data[guild_key] = {"commands": {}}
 
     def get_guild_commands(self, guild_id: int) -> dict:
+        self._refresh()
         self.ensure_guild_entry(guild_id)
         return self.data[str(guild_id)]["commands"]
-
-    def save(self) -> None:
-        save_data(self.data)
 
     def normalize_name(self, name: str) -> str:
         return name.strip().lower()
 
+    def _premium_enabled(self, guild_id: int, interaction: discord.Interaction | None = None) -> bool:
+        return guild_has_premium(self.bot, guild_id, interaction)
+
+    def _limit(self, guild_id: int, interaction: discord.Interaction | None = None) -> int | None:
+        return command_limit(FREE_CUSTOM_COMMAND_LIMIT, premium_enabled=self._premium_enabled(guild_id, interaction))
+
+    def _footer(self, guild_id: int, item_count: int, interaction: discord.Interaction | None = None) -> str:
+        return usage_footer(
+            item_count,
+            "custom commands",
+            FREE_CUSTOM_COMMAND_LIMIT,
+            premium_enabled=self._premium_enabled(guild_id, interaction),
+        )
+
+    async def _require_manager(self, interaction: discord.Interaction) -> discord.Member | None:
+        if interaction.guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return None
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("I couldn't verify your server permissions.", ephemeral=True)
+            return None
+        if not interaction.user.guild_permissions.manage_guild:
+            await interaction.response.send_message(
+                "You need Manage Server to manage custom commands.",
+                ephemeral=True,
+            )
+            return None
+        return interaction.user
+
     def is_reserved_command(self, name: str) -> bool:
-        name = self.normalize_name(name)
-
-        # Prevent collisions with real bot commands
-        if self.bot.get_command(name) is not None:
-            return True
-
-        # Prevent collisions with slash command names you already use
+        normalized = self.normalize_name(name)
         reserved = {
             "help",
             "poll",
@@ -75,319 +106,211 @@ class CustomCommands(commands.Cog):
             "customcommand",
             "dashboard",
             "purge",
-            "colors",
-            "alert",
+            "color",
+            "wiki",
+            "ticket",
         }
-        return name in reserved
+        return normalized in reserved
 
-    # ----------------------------
-    # COMMAND GROUP
-    # ----------------------------
-    customcommand = app_commands.Group(
-        name="customcommand",
-        description="Create and manage simple custom commands for your server"
-    )
-
-    @customcommand.command(name="add", description="Add a custom command")
+    @customcommand.command(name="add", description="Save a new prefix command")
     @app_commands.describe(
-        name="The command name users will type with !",
-        response="What the bot should say"
+        name="The command name members will type after !",
+        response="What the bot should send back",
     )
     async def add(
         self,
         interaction: discord.Interaction,
         name: app_commands.Range[str, 1, 32],
-        response: app_commands.Range[str, 1, 500]
-    ):
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "❌ This command can only be used in a server.",
-                ephemeral=True
-            )
+        response: app_commands.Range[str, 1, 500],
+    ) -> None:
+        manager = await self._require_manager(interaction)
+        if manager is None or interaction.guild is None:
             return
 
-        if not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message(
-                "❌ I couldn't verify your server permissions.",
-                ephemeral=True
-            )
-            return
-
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.response.send_message(
-                "❌ You need **Manage Server** to use custom commands.",
-                ephemeral=True
-            )
-            return
-
-        name = self.normalize_name(name)
+        normalized_name = self.normalize_name(name)
         guild_commands = self.get_guild_commands(interaction.guild.id)
+        limit = self._limit(interaction.guild.id, interaction)
 
-        if not name.isalnum():
+        if not normalized_name.isalnum():
             await interaction.response.send_message(
-                "❌ Command names must only use letters and numbers.",
-                ephemeral=True
+                "Command names can only use letters and numbers.",
+                ephemeral=True,
+            )
+            return
+        if self.is_reserved_command(normalized_name):
+            await interaction.response.send_message(
+                "That name is already used by ServerCore. Pick a different custom command name.",
+                ephemeral=True,
+            )
+            return
+        if normalized_name in guild_commands:
+            await interaction.response.send_message(
+                "That custom command already exists in this server.",
+                ephemeral=True,
+            )
+            return
+        if limit is not None and len(guild_commands) >= limit:
+            await interaction.response.send_message(
+                limit_reached_message("custom commands in this server", limit),
+                ephemeral=True,
             )
             return
 
-        if self.is_reserved_command(name):
-            await interaction.response.send_message(
-                "❌ That command name is reserved or already used by the bot.",
-                ephemeral=True
-            )
-            return
-
-        if name in guild_commands:
-            await interaction.response.send_message(
-                "❌ That custom command already exists.",
-                ephemeral=True
-            )
-            return
-
-        if len(guild_commands) >= MAX_CUSTOM_COMMANDS_PER_GUILD:
-            await interaction.response.send_message(
-                f"❌ Free tier allows up to **{MAX_CUSTOM_COMMANDS_PER_GUILD}** custom commands per server.",
-                ephemeral=True
-            )
-            return
-
-        guild_commands[name] = {
+        guild_commands[normalized_name] = {
             "response": response.strip(),
-            "created_by": interaction.user.id
+            "created_by": interaction.user.id,
         }
-        self.save()
+        self._save()
 
         embed = discord.Embed(
-            title="✅ Custom Command Added",
-            color=discord.Color.green()
+            title="Custom command saved",
+            description="Members can now use this command with the server prefix.",
+            color=discord.Color.green(),
         )
-        embed.add_field(name="Command", value=f"`!{name}`", inline=False)
-        embed.add_field(name="Response", value=response.strip(), inline=False)
-        embed.set_footer(
-            text=f"{len(guild_commands)}/{MAX_CUSTOM_COMMANDS_PER_GUILD} free-tier custom commands used"
-        )
-
+        embed.add_field(name="Command", value=f"`!{normalized_name}`", inline=False)
+        embed.add_field(name="Reply", value=response.strip(), inline=False)
+        embed.set_footer(text=self._footer(interaction.guild.id, len(guild_commands), interaction))
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @customcommand.command(name="edit", description="Edit an existing custom command")
+    @customcommand.command(name="edit", description="Update one of your saved custom commands")
     @app_commands.describe(
-        name="The existing custom command name",
-        new_name="Optional new command name",
-        new_response="Optional new response"
+        name="The current custom command name",
+        new_name="Optional new name",
+        new_response="Optional new reply",
     )
     async def edit(
         self,
         interaction: discord.Interaction,
         name: app_commands.Range[str, 1, 32],
-        new_name: str | None = None,
-        new_response: str | None = None
-    ):
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "❌ This command can only be used in a server.",
-                ephemeral=True
-            )
-            return
-
-        if not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message(
-                "❌ I couldn't verify your server permissions.",
-                ephemeral=True
-            )
-            return
-
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.response.send_message(
-                "❌ You need **Manage Server** to use custom commands.",
-                ephemeral=True
-            )
+        new_name: app_commands.Range[str, 1, 32] | None = None,
+        new_response: app_commands.Range[str, 1, 500] | None = None,
+    ) -> None:
+        manager = await self._require_manager(interaction)
+        if manager is None or interaction.guild is None:
             return
 
         guild_commands = self.get_guild_commands(interaction.guild.id)
-        name = self.normalize_name(name)
-
-        if name not in guild_commands:
+        current_name = self.normalize_name(name)
+        if current_name not in guild_commands:
             await interaction.response.send_message(
-                "❌ That custom command does not exist.",
-                ephemeral=True
+                "That custom command does not exist in this server.",
+                ephemeral=True,
             )
             return
-
         if new_name is None and new_response is None:
             await interaction.response.send_message(
-                "❌ You need to provide a new name or a new response.",
-                ephemeral=True
+                "Choose a new name, a new reply, or both.",
+                ephemeral=True,
             )
             return
 
-        old_data = guild_commands[name]
-        final_name = name
-
+        updated_name = current_name
         if new_name is not None:
-            new_name = self.normalize_name(new_name)
-
-            if not new_name.isalnum():
+            updated_name = self.normalize_name(new_name)
+            if not updated_name.isalnum():
                 await interaction.response.send_message(
-                    "❌ New command names must only use letters and numbers.",
-                    ephemeral=True
+                    "Command names can only use letters and numbers.",
+                    ephemeral=True,
+                )
+                return
+            if self.is_reserved_command(updated_name):
+                await interaction.response.send_message(
+                    "That name is already used by ServerCore. Pick a different custom command name.",
+                    ephemeral=True,
+                )
+                return
+            if updated_name != current_name and updated_name in guild_commands:
+                await interaction.response.send_message(
+                    "Another custom command already uses that name.",
+                    ephemeral=True,
                 )
                 return
 
-            if self.is_reserved_command(new_name):
-                await interaction.response.send_message(
-                    "❌ That new command name is reserved or already used by the bot.",
-                    ephemeral=True
-                )
-                return
-
-            if new_name != name and new_name in guild_commands:
-                await interaction.response.send_message(
-                    "❌ Another custom command already uses that name.",
-                    ephemeral=True
-                )
-                return
-
-            final_name = new_name
-
-        final_response = new_response.strip() if new_response is not None else old_data["response"]
-
-        # Remove old entry if renaming
-        if final_name != name:
-            del guild_commands[name]
-
-        guild_commands[final_name] = {
-            "response": final_response,
-            "created_by": old_data.get("created_by", interaction.user.id)
+        current = guild_commands[current_name]
+        new_payload = {
+            "response": new_response.strip() if new_response is not None else current["response"],
+            "created_by": current.get("created_by", interaction.user.id),
         }
-        self.save()
+        if updated_name != current_name:
+            del guild_commands[current_name]
+        guild_commands[updated_name] = new_payload
+        self._save()
 
         embed = discord.Embed(
-            title="✏️ Custom Command Updated",
-            color=discord.Color.blurple()
+            title="Custom command updated",
+            color=discord.Color.blurple(),
         )
-        embed.add_field(name="Command", value=f"`!{final_name}`", inline=False)
-        embed.add_field(name="Response", value=final_response, inline=False)
-
+        embed.add_field(name="Command", value=f"`!{updated_name}`", inline=False)
+        embed.add_field(name="Reply", value=new_payload["response"], inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @customcommand.command(name="remove", description="Remove a custom command")
-    @app_commands.describe(name="The custom command name to remove")
-    async def remove(
-        self,
-        interaction: discord.Interaction,
-        name: app_commands.Range[str, 1, 32]
-    ):
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "❌ This command can only be used in a server.",
-                ephemeral=True
-            )
-            return
-
-        if not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message(
-                "❌ I couldn't verify your server permissions.",
-                ephemeral=True
-            )
-            return
-
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.response.send_message(
-                "❌ You need **Manage Server** to use custom commands.",
-                ephemeral=True
-            )
+    @customcommand.command(name="remove", description="Delete a custom command")
+    @app_commands.describe(name="The custom command name to delete")
+    async def remove(self, interaction: discord.Interaction, name: app_commands.Range[str, 1, 32]) -> None:
+        manager = await self._require_manager(interaction)
+        if manager is None or interaction.guild is None:
             return
 
         guild_commands = self.get_guild_commands(interaction.guild.id)
-        name = self.normalize_name(name)
-
-        if name not in guild_commands:
+        normalized_name = self.normalize_name(name)
+        if normalized_name not in guild_commands:
             await interaction.response.send_message(
-                "❌ That custom command does not exist.",
-                ephemeral=True
+                "That custom command does not exist in this server.",
+                ephemeral=True,
             )
             return
 
-        del guild_commands[name]
-        self.save()
-
+        del guild_commands[normalized_name]
+        self._save()
         await interaction.response.send_message(
-            f"🗑️ Removed custom command `!{name}`.",
-            ephemeral=True
+            f"Removed `!{normalized_name}`.",
+            ephemeral=True,
         )
 
-    @customcommand.command(name="list", description="List all custom commands in this server")
-    async def list_commands(self, interaction: discord.Interaction):
+    @customcommand.command(name="list", description="Show the custom commands saved in this server")
+    async def list_commands(self, interaction: discord.Interaction) -> None:
         if interaction.guild is None:
-            await interaction.response.send_message(
-                "❌ This command can only be used in a server.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
             return
 
         guild_commands = self.get_guild_commands(interaction.guild.id)
-
         if not guild_commands:
             await interaction.response.send_message(
                 "This server has no custom commands yet.",
-                ephemeral=True
+                ephemeral=True,
             )
             return
 
         embed = discord.Embed(
-            title="🧩 Custom Commands",
-            description="Here are the custom commands for this server.",
-            color=discord.Color.blurple()
+            title="Custom commands",
+            description="Members can use these with the `!` prefix.",
+            color=discord.Color.blurple(),
         )
-
-        lines = []
-        for name, data in list(guild_commands.items())[:15]:
-            lines.append(
-                f"**`!{name}`**\n{data['response']}"
-            )
-
-        embed.description = "\n\n".join(lines)
-
-        if len(guild_commands) > 15:
-            embed.set_footer(text=f"Showing 15 of {len(guild_commands)} custom commands")
-        else:
-            embed.set_footer(
-                text=f"{len(guild_commands)}/{MAX_CUSTOM_COMMANDS_PER_GUILD} free-tier custom commands used"
-            )
-
+        embed.description = "\n\n".join(
+            f"**`!{command_name}`**\n{command_data['response']}"
+            for command_name, command_data in list(guild_commands.items())[:15]
+        )
+        embed.set_footer(text=self._footer(interaction.guild.id, len(guild_commands)))
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    # ----------------------------
-    # MESSAGE LISTENER
-    # ----------------------------
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.guild is None:
-            return
-
-        if message.author.bot:
+    async def on_message(self, message: discord.Message) -> None:
+        if message.guild is None or message.author.bot:
             return
 
         content = message.content.strip()
         if not content.startswith("!"):
             return
-
-        if len(content) <= 1:
-            return
-
         parts = content[1:].split()
         if not parts:
             return
 
         command_name = self.normalize_name(parts[0])
         guild_commands = self.get_guild_commands(message.guild.id)
-
         if command_name not in guild_commands:
             return
 
-        response = guild_commands[command_name]["response"]
-
-        # Simple variable replacement
+        response = str(guild_commands[command_name].get("response", ""))
         response = response.replace("{user}", message.author.mention)
         response = response.replace("{username}", message.author.name)
         response = response.replace("{server}", message.guild.name)

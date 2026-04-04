@@ -328,23 +328,31 @@ class Poll(commands.Cog):
     @app_commands.command(name="pollresults", description="See the current or final results of a poll")
     @app_commands.describe(poll_id="The poll ID you want to check")
     async def pollresults(self, interaction: discord.Interaction, poll_id: str):
+        if interaction.guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
         poll = self.get_poll(poll_id)
-        if poll is None:
-            await interaction.response.send_message("Poll not found.", ephemeral=True)
+        if poll is None or int(poll.get("guild_id", 0)) != interaction.guild.id:
+            await interaction.response.send_message("I couldn't find that poll in this server.", ephemeral=True)
             return
         await interaction.response.send_message(embed=self.build_poll_embed(poll), ephemeral=True)
 
     @app_commands.command(name="endpoll", description="End a poll before its timer runs out")
     @app_commands.describe(poll_id="The poll ID to end early")
     async def endpoll(self, interaction: discord.Interaction, poll_id: str):
+        if interaction.guild is None:
+            await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+            return
         poll = self.get_poll(poll_id)
-        if poll is None:
-            await interaction.response.send_message("Poll not found.", ephemeral=True)
+        if poll is None or int(poll.get("guild_id", 0)) != interaction.guild.id:
+            await interaction.response.send_message("I couldn't find that poll in this server.", ephemeral=True)
             return
         is_creator = interaction.user.id == poll["author_id"]
-        is_admin = isinstance(interaction.user, discord.Member) and interaction.user.guild_permissions.manage_guild
+        is_admin = isinstance(interaction.user, discord.Member) and (
+            interaction.user.guild_permissions.manage_guild or interaction.user.guild_permissions.administrator
+        )
         if not is_creator and not is_admin:
-            await interaction.response.send_message("Only the poll creator or a server admin can end this poll.", ephemeral=True)
+            await interaction.response.send_message("Only the poll creator or a server admin can end this poll early.", ephemeral=True)
             return
         if poll.get("closed", False):
             await interaction.response.send_message("This poll is already closed.", ephemeral=True)

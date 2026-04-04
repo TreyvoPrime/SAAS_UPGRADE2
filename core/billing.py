@@ -31,6 +31,7 @@ FREE_PREMIUM_COMPARISON_ROWS = [
     {"label": "Advanced giveaway controls", "free": False, "premium": True},
     {"label": "Advanced autofeed controls", "free": False, "premium": True},
     {"label": "Advanced automation", "free": False, "premium": True},
+    {"label": "Unlimited custom commands, autoresponders, and role panels", "free": False, "premium": True},
     {"label": "Analytics", "free": False, "premium": True},
 ]
 

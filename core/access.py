@@ -11,6 +11,26 @@ class CommandAccessManager:
         self.controls = controls
         self.logs = logs
 
+    @staticmethod
+    def _blocked_roles_message(interaction: discord.Interaction, allowed_role_ids: set[int]) -> str:
+        guild = interaction.guild
+        if guild is None or not allowed_role_ids:
+            return "Your roles are not allowed to use this command. Ask a server admin to update Command Access."
+
+        role_mentions = []
+        for role_id in sorted(allowed_role_ids):
+            role = guild.get_role(role_id)
+            if role is not None:
+                role_mentions.append(role.mention)
+
+        if not role_mentions:
+            return "Your roles are not allowed to use this command. Ask a server admin to review Command Access."
+
+        return (
+            "You do not have access to this command right now. "
+            f"Allowed roles: {', '.join(role_mentions)}."
+        )
+
     async def enforce(self, interaction: discord.Interaction) -> bool:
         if interaction.guild is None or interaction.command is None:
             return True
@@ -58,7 +78,7 @@ class CommandAccessManager:
                 )
                 if not interaction.response.is_done():
                     await interaction.response.send_message(
-                        "Your roles are not allowed to use this command.",
+                        self._blocked_roles_message(interaction, allowed_role_ids),
                         ephemeral=True,
                     )
                 return False
@@ -75,7 +95,7 @@ class CommandAccessManager:
             )
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "Your roles are not allowed to use this command.",
+                    self._blocked_roles_message(interaction, allowed_role_ids),
                     ephemeral=True,
                 )
             return False

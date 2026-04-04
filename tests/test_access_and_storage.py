@@ -15,6 +15,9 @@ from core.command_controls import CommandControlStore
 from core.command_logs import CommandLogStore
 from core import storage
 from core.storage import read_json, run_storage_maintenance, write_json
+from modules.autoresponder import AutoResponder, FREE_AUTORESPONDER_LIMIT
+from modules.premium.customcomands import CustomCommands, FREE_CUSTOM_COMMAND_LIMIT
+from modules.reactionroles import ReactionRoles, FREE_PANEL_LIMIT
 
 
 class FakePermissions:
@@ -33,8 +36,10 @@ class FakePermissions:
 
 
 class FakeRole:
-    def __init__(self, role_id: int):
+    def __init__(self, role_id: int, name: str | None = None):
         self.id = role_id
+        self.name = name or f"Role {role_id}"
+        self.mention = f"@{self.name}"
 
 
 class FakeMember:
@@ -48,9 +53,13 @@ class FakeMember:
 
 
 class FakeGuild:
-    def __init__(self, guild_id: int, name: str):
+    def __init__(self, guild_id: int, name: str, *, roles: list[FakeRole] | None = None):
         self.id = guild_id
         self.name = name
+        self._roles = {role.id: role for role in (roles or [])}
+
+    def get_role(self, role_id: int):
+        return self._roles.get(role_id)
 
 
 class FakeResponse:
@@ -87,7 +96,7 @@ class CommandAccessManagerTests(unittest.IsolatedAsyncioTestCase):
         self.controls = CommandControlStore(root / "command_controls.json")
         self.logs = CommandLogStore(root / "command_logs.json")
         self.manager = CommandAccessManager(self.controls, self.logs)
-        self.guild = FakeGuild(1001, "Audit Guild")
+        self.guild = FakeGuild(1001, "Audit Guild", roles=[FakeRole(777)])
         self.member_patch = mock.patch("core.access.discord.Member", FakeMember)
         self.member_patch.start()
 
@@ -139,7 +148,10 @@ class CommandAccessManagerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(blocked)
         self.assertTrue(allowed)
-        self.assertEqual(blocked_interaction.response.messages[0]["content"], "Your roles are not allowed to use this command.")
+        self.assertEqual(
+            blocked_interaction.response.messages[0]["content"],
+            "You do not have access to this command right now. Allowed roles: @Role 777.",
+        )
 
     async def test_no_roles_selected_with_explicit_restriction_blocks_everyone_except_admins(self) -> None:
         self.controls.set_roles(self.guild.id, "ticketclaim", [], restrict_to_roles=True)
@@ -152,7 +164,27 @@ class CommandAccessManagerTests(unittest.IsolatedAsyncioTestCase):
         allowed = await self.manager.enforce(interaction)
 
         self.assertFalse(allowed)
-        self.assertEqual(interaction.response.messages[0]["content"], "Your roles are not allowed to use this command.")
+        self.assertEqual(
+            interaction.response.messages[0]["content"],
+            "Your roles are not allowed to use this command. Ask a server admin to update Command Access.",
+        )
+
+    async def test_role_restriction_message_lists_allowed_roles(self) -> None:
+        guild = FakeGuild(1002, "Role Guild", roles=[FakeRole(321, "Moderator"), FakeRole(654, "Helper")])
+        self.controls.set_roles(guild.id, "ban", [321, 654], restrict_to_roles=True)
+        interaction = FakeInteraction(
+            guild=guild,
+            user=FakeMember(2006, roles=[10]),
+            command_name="ban",
+        )
+
+        allowed = await self.manager.enforce(interaction)
+
+        self.assertFalse(allowed)
+        self.assertEqual(
+            interaction.response.messages[0]["content"],
+            "You do not have access to this command right now. Allowed roles: @Moderator, @Helper.",
+        )
 
 
 class StorageTests(unittest.TestCase):
@@ -422,6 +454,38 @@ class BillingStoreTests(unittest.TestCase):
         self.assertTrue(assignment["is_active"])
         self.assertEqual(assignment["entitlement_id"], "9001")
         self.assertEqual(assignment["premium_user_id"], 5001)
+
+
+class PremiumLimitTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        self.controls = CommandControlStore(self.root / "command_controls.json")
+        self.billing = BillingStore(self.root / "billing.json")
+        self.controls.attach_billing_store(self.billing)
+        self.bot = SimpleNamespace(command_controls=self.controls, billing_store=self.billing)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_free_tier_keeps_command_caps(self) -> None:
+        autoresponder = AutoResponder(self.bot)
+        reaction_roles = ReactionRoles(self.bot)
+        custom_commands = CustomCommands(self.bot)
+
+        self.assertEqual(autoresponder._limit(1001), FREE_AUTORESPONDER_LIMIT)
+        self.assertEqual(reaction_roles._panel_limit(1001), FREE_PANEL_LIMIT)
+        self.assertEqual(custom_commands._limit(1001), FREE_CUSTOM_COMMAND_LIMIT)
+
+    def test_premium_tier_removes_command_caps(self) -> None:
+        self.controls.set_subscription_tier(1001, "premium")
+        autoresponder = AutoResponder(self.bot)
+        reaction_roles = ReactionRoles(self.bot)
+        custom_commands = CustomCommands(self.bot)
+
+        self.assertIsNone(autoresponder._limit(1001))
+        self.assertIsNone(reaction_roles._panel_limit(1001))
+        self.assertIsNone(custom_commands._limit(1001))
 
 class FakePsycopgCursor:
     def __init__(self, documents: dict[str, object], command_logs: list[dict[str, object]]):

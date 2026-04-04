@@ -293,12 +293,31 @@ async def on_app_command_completion(interaction: discord.Interaction, command: a
 @bot.event
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     bot.access_manager.log_error(interaction, error)
+    original = getattr(error, "original", error)
+
+    if isinstance(original, PermissionError):
+        message = str(original) or "You do not have permission to do that."
+    elif isinstance(error, app_commands.TransformerError):
+        option_name = getattr(error, "parameter", None)
+        option_label = getattr(option_name, "display_name", None) or getattr(option_name, "name", None) or "one of the inputs"
+        message = f"I couldn't understand {option_label}. Check that value and try again."
+    elif isinstance(original, ValueError):
+        message = str(original) or "That value is not valid for this command."
+    elif isinstance(original, discord.Forbidden):
+        message = "Discord blocked that action. Check my permissions and role position, then try again."
+    elif isinstance(original, discord.HTTPException):
+        message = "Discord had trouble finishing that action. Please try again in a moment."
+    else:
+        message = "Something went wrong while running that command. Please try again, and if it keeps happening check the bot logs."
+
     if interaction.response.is_done():
+        try:
+            await interaction.followup.send(message, ephemeral=True)
+        except Exception:
+            pass
         return
-    await interaction.response.send_message(
-        "Something went wrong while running that command.",
-        ephemeral=True,
-    )
+
+    await interaction.response.send_message(message, ephemeral=True)
 
 
 @bot.event
