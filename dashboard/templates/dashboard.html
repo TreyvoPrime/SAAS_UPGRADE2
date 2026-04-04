@@ -218,122 +218,6 @@
                     </div>
                 </section>
 
-                <div class="defense-grid" id="defense-grid">
-                    {% for defense in defense_cards %}
-                    {% if defense.name != 'autofilter' %}
-                    <article
-                        class="defense-card{% if defense.name == 'antiraid' %} guardian-defense-card{% endif %}"
-                        data-defense-card
-                        data-defense-name="{{ defense.name }}"
-                        data-enabled="{{ 'true' if defense.enabled else 'false' }}"
-                        data-duration-minutes="{{ defense.duration_minutes or '' }}"
-                        {% if defense.name == 'lockdown' %}
-                        data-lockdown-role-ids="{{ defense.allowed_role_ids|join(',') }}"
-                        {% endif %}
-                    >
-                        <div class="command-flags defense-flags">
-                            <span class="tier tier-free">Defense</span>
-                            <span class="module-chip">{{ defense.tag }}</span>
-                            {% if defense.name == 'antiraid' and defense.locked %}
-                            <span class="tier tier-premium guardian-inline-tag">Premium</span>
-                            {% endif %}
-                        </div>
-                        <div class="defense-card-head">
-                            <div>
-                                <h4>{{ defense.title }}</h4>
-                                <p>{{ defense.description }}</p>
-                            </div>
-                            <label class="toggle">
-                                <input
-                                    type="checkbox"
-                                    {% if defense.enabled %}checked{% endif %}
-                                    {% if defense.locked %}disabled{% endif %}
-                                    data-defense-toggle
-                                    data-defense-name="{{ defense.name }}"
-                                >
-                                <span>Active</span>
-                            </label>
-                        </div>
-
-                        <div class="defense-status-row">
-                            <span class="defense-status-pill" data-defense-status>{{ defense.status_label }}</span>
-                            <span class="defense-duration-pill" data-defense-remaining>{{ defense.remaining_label }}</span>
-                        </div>
-
-                        <div class="defense-card-bottom">
-                            <label class="search-shell defense-duration-shell">
-                                <span>Duration in minutes</span>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    class="search-input"
-                                    placeholder="Leave blank for indefinite"
-                                    data-defense-duration
-                                    data-defense-name="{{ defense.name }}"
-                                    {% if defense.locked %}disabled{% endif %}
-                                    value="{{ defense.duration_minutes or '' }}"
-                                >
-                            </label>
-                            {% if defense.rate_label %}
-                            <div class="defense-note">{{ defense.rate_label }}</div>
-                            {% endif %}
-                            {% if defense.name == 'antiraid' and defense.locked %}
-                            <div class="dashboard-access-note guardian-premium-note">Locked on Free. Turn Premium on above to unlock live threat watch and Guardian response controls.</div>
-                            {% endif %}
-                            {% if defense.locked %}
-                            <div class="dashboard-access-summary">{{ defense.remaining_premium_label }}</div>
-                            {% endif %}
-                            {% if defense.name == 'lockdown' %}
-                            <div class="role-summary" data-lockdown-role-summary>{{ defense.allowed_role_summary }}</div>
-                            {% if can_manage_lockdown_roles %}
-                            <button type="button" class="ghost-button compact-button" data-lockdown-role-editor>Edit talk roles</button>
-                            {% else %}
-                            <span class="dashboard-access-note">Only the owner or members with Manage Server can change these roles.</span>
-                            {% endif %}
-                            {% endif %}
-                            <div class="defense-actions">
-                                {% if defense.name == 'lockdown' %}
-                                <button type="button" class="ghost-button compact-button" data-defense-release data-defense-name="{{ defense.name }}">Unlock now</button>
-                                {% endif %}
-                                <button type="button" class="primary-button compact-button" data-defense-save data-defense-name="{{ defense.name }}" {% if defense.locked %}disabled{% endif %}>{% if defense.locked %}Locked on Free{% else %}Apply{% endif %}</button>
-                            </div>
-                        </div>
-                    </article>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-
-                <section class="surface command-settings-panel defense-settings-panel">
-                    <div>
-                        <div class="eyebrow">AutoFilter</div>
-                        <h3>Blocked words and phrases</h3>
-                        <p>Keep a live list of words or phrases that should never land in chat. Members get three warnings, and after that AutoFilter applies a one-hour timeout automatically.</p>
-                    </div>
-                    <div class="command-settings-actions">
-                        <div class="autofilter-panel-head">
-                            <div class="defense-status-row autofilter-status-row">
-                                <span class="defense-status-pill {% if not autofilter_card.enabled %}is-muted{% endif %}" id="autofilter-status">{{ autofilter_card.status_label }}</span>
-                                <span class="defense-duration-pill" id="autofilter-remaining">{{ autofilter_card.remaining_label }}</span>
-                            </div>
-                            <label class="toggle autofilter-toggle">
-                                <input
-                                    id="autofilter-enabled-toggle"
-                                    type="checkbox"
-                                    {% if autofilter_card.enabled %}checked{% endif %}
-                                >
-                                <span>AutoFilter active</span>
-                            </label>
-                        </div>
-                        <label class="search-shell">
-                            <span>Blocked terms</span>
-                            <textarea id="autofilter-terms-input" class="search-input greeting-textarea" rows="6" placeholder="One word or phrase per line">{{ defense_summary.autofilter_terms|join('\n') }}</textarea>
-                        </label>
-                        <div class="dashboard-access-summary" id="autofilter-summary">AutoFilter is tracking {{ defense_summary.autofilter_terms|length }} blocked term(s). It warns 3 times, then times out for {{ defense_summary.autofilter_timeout_minutes }} minutes.</div>
-                        <button type="button" class="primary-button" id="save-autofilter-terms">Save AutoFilter</button>
-                    </div>
-                </section>
-
                 <section class="surface threat-stage">
                     <div class="threat-stage-copy">
                         <div class="eyebrow">Guardian</div>
@@ -394,6 +278,184 @@
                                 </div>
                             {% endif %}
                         </div>
+                    </div>
+                </section>
+
+                <div class="defense-grid" id="defense-grid">
+                    {% for defense in defense_cards %}
+                    {% if defense.name == 'antiraid' %}
+                    <article
+                        class="defense-card guardian-defense-card"
+                        data-defense-card
+                        data-defense-name="{{ defense.name }}"
+                        data-enabled="{{ 'true' if defense.enabled else 'false' }}"
+                        data-duration-minutes="{{ defense.duration_minutes or '' }}"
+                    >
+                        <div class="command-flags defense-flags">
+                            <span class="tier tier-free">Defense</span>
+                            <span class="module-chip">{{ defense.tag }}</span>
+                            {% if defense.locked %}
+                            <span class="tier tier-premium guardian-inline-tag">Premium</span>
+                            {% endif %}
+                        </div>
+                        <div class="defense-card-head">
+                            <div>
+                                <h4>{{ defense.title }}</h4>
+                                <p>{{ defense.description }}</p>
+                            </div>
+                            <label class="toggle">
+                                <input
+                                    type="checkbox"
+                                    {% if defense.enabled %}checked{% endif %}
+                                    {% if defense.locked %}disabled{% endif %}
+                                    data-defense-toggle
+                                    data-defense-name="{{ defense.name }}"
+                                >
+                                <span>Active</span>
+                            </label>
+                        </div>
+
+                        <div class="defense-status-row">
+                            <span class="defense-status-pill" data-defense-status>{{ defense.status_label }}</span>
+                            <span class="defense-duration-pill" data-defense-remaining>{{ defense.remaining_label }}</span>
+                        </div>
+
+                        <div class="defense-card-bottom">
+                            <label class="search-shell defense-duration-shell">
+                                <span>Duration in minutes</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    class="search-input"
+                                    placeholder="Leave blank for indefinite"
+                                    data-defense-duration
+                                    data-defense-name="{{ defense.name }}"
+                                    {% if defense.locked %}disabled{% endif %}
+                                    value="{{ defense.duration_minutes or '' }}"
+                                >
+                            </label>
+                            {% if defense.rate_label %}
+                            <div class="defense-note">{{ defense.rate_label }}</div>
+                            {% endif %}
+                            {% if defense.locked %}
+                            <div class="dashboard-access-note guardian-premium-note">Locked on Free. Turn Premium on above to unlock live threat watch and Guardian response controls.</div>
+                            <div class="dashboard-access-summary">{{ defense.remaining_premium_label }}</div>
+                            {% endif %}
+                            <div class="defense-actions">
+                                <button type="button" class="primary-button compact-button" data-defense-save data-defense-name="{{ defense.name }}" {% if defense.locked %}disabled{% endif %}>{% if defense.locked %}Locked on Free{% else %}Apply{% endif %}</button>
+                            </div>
+                        </div>
+                    </article>
+                    {% endif %}
+                    {% endfor %}
+
+                    {% for defense in defense_cards %}
+                    {% if defense.name != 'autofilter' and defense.name != 'antiraid' %}
+                    <article
+                        class="defense-card"
+                        data-defense-card
+                        data-defense-name="{{ defense.name }}"
+                        data-enabled="{{ 'true' if defense.enabled else 'false' }}"
+                        data-duration-minutes="{{ defense.duration_minutes or '' }}"
+                        {% if defense.name == 'lockdown' %}
+                        data-lockdown-role-ids="{{ defense.allowed_role_ids|join(',') }}"
+                        {% endif %}
+                    >
+                        <div class="command-flags defense-flags">
+                            <span class="tier tier-free">Defense</span>
+                            <span class="module-chip">{{ defense.tag }}</span>
+                        </div>
+                        <div class="defense-card-head">
+                            <div>
+                                <h4>{{ defense.title }}</h4>
+                                <p>{{ defense.description }}</p>
+                            </div>
+                            <label class="toggle">
+                                <input
+                                    type="checkbox"
+                                    {% if defense.enabled %}checked{% endif %}
+                                    {% if defense.locked %}disabled{% endif %}
+                                    data-defense-toggle
+                                    data-defense-name="{{ defense.name }}"
+                                >
+                                <span>Active</span>
+                            </label>
+                        </div>
+
+                        <div class="defense-status-row">
+                            <span class="defense-status-pill" data-defense-status>{{ defense.status_label }}</span>
+                            <span class="defense-duration-pill" data-defense-remaining>{{ defense.remaining_label }}</span>
+                        </div>
+
+                        <div class="defense-card-bottom">
+                            <label class="search-shell defense-duration-shell">
+                                <span>Duration in minutes</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    class="search-input"
+                                    placeholder="Leave blank for indefinite"
+                                    data-defense-duration
+                                    data-defense-name="{{ defense.name }}"
+                                    {% if defense.locked %}disabled{% endif %}
+                                    value="{{ defense.duration_minutes or '' }}"
+                                >
+                            </label>
+                            {% if defense.rate_label %}
+                            <div class="defense-note">{{ defense.rate_label }}</div>
+                            {% endif %}
+                            {% if defense.locked %}
+                            <div class="dashboard-access-summary">{{ defense.remaining_premium_label }}</div>
+                            {% endif %}
+                            {% if defense.name == 'lockdown' %}
+                            <div class="role-summary" data-lockdown-role-summary>{{ defense.allowed_role_summary }}</div>
+                            {% if can_manage_lockdown_roles %}
+                            <button type="button" class="ghost-button compact-button" data-lockdown-role-editor>Edit talk roles</button>
+                            {% else %}
+                            <span class="dashboard-access-note">Only the owner or members with Manage Server can change these roles.</span>
+                            {% endif %}
+                            {% endif %}
+                            <div class="defense-actions">
+                                {% if defense.name == 'lockdown' %}
+                                <button type="button" class="ghost-button compact-button" data-defense-release data-defense-name="{{ defense.name }}">Unlock now</button>
+                                {% endif %}
+                                <button type="button" class="primary-button compact-button" data-defense-save data-defense-name="{{ defense.name }}" {% if defense.locked %}disabled{% endif %}>{% if defense.locked %}Locked on Free{% else %}Apply{% endif %}</button>
+                            </div>
+                        </div>
+                    </article>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+
+                <section class="surface command-settings-panel defense-settings-panel">
+                    <div>
+                        <div class="eyebrow">AutoFilter</div>
+                        <h3>Blocked words and phrases</h3>
+                        <p>Keep a live list of words or phrases that should never land in chat. Members get three warnings, and after that AutoFilter applies a one-hour timeout automatically.</p>
+                    </div>
+                    <div class="command-settings-actions">
+                        <div class="autofilter-panel-head">
+                            <div class="defense-status-row autofilter-status-row">
+                                <span class="defense-status-pill {% if not autofilter_card.enabled %}is-muted{% endif %}" id="autofilter-status">{{ autofilter_card.status_label }}</span>
+                                <span class="defense-duration-pill" id="autofilter-remaining">{{ autofilter_card.remaining_label }}</span>
+                            </div>
+                            <label class="toggle autofilter-toggle">
+                                <input
+                                    id="autofilter-enabled-toggle"
+                                    type="checkbox"
+                                    {% if autofilter_card.enabled %}checked{% endif %}
+                                >
+                                <span>AutoFilter active</span>
+                            </label>
+                        </div>
+                        <label class="search-shell">
+                            <span>Blocked terms</span>
+                            <textarea id="autofilter-terms-input" class="search-input greeting-textarea" rows="6" placeholder="One word or phrase per line">{{ defense_summary.autofilter_terms|join('\n') }}</textarea>
+                        </label>
+                        <div class="dashboard-access-summary" id="autofilter-summary">AutoFilter is tracking {{ defense_summary.autofilter_terms|length }} blocked term(s). It warns 3 times, then times out for {{ defense_summary.autofilter_timeout_minutes }} minutes.</div>
+                        <button type="button" class="primary-button" id="save-autofilter-terms">Save AutoFilter</button>
                     </div>
                 </section>
 
