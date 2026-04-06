@@ -244,7 +244,7 @@
                             {% if not subscription.is_premium %}
                             <span class="tier tier-premium guardian-preview-chip">Premium</span>
                             <span class="guardian-preview-note">Guardian watches join spikes, spam bursts, and stacked defense pressure so staff can react before a raid spreads.</span>
-                            <span class="guardian-preview-note guardian-upgrade-note">Locked on Free. Turn Premium on above to unlock the live threat meter and Guardian response controls.</span>
+                            <span class="guardian-preview-note guardian-upgrade-note">This feature requires Premium. Turn Premium on above to unlock the live threat meter and Guardian response controls.</span>
                             {% else %}
                             <span class="module-chip guardian-preview-chip">Live</span>
                             {% endif %}
@@ -357,7 +357,7 @@
                             <div class="defense-note">{{ defense.rate_label }}</div>
                             {% endif %}
                             {% if defense.locked %}
-                            <div class="dashboard-access-note guardian-premium-note">Locked on Free. Turn Premium on above to unlock live threat watch and Guardian response controls.</div>
+                            <div class="dashboard-access-note guardian-premium-note">This feature requires Premium. Turn Premium on above to unlock live threat watch and Guardian response controls.</div>
                             <div class="dashboard-access-summary">{{ defense.remaining_premium_label }}</div>
                             {% endif %}
                             <div class="defense-actions">
@@ -491,7 +491,7 @@
                     <article class="command-card case-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
                             <strong>Premium feature</strong>
-                            <span>Locked on Free. Turn Premium on above to unlock this moderation workspace.</span>
+                            <span>This feature requires Premium. Turn Premium on above to unlock this moderation workspace.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Case #{{ case.case_id }}</span>
@@ -528,7 +528,7 @@
                     <article class="command-card case-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
                             <strong>Premium feature</strong>
-                            <span>Locked on Free. Turn Premium on above to unlock this moderation workspace.</span>
+                            <span>This feature requires Premium. Turn Premium on above to unlock this moderation workspace.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Staff Notes</span>
@@ -737,7 +737,7 @@
                     <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
                             <strong>Premium feature</strong>
-                            <span>Locked on Free. Turn Premium on above to unlock this support workflow.</span>
+                            <span>This feature requires Premium. Turn Premium on above to unlock this support workflow.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Support</span>
@@ -869,7 +869,7 @@
                     <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
                             <strong>Premium feature</strong>
-                            <span>Locked on Free. Turn Premium on above to unlock this giveaway workflow.</span>
+                            <span>This feature requires Premium. Turn Premium on above to unlock this giveaway workflow.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Giveaways</span>
@@ -957,7 +957,7 @@
                     <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
                         <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
                             <strong>Premium feature</strong>
-                            <span>Locked on Free. Turn Premium on above to unlock this autofeed workflow.</span>
+                            <span>This feature requires Premium. Turn Premium on above to unlock this autofeed workflow.</span>
                         </div>
                         <div class="command-flags">
                             <span class="tier tier-premium">Autofeed</span>
@@ -1084,7 +1084,7 @@
                                     {% if command.tier|lower == 'premium' and not subscription.is_premium %}
                                     <div class="command-actions">
                                         <span class="dashboard-access-note">
-                                            Locked on Free. Turn Premium on above to unlock it.
+                                            This feature requires Premium. Turn Premium on above to unlock it.
                                         </span>
                                     </div>
                                     {% else %}

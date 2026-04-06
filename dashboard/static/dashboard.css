@@ -3031,27 +3031,24 @@ input[type="checkbox"] {
 .greeting-card.is-locked-card,
 .support-card.is-locked-card,
 .case-card.is-locked-card {
-    position: relative;
     border-color: rgba(172, 235, 152, 0.18);
 }
 
 .premium-card-lock {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
+    position: static;
     display: grid;
-    align-content: center;
-    justify-items: start;
     gap: 8px;
     padding: 14px;
     border-radius: 12px;
     border: 1px solid rgba(164, 194, 168, 0.2);
-    background: rgba(42, 43, 46, 0.68);
-    backdrop-filter: blur(2px);
+    background: rgba(164, 194, 168, 0.08);
+}
+
+.premium-card-lock strong {
+    color: var(--text);
 }
 
 .premium-card-lock span {
-    max-width: 42ch;
     color: var(--muted-strong);
     line-height: 1.5;
 }
@@ -3064,14 +3061,7 @@ input[type="checkbox"] {
 .greeting-card .premium-card-lock,
 .support-card .premium-card-lock,
 .case-card .premium-card-lock {
-    border-radius: inherit;
-}
-
-.command-card.is-locked-card > :not(.premium-card-lock),
-.greeting-card.is-locked-card > :not(.premium-card-lock),
-.support-card.is-locked-card > :not(.premium-card-lock),
-.case-card.is-locked-card > :not(.premium-card-lock) {
-    opacity: 0.76;
+    border-radius: 16px;
 }
 
 .threat-stage {
@@ -4923,7 +4913,6 @@ textarea.search-input {
 }
 
 .premium-card-lock {
-    inset: 12px;
     border-radius: 12px;
 }
 
