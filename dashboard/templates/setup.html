@@ -114,6 +114,10 @@
                                 <strong>Current moderation access</strong>
                                 <span id="setup-moderation-summary">{{ "Open to everyone" if setup_summary.moderation.allow_all else (setup_summary.moderation.role_names|join(", ") if setup_summary.moderation.role_names else "No roles selected") }}</span>
                             </div>
+                            <div class="setup-summary-card">
+                                <strong>Current ServerGuard access</strong>
+                                <span id="setup-serverguard-summary">{{ "Open to everyone" if setup_summary.serverguard.allow_all else (setup_summary.serverguard.role_names|join(", ") if setup_summary.serverguard.role_names else "No roles selected") }}</span>
+                            </div>
                         </div>
 
                         <div class="setup-grid setup-grid-wide">
@@ -132,7 +136,7 @@
                             <div class="setup-role-head">
                                 <div>
                                     <h4>Who can use moderation commands</h4>
-                                    <p>Choose the roles that should be able to warn, timeout, ban, purge, manage roles, and view staff history.</p>
+                                    <p>Choose the roles that should be able to warn, timeout, ban, manage roles, and view staff history.</p>
                                 </div>
                                 <label class="toggle compact-toggle">
                                     <input id="wizard-moderation-allow-all" type="checkbox" {% if setup_summary.moderation.allow_all %}checked{% endif %}>
@@ -224,6 +228,27 @@
                                 {% for role in roles %}
                                 <label class="role-option">
                                     <input type="checkbox" value="{{ role.id }}" data-role-group="welcome" {% if role.id in setup_summary.welcome.role_ids %}checked{% endif %}>
+                                    <span>{{ role.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <section class="setup-role-group">
+                            <div class="setup-role-head">
+                                <div>
+                                    <h4>Who can use ServerGuard commands</h4>
+                                    <p>Choose the roles that should be able to use cleanup, lockdown, Guardian, and the other ServerGuard tools.</p>
+                                </div>
+                                <label class="toggle compact-toggle">
+                                    <input id="wizard-serverguard-allow-all" type="checkbox" {% if setup_summary.serverguard.allow_all %}checked{% endif %}>
+                                    <span>Allow everyone</span>
+                                </label>
+                            </div>
+                            <div class="setup-checklist" id="wizard-serverguard-roles">
+                                {% for role in roles %}
+                                <label class="role-option">
+                                    <input type="checkbox" value="{{ role.id }}" data-role-group="serverguard" {% if role.id in setup_summary.serverguard.role_ids %}checked{% endif %}>
                                     <span>{{ role.name }}</span>
                                 </label>
                                 {% endfor %}
@@ -404,6 +429,7 @@
         const progressTitle = document.getElementById("setup-progress-title");
         const progressLabel = document.getElementById("setup-progress-label");
         const moderationSummary = document.getElementById("setup-moderation-summary");
+        const serverguardSummary = document.getElementById("setup-serverguard-summary");
         const welcomeAccessSummary = document.getElementById("setup-welcome-access-summary");
         const autoroleSummary = document.getElementById("setup-autorole-summary");
         const supportSummary = document.getElementById("setup-support-summary");
@@ -465,6 +491,11 @@
                 moderationSummary.textContent = document.getElementById("wizard-moderation-allow-all")?.checked
                     ? "Open to everyone"
                     : (selectedRoleNames("moderation").join(", ") || "No roles selected");
+            }
+            if (serverguardSummary) {
+                serverguardSummary.textContent = document.getElementById("wizard-serverguard-allow-all")?.checked
+                    ? "Open to everyone"
+                    : (selectedRoleNames("serverguard").join(", ") || "No roles selected");
             }
             if (supportSummary) {
                 supportSummary.textContent = document.getElementById("wizard-support-allow-all")?.checked
@@ -528,6 +559,8 @@
                 default_timeout_minutes: Number(document.getElementById("wizard-timeout-minutes")?.value || "10"),
                 moderation_allow_everyone: Boolean(document.getElementById("wizard-moderation-allow-all")?.checked),
                 moderation_role_ids: checkedRoleIds("moderation", "wizard-moderation-allow-all"),
+                serverguard_allow_everyone: Boolean(document.getElementById("wizard-serverguard-allow-all")?.checked),
+                serverguard_role_ids: checkedRoleIds("serverguard", "wizard-serverguard-allow-all"),
                 welcome_allow_everyone: Boolean(document.getElementById("wizard-welcome-allow-all")?.checked),
                 welcome_role_ids: checkedRoleIds("welcome", "wizard-welcome-allow-all"),
                 support_allow_everyone: Boolean(document.getElementById("wizard-support-allow-all")?.checked),
@@ -645,6 +678,7 @@
         finishButton?.addEventListener("click", finishSetup);
 
         syncAllowAllToggle("wizard-moderation-allow-all", "moderation");
+        syncAllowAllToggle("wizard-serverguard-allow-all", "serverguard");
         syncAllowAllToggle("wizard-welcome-allow-all", "welcome");
         syncAllowAllToggle("wizard-support-allow-all", "support");
         syncAllowAllToggle("wizard-giveaway-allow-all", "giveaway");

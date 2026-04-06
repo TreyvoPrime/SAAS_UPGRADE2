@@ -835,6 +835,8 @@ class DashboardRouteTests(unittest.TestCase):
                 "default_timeout_minutes": 15,
                 "moderation_allow_everyone": False,
                 "moderation_role_ids": [],
+                "serverguard_allow_everyone": False,
+                "serverguard_role_ids": [10],
                 "welcome_allow_everyone": False,
                 "welcome_role_ids": [11],
                 "support_allow_everyone": False,
@@ -861,12 +863,15 @@ class DashboardRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         moderation_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "warn")
+        serverguard_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "purge")
         welcome_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "setwelcome")
         support_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "ticketclaim")
         giveaway_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "giveaway create")
         autofeed_policy = self.bot.command_controls.get_policy(self.bot.guild.id, "autofeed create")
         self.assertTrue(moderation_policy["restrict_to_roles"])
         self.assertEqual(moderation_policy["allowed_role_ids"], [])
+        self.assertTrue(serverguard_policy["restrict_to_roles"])
+        self.assertEqual(serverguard_policy["allowed_role_ids"], [10])
         self.assertTrue(welcome_policy["restrict_to_roles"])
         self.assertEqual(welcome_policy["allowed_role_ids"], [11])
         self.assertTrue(support_policy["restrict_to_roles"])
@@ -889,6 +894,8 @@ class DashboardRouteTests(unittest.TestCase):
                 "default_timeout_minutes": 20,
                 "moderation_allow_everyone": True,
                 "moderation_role_ids": [],
+                "serverguard_allow_everyone": False,
+                "serverguard_role_ids": [10],
                 "welcome_allow_everyone": False,
                 "welcome_role_ids": [11],
                 "support_allow_everyone": False,
@@ -921,11 +928,60 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(setup_page.status_code, 200)
         self.assertIn('id="setup-skip-button">Skip setup</button>', setup_page.text)
         self.assertIn('id="wizard-moderation-allow-all" type="checkbox" checked', setup_page.text)
+        self.assertIn('value="10" data-role-group="serverguard" checked', setup_page.text)
         self.assertIn('value="11" data-role-group="welcome" checked', setup_page.text)
         self.assertIn('value="10" data-role-group="support" checked', setup_page.text)
         self.assertIn('value="10" data-role-group="giveaway" checked', setup_page.text)
         self.assertIn('value="11" data-role-group="autofeed" checked', setup_page.text)
         self.assertIn('value="11" data-role-group="autorole" checked', setup_page.text)
+
+    def test_setup_wizard_roles_appear_in_pillar_access_panels(self) -> None:
+        self._authenticate()
+        response = self.client.post(
+            f"/api/guilds/{self.bot.guild.id}/setup-wizard",
+            json={
+                "moderation_confirmation_enabled": True,
+                "default_timeout_minutes": 15,
+                "moderation_allow_everyone": False,
+                "moderation_role_ids": [11],
+                "serverguard_allow_everyone": False,
+                "serverguard_role_ids": [10],
+                "welcome_allow_everyone": False,
+                "welcome_role_ids": [11],
+                "support_allow_everyone": False,
+                "support_role_ids": [10],
+                "giveaway_allow_everyone": False,
+                "giveaway_role_ids": [10],
+                "autofeed_allow_everyone": False,
+                "autofeed_role_ids": [11],
+                "community_allow_everyone": False,
+                "community_role_ids": [11],
+                "autorole_role_ids": [11],
+                "welcome_channel_id": 3001,
+                "welcome_message": "Welcome {user}",
+                "leave_channel_id": 3002,
+                "leave_message": "Bye {user_name}",
+                "join_dm_enabled": True,
+                "join_dm_message": "Read the rules",
+                "support_issue_types": ["Moderation Help", "Other"],
+                "support_command_channel_id": 3002,
+                "mark_complete": True,
+            },
+            headers={"origin": "http://testserver"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        defense_page = self.client.get(f"/dashboard/{self.bot.guild.id}/defense")
+        greetings_page = self.client.get(f"/dashboard/{self.bot.guild.id}/greetings")
+        support_page = self.client.get(f"/dashboard/{self.bot.guild.id}/support")
+        giveaways_page = self.client.get(f"/dashboard/{self.bot.guild.id}/giveaways")
+        autofeed_page = self.client.get(f"/dashboard/{self.bot.guild.id}/autofeed")
+
+        self.assertIn("Moderators", defense_page.text)
+        self.assertIn("Helpers", greetings_page.text)
+        self.assertIn("Moderators", support_page.text)
+        self.assertIn("Moderators", giveaways_page.text)
+        self.assertIn("Helpers", autofeed_page.text)
 
     def test_logout_clears_dashboard_session(self) -> None:
         self._authenticate()

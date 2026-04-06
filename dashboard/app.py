@@ -119,6 +119,8 @@ class SetupWizardPayload(BaseModel):
     default_timeout_minutes: int = Field(ge=1, le=40320)
     moderation_allow_everyone: bool = False
     moderation_role_ids: list[int] = Field(default_factory=list)
+    serverguard_allow_everyone: bool = False
+    serverguard_role_ids: list[int] = Field(default_factory=list)
     welcome_allow_everyone: bool = False
     welcome_role_ids: list[int] = Field(default_factory=list)
     support_allow_everyone: bool = False
@@ -1309,6 +1311,13 @@ def create_dashboard_app(bot) -> FastAPI:
     def _slugify(value: str) -> str:
         return "".join(character.lower() if character.isalnum() else "-" for character in value).strip("-")
 
+    def module_command_names(module_name: str) -> list[str]:
+        return [
+            command["name"]
+            for command in build_command_catalog(bot)
+            if command["module"] == module_name
+        ]
+
     setup_command_groups = {
         "moderation": [
             "warn",
@@ -1316,7 +1325,6 @@ def create_dashboard_app(bot) -> FastAPI:
             "removetimeout",
             "kick",
             "ban",
-            "purge",
             "role add",
             "role remove",
             "role temp",
@@ -1324,6 +1332,11 @@ def create_dashboard_app(bot) -> FastAPI:
             "staffnotes add",
             "staffnotes view",
                 "staffnotes remove",
+        ],
+        "serverguard": lambda: [
+            command_name
+            for command_name in module_command_names("ServerGuard")
+            if command_name not in set(setup_command_groups["moderation"])
         ],
         "welcome": [
             "setwelcome",
@@ -1368,8 +1381,12 @@ def create_dashboard_app(bot) -> FastAPI:
         ],
     }
 
+    def get_setup_command_group(group_name: str) -> list[str]:
+        group = setup_command_groups[group_name]
+        return list(group()) if callable(group) else list(group)
+
     def setup_role_group_summary(guild_id: int, group_name: str, role_lookup: dict[int, str]) -> dict:
-        command_names = setup_command_groups[group_name]
+        command_names = get_setup_command_group(group_name)
         controls = bot.access_manager.controls
         policies = controls.get_policies(guild_id, command_names)
         group_role_ids: set[int] = set()
@@ -1393,6 +1410,7 @@ def create_dashboard_app(bot) -> FastAPI:
         return {
             "completed": bot.access_manager.controls.is_setup_wizard_completed(guild_id),
             "moderation": setup_role_group_summary(guild_id, "moderation", role_lookup),
+            "serverguard": setup_role_group_summary(guild_id, "serverguard", role_lookup),
             "welcome": setup_role_group_summary(guild_id, "welcome", role_lookup),
             "support": setup_role_group_summary(guild_id, "support", role_lookup),
             "giveaways": setup_role_group_summary(guild_id, "giveaways", role_lookup),
@@ -1509,7 +1527,7 @@ def create_dashboard_app(bot) -> FastAPI:
             "eyebrow": "Welcome/Leave command access",
             "description": "Manage one shared role list for the welcome, leave, and join-DM command group here.",
             "summary_kind": "commands",
-            "command_names": setup_command_groups["welcome"],
+            "command_names": lambda: get_setup_command_group("welcome"),
         },
         "support": {
             "label": "Support",
@@ -1517,7 +1535,7 @@ def create_dashboard_app(bot) -> FastAPI:
             "eyebrow": "Support command access",
             "description": "Manage one shared role list for the support command group here. Saving here applies the same access to ticket issue setup, claims, notes, transcripts, close actions, and support-channel management.",
             "summary_kind": "commands",
-            "command_names": setup_command_groups["support"],
+            "command_names": lambda: get_setup_command_group("support"),
         },
         "autofeed": {
             "label": "Autofeed",
@@ -1525,7 +1543,7 @@ def create_dashboard_app(bot) -> FastAPI:
             "eyebrow": "Autofeed command access",
             "description": "Manage one shared role list for the Autofeed command group here.",
             "summary_kind": "commands",
-            "command_names": setup_command_groups["autofeed"],
+            "command_names": lambda: get_setup_command_group("autofeed"),
         },
         "giveaways": {
             "label": "Giveaways",
@@ -1533,7 +1551,7 @@ def create_dashboard_app(bot) -> FastAPI:
             "eyebrow": "Giveaway command access",
             "description": "Manage one shared role list for the giveaway command group here.",
             "summary_kind": "commands",
-            "command_names": setup_command_groups["giveaways"],
+            "command_names": lambda: get_setup_command_group("giveaways"),
         },
     }
 
@@ -1589,7 +1607,11 @@ def create_dashboard_app(bot) -> FastAPI:
         summary = (
             module_access_summary(guild_id, config["module_name"])
             if config["summary_kind"] == "module"
-            else command_group_access_summary(guild_id, config["label"], config["command_names"])
+            else command_group_access_summary(
+                guild_id,
+                config["label"],
+                config["command_names"]() if callable(config["command_names"]) else config["command_names"],
+            )
         )
         return {**config, **summary}
 
@@ -2165,7 +2187,7 @@ def create_dashboard_app(bot) -> FastAPI:
         else:
             bot.access_manager.controls.set_roles_for_commands(
                 guild_id,
-                list(config["command_names"]),
+                list(config["command_names"]() if callable(config["command_names"]) else config["command_names"]),
                 safe_role_ids,
             )
 
@@ -2577,6 +2599,7 @@ def create_dashboard_app(bot) -> FastAPI:
             return channel_id if channel_id in valid_channel_ids else None
 
         moderation_role_ids = clean_role_ids(payload.moderation_role_ids)
+        serverguard_role_ids = clean_role_ids(payload.serverguard_role_ids)
         welcome_role_ids = clean_role_ids(payload.welcome_role_ids)
         support_role_ids = clean_role_ids(payload.support_role_ids)
         giveaway_role_ids = clean_role_ids(payload.giveaway_role_ids)
@@ -2593,37 +2616,43 @@ def create_dashboard_app(bot) -> FastAPI:
 
         bot.access_manager.controls.set_roles_for_commands(
             guild_id,
-            list(setup_command_groups["moderation"]),
+            get_setup_command_group("moderation"),
             moderation_role_ids,
             restrict_to_roles=not payload.moderation_allow_everyone,
         )
         bot.access_manager.controls.set_roles_for_commands(
             guild_id,
-            list(setup_command_groups["welcome"]),
+            get_setup_command_group("serverguard"),
+            serverguard_role_ids,
+            restrict_to_roles=not payload.serverguard_allow_everyone,
+        )
+        bot.access_manager.controls.set_roles_for_commands(
+            guild_id,
+            get_setup_command_group("welcome"),
             welcome_role_ids,
             restrict_to_roles=not payload.welcome_allow_everyone,
         )
         bot.access_manager.controls.set_roles_for_commands(
             guild_id,
-            list(setup_command_groups["support"]),
+            get_setup_command_group("support"),
             support_role_ids,
             restrict_to_roles=not payload.support_allow_everyone,
         )
         bot.access_manager.controls.set_roles_for_commands(
             guild_id,
-            list(setup_command_groups["giveaways"]),
+            get_setup_command_group("giveaways"),
             giveaway_role_ids,
             restrict_to_roles=not payload.giveaway_allow_everyone,
         )
         bot.access_manager.controls.set_roles_for_commands(
             guild_id,
-            list(setup_command_groups["autofeed"]),
+            get_setup_command_group("autofeed"),
             autofeed_role_ids,
             restrict_to_roles=not payload.autofeed_allow_everyone,
         )
         bot.access_manager.controls.set_roles_for_commands(
             guild_id,
-            list(setup_command_groups["community"]),
+            get_setup_command_group("community"),
             community_role_ids,
             restrict_to_roles=not payload.community_allow_everyone,
         )
@@ -2672,6 +2701,13 @@ def create_dashboard_app(bot) -> FastAPI:
                         "Allow everyone"
                         if payload.moderation_allow_everyone
                         else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in moderation_role_ids) or "No roles selected"),
+                        False,
+                    ),
+                    (
+                        "ServerGuard Access",
+                        "Allow everyone"
+                        if payload.serverguard_allow_everyone
+                        else (", ".join(role_lookup.get(role_id, f"Deleted ({role_id})") for role_id in serverguard_role_ids) or "No roles selected"),
                         False,
                     ),
                     (
