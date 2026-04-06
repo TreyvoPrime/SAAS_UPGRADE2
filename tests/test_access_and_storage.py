@@ -221,7 +221,7 @@ class StorageTests(unittest.TestCase):
         target.parent.mkdir(parents=True, exist_ok=True)
         original_payload = {"guilds": {"1001": {"commands": {"warn": {"enabled": False}}}}}
         target.write_text(json.dumps(original_payload), encoding="utf-8")
-        fake_psycopg, documents, _ = build_fake_psycopg()
+        fake_psycopg, documents, _, _ = build_fake_psycopg()
 
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
             with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
@@ -234,7 +234,7 @@ class StorageTests(unittest.TestCase):
     def test_postgres_backend_writes_and_reads_documents_without_local_file(self) -> None:
         target = self.root / "dashboard_data" / "command_controls.json"
         payload = {"guilds": {"1001": {"commands": {"warn": {"enabled": True, "allowed_role_ids": [10]}}}}}
-        fake_psycopg, documents, _ = build_fake_psycopg()
+        fake_psycopg, documents, _, _ = build_fake_psycopg()
 
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
             with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
@@ -247,7 +247,7 @@ class StorageTests(unittest.TestCase):
         self.assertFalse(target.exists())
 
     def test_postgres_command_logs_are_retained_and_cleaned_up(self) -> None:
-        fake_psycopg, _, command_logs = build_fake_psycopg()
+        fake_psycopg, _, command_logs, _ = build_fake_psycopg()
 
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
             with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
@@ -284,7 +284,7 @@ class StorageTests(unittest.TestCase):
 
     def test_command_controls_reload_from_postgres_across_instances(self) -> None:
         target = self.root / "dashboard_data" / "command_controls.json"
-        fake_psycopg, documents, _ = build_fake_psycopg()
+        fake_psycopg, documents, _, _ = build_fake_psycopg()
 
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
             with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
@@ -303,6 +303,21 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(ban_policy["allowed_role_ids"], [10, 11])
         self.assertEqual(editors, [11])
         self.assertIn(storage._normalize_document_key(target), documents)
+
+    def test_postgres_backend_reuses_connections_across_repeated_reads(self) -> None:
+        target = self.root / "dashboard_data" / "command_controls.json"
+        payload = {"guilds": {"1001": {"commands": {"warn": {"enabled": True}}}}}
+        fake_psycopg, _, _, connect_calls = build_fake_psycopg()
+
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
+            with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
+                storage._reset_storage_backend_cache()
+                write_json(target, payload)
+                self.assertEqual(read_json(target, {}), payload)
+                self.assertEqual(read_json(target, {}), payload)
+
+        self.assertEqual(len(connect_calls), 2)
+        self.assertEqual([bool(call["autocommit"]) for call in connect_calls], [True, False])
 
 
 class CommandControlStoreSettingsTests(unittest.TestCase):
@@ -592,9 +607,12 @@ class FakePsycopgCursor:
 
 
 class FakePsycopgConnection:
-    def __init__(self, documents: dict[str, object], command_logs: list[dict[str, object]]):
+    def __init__(self, documents: dict[str, object], command_logs: list[dict[str, object]], *, autocommit: bool = True):
         self.documents = documents
         self.command_logs = command_logs
+        self.autocommit = autocommit
+        self.closed = False
+        self.broken = False
 
     def __enter__(self):
         return self
@@ -608,17 +626,28 @@ class FakePsycopgConnection:
     def commit(self):
         return None
 
+    def close(self):
+        self.closed = True
+
 
 def build_fake_psycopg():
     documents: dict[str, object] = {}
     command_logs: list[dict[str, object]] = []
+    connect_calls: list[dict[str, object]] = []
 
     class FakePsycopgModule:
         @staticmethod
         def connect(dsn, autocommit=True, connect_timeout=5):
-            return FakePsycopgConnection(documents, command_logs)
+            connect_calls.append(
+                {
+                    "dsn": dsn,
+                    "autocommit": autocommit,
+                    "connect_timeout": connect_timeout,
+                }
+            )
+            return FakePsycopgConnection(documents, command_logs, autocommit=autocommit)
 
-    return FakePsycopgModule(), documents, command_logs
+    return FakePsycopgModule(), documents, command_logs, connect_calls
 
 
 if __name__ == "__main__":

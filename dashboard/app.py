@@ -1371,10 +1371,11 @@ def create_dashboard_app(bot) -> FastAPI:
     def setup_role_group_summary(guild_id: int, group_name: str, role_lookup: dict[int, str]) -> dict:
         command_names = setup_command_groups[group_name]
         controls = bot.access_manager.controls
+        policies = controls.get_policies(guild_id, command_names)
         group_role_ids: set[int] = set()
         allow_all = True
         for command_name in command_names:
-            policy = controls.get_policy(guild_id, command_name)
+            policy = policies.get(command_name, {"allowed_role_ids": [], "restrict_to_roles": False})
             role_ids = set(policy["allowed_role_ids"])
             group_role_ids.update(role_ids)
             if policy.get("restrict_to_roles"):
@@ -1405,9 +1406,11 @@ def create_dashboard_app(bot) -> FastAPI:
         role_names = {role["id"]: role["name"] for role in roles}
         grouped: dict[str, list[dict]] = defaultdict(list)
         rows: list[dict] = []
+        catalog = build_command_catalog(bot)
+        policies = bot.access_manager.controls.get_policies(guild_id, [command["name"] for command in catalog])
 
-        for command in build_command_catalog(bot):
-            policy = bot.access_manager.controls.get_policy(guild_id, command["name"])
+        for command in catalog:
+            policy = policies.get(command["name"], {"enabled": True, "restrict_to_roles": False, "allowed_role_ids": []})
             allowed_role_ids = policy["allowed_role_ids"] or []
             restrict_to_roles = bool(policy.get("restrict_to_roles"))
             row = {
@@ -1452,12 +1455,13 @@ def create_dashboard_app(bot) -> FastAPI:
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
         module_commands = [command for command in build_command_catalog(bot) if command["module"] == module_name]
         command_names = [command["name"] for command in module_commands]
+        policies = controls.get_policies(guild_id, command_names)
         role_sets: list[tuple[int, ...]] = []
         restrict_flags: list[bool] = []
         union_role_ids: set[int] = set()
 
         for command_name in command_names:
-            policy = controls.get_policy(guild_id, command_name)
+            policy = policies.get(command_name, {"allowed_role_ids": [], "restrict_to_roles": False})
             role_ids = tuple(policy["allowed_role_ids"])
             role_sets.append(role_ids)
             restrict_flags.append(bool(policy.get("restrict_to_roles")))
@@ -1536,6 +1540,7 @@ def create_dashboard_app(bot) -> FastAPI:
     def command_group_access_summary(guild_id: int, label: str, command_names: list[str]) -> dict:
         controls = bot.access_manager.controls
         role_lookup = {role["id"]: role["name"] for role in guild_roles(guild_id)}
+        policies = controls.get_policies(guild_id, command_names)
         role_sets: list[tuple[int, ...]] = []
         restrict_flags: list[bool] = []
         union_role_ids: set[int] = set()
@@ -1543,7 +1548,7 @@ def create_dashboard_app(bot) -> FastAPI:
 
         for command_name in command_names:
             filtered_command_names.append(command_name)
-            policy = controls.get_policy(guild_id, command_name)
+            policy = policies.get(command_name, {"allowed_role_ids": [], "restrict_to_roles": False})
             role_ids = tuple(policy["allowed_role_ids"])
             role_sets.append(role_ids)
             restrict_flags.append(bool(policy.get("restrict_to_roles")))

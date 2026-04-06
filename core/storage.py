@@ -78,6 +78,11 @@ class PostgresDocumentBackend:
         self.dsn = dsn
         self._schema_ready = False
         self._schema_lock = threading.Lock()
+        self._thread_local = threading.local()
+        self._cache_lock = threading.Lock()
+        self._document_cache: dict[str, tuple[float, bool, Any]] = {}
+        self._cache_ttl_seconds = max(0.0, float(os.getenv("STORAGE_DOCUMENT_CACHE_TTL_SECONDS", "2.0")))
+        self._slow_operation_threshold_ms = max(100.0, float(os.getenv("STORAGE_SLOW_OPERATION_MS", "350")))
 
     def _connect(self, *, autocommit: bool = True):
         psycopg = _load_psycopg()
@@ -91,10 +96,77 @@ class PostgresDocumentBackend:
             )
             raise
 
+    def _connection_slot_name(self, *, autocommit: bool) -> str:
+        return "autocommit_connection" if autocommit else "transaction_connection"
+
+    @staticmethod
+    def _connection_is_usable(connection: Any) -> bool:
+        if connection is None:
+            return False
+        if bool(getattr(connection, "closed", False)):
+            return False
+        if bool(getattr(connection, "broken", False)):
+            return False
+        return True
+
+    def _get_thread_connection(self, *, autocommit: bool):
+        slot_name = self._connection_slot_name(autocommit=autocommit)
+        connection = getattr(self._thread_local, slot_name, None)
+        if self._connection_is_usable(connection):
+            return connection
+
+        connection = self._connect(autocommit=autocommit)
+        setattr(self._thread_local, slot_name, connection)
+        return connection
+
+    def _drop_thread_connection(self, *, autocommit: bool) -> None:
+        slot_name = self._connection_slot_name(autocommit=autocommit)
+        connection = getattr(self._thread_local, slot_name, None)
+        setattr(self._thread_local, slot_name, None)
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+
+    def _cache_get(self, key: str) -> tuple[bool, bool, Any]:
+        if self._cache_ttl_seconds <= 0:
+            return False, False, None
+        now = datetime.now(UTC).timestamp()
+        with self._cache_lock:
+            cached = self._document_cache.get(key)
+            if cached is None:
+                return False, False, None
+            expires_at, found, payload = cached
+            if expires_at <= now:
+                self._document_cache.pop(key, None)
+                return False, False, None
+            return True, found, copy.deepcopy(payload)
+
+    def _cache_set(self, key: str, found: bool, payload: Any) -> None:
+        if self._cache_ttl_seconds <= 0:
+            return
+        with self._cache_lock:
+            self._document_cache[key] = (
+                datetime.now(UTC).timestamp() + self._cache_ttl_seconds,
+                bool(found),
+                copy.deepcopy(payload),
+            )
+
+    def _log_slow_operation(self, operation: str, started_at: datetime, **fields: Any) -> None:
+        elapsed_ms = (_utcnow() - started_at).total_seconds() * 1000.0
+        if elapsed_ms < self._slow_operation_threshold_ms:
+            return
+        _storage_console_event("slow_operation", operation=operation, elapsed_ms=round(elapsed_ms, 1), **fields)
+
     @contextmanager
     def _connection(self, *, autocommit: bool = True):
-        with self._connect(autocommit=autocommit) as connection:
+        connection = self._get_thread_connection(autocommit=autocommit)
+        try:
             yield connection
+        except Exception:
+            self._drop_thread_connection(autocommit=autocommit)
+            raise
 
     def ensure_ready(self) -> None:
         if self._schema_ready:
@@ -166,6 +238,10 @@ class PostgresDocumentBackend:
 
     def read_document(self, key: str) -> tuple[bool, Any]:
         self.ensure_ready()
+        cached, found, payload = self._cache_get(key)
+        if cached:
+            return found, payload
+        started_at = _utcnow()
         with self._connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -173,9 +249,13 @@ class PostgresDocumentBackend:
                     (key,),
                 )
                 row = cursor.fetchone()
+        self._log_slow_operation("read_document", started_at, document_key=key)
         if row is None:
+            self._cache_set(key, False, None)
             return False, None
-        return True, json.loads(row[0])
+        payload = json.loads(row[0])
+        self._cache_set(key, True, payload)
+        return True, payload
 
     def write_document(self, key: str, payload: Any) -> None:
         self.write_documents({key: payload})
@@ -184,6 +264,7 @@ class PostgresDocumentBackend:
         if not documents:
             return
         self.ensure_ready()
+        started_at = _utcnow()
         with self._connection(autocommit=False) as connection:
             with connection.cursor() as cursor:
                 for key, payload in documents.items():
@@ -200,11 +281,15 @@ class PostgresDocumentBackend:
                         (key, serialized),
                     )
             connection.commit()
+        self._log_slow_operation("write_documents", started_at, document_count=len(documents))
+        for key, payload in documents.items():
+            self._cache_set(key, True, payload)
 
     def append_command_log(self, entry: dict[str, Any]) -> None:
         self.ensure_ready()
         payload = dict(entry)
         timestamp = payload.pop("timestamp", None) or _utcnow().isoformat()
+        started_at = _utcnow()
         with self._connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -232,6 +317,7 @@ class PostgresDocumentBackend:
                         json.dumps({"timestamp": timestamp, **payload}, ensure_ascii=False, sort_keys=True),
                     ),
                 )
+        self._log_slow_operation("append_command_log", started_at, guild_id=int(entry.get("guild_id") or 0))
 
     def list_command_logs(
         self,
@@ -276,15 +362,24 @@ class PostgresDocumentBackend:
         sql.append("ORDER BY timestamp DESC LIMIT %s")
         params.append(max(1, int(limit)))
 
+        started_at = _utcnow()
         with self._connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute("\n".join(sql), tuple(params))
                 rows = cursor.fetchall() or []
+        self._log_slow_operation(
+            "list_command_logs",
+            started_at,
+            guild_id=int(guild_id),
+            limit=max(1, int(limit)),
+            filtered=bool(query or kind or status or category or actor),
+        )
         return [json.loads(row[0]) for row in rows]
 
     def cleanup_command_logs(self, *, retention_days: int = 5) -> int:
         self.ensure_ready()
         cutoff = _utcnow() - timedelta(days=max(1, int(retention_days)))
+        started_at = _utcnow()
         with self._connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -292,6 +387,7 @@ class PostgresDocumentBackend:
                     (cutoff.isoformat(),),
                 )
                 deleted = int(getattr(cursor, "rowcount", 0) or 0)
+        self._log_slow_operation("cleanup_command_logs", started_at, retention_days=retention_days, deleted=deleted)
         return deleted
 
 
