@@ -1414,6 +1414,22 @@ button {
     align-content: start;
 }
 
+.premium-feature-group {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+
+.premium-feature-kicker {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
 .defense-note {
     color: var(--muted);
     font-size: 0.9rem;

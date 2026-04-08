@@ -734,13 +734,9 @@
                         </div>
                     </article>
 
-                    <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
-                        <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
-                            <strong>Premium feature</strong>
-                            <span>This feature requires Premium. Turn Premium on above to unlock this support workflow.</span>
-                        </div>
+                    <article class="greeting-card support-card">
                         <div class="command-flags">
-                            <span class="tier tier-premium">Support</span>
+                            <span class="tier tier-free">Support</span>
                             <span class="module-chip">Staff tools</span>
                         </div>
                         <div class="greeting-card-head">
@@ -751,8 +747,8 @@
                             <span class="defense-status-pill is-muted">In Discord</span>
                         </div>
                         <div class="role-summary">Use `/ticketissue add`, `/ticketissue remove`, and `/ticketissue list` to manage these options from inside the server.</div>
-                        <div class="role-summary">Use `/ticketclaim`, `/ticketpriority`, `/tickettranscript`, and `/closeticket` to manage live tickets without leaving Discord.</div>
-                        <div class="dashboard-access-summary">Open tickets keep the same private channel flow, but staff can now claim them, raise priority, export transcripts, and close with a reason.</div>
+                        <div class="role-summary">Use `/closeticket` to close a ticket and post the reason without leaving Discord.</div>
+                        <div class="dashboard-access-summary">Staff can keep the ticket menu clean and close resolved tickets directly from chat.</div>
                         {% if support_summary.active_tickets %}
                         <div class="support-issue-list">
                             {% for ticket in support_summary.active_tickets %}
@@ -766,6 +762,18 @@
                             {% endfor %}
                         </div>
                         {% endif %}
+                        <div class="premium-feature-group">
+                            <div class="premium-feature-kicker">Premium ticket tools</div>
+                            <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
+                                <strong>Premium feature</strong>
+                                <span>This feature requires Premium. Turn Premium on above to unlock these support tools.</span>
+                            </div>
+                            <div class="role-summary">/ticketclaim - Let one staff member take ownership of a ticket</div>
+                            <div class="role-summary">/ticketpriority - Raise or lower urgency so staff can triage faster</div>
+                            <div class="role-summary">/tickettranscript - Export the full conversation when you need a record</div>
+                            <div class="role-summary">/ticketnote add and /ticketnote view - Keep private staff notes on a ticket</div>
+                            <div class="dashboard-access-summary">Premium support adds ticket claiming, priority, transcripts, and internal staff notes for busier help desks.</div>
+                        </div>
                     </article>
 
                     <article class="greeting-card support-card">
@@ -866,13 +874,9 @@
                         </div>
                     </article>
 
-                    <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
-                        <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
-                            <strong>Premium feature</strong>
-                            <span>This feature requires Premium. Turn Premium on above to unlock this giveaway workflow.</span>
-                        </div>
+                    <article class="greeting-card support-card">
                         <div class="command-flags">
-                            <span class="tier tier-premium">Giveaways</span>
+                            <span class="tier tier-free">Giveaways</span>
                             <span class="module-chip">Staff flow</span>
                         </div>
                         <div class="greeting-card-head">
@@ -886,7 +890,7 @@
                         <div class="role-summary">/giveaway end - End a giveaway whenever you want</div>
                         <div class="role-summary">/giveaway list - View all active and past giveaways</div>
                         <div class="role-summary">/giveaway reroll - Pick a new winner instantly</div>
-                        <div class="dashboard-access-summary">Giveaways can now require a role before entry and award bonus entries to special roles, so promo drops and perk-based events feel much more intentional.</div>
+                        <div class="dashboard-access-summary">Run, end, list, and reroll giveaways directly from Discord without leaving the server.</div>
                         <div class="support-issue-list">
                             {% for giveaway in giveaways_summary.recent %}
                             <div class="support-issue-item giveaway-item">
@@ -903,6 +907,16 @@
                                 <p>Ended giveaways and rerolls will start showing here once your server runs a few rounds.</p>
                             </div>
                             {% endif %}
+                        </div>
+                        <div class="premium-feature-group">
+                            <div class="premium-feature-kicker">Premium giveaway upgrades</div>
+                            <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
+                                <strong>Premium feature</strong>
+                                <span>This feature requires Premium. Turn Premium on above to unlock these giveaway upgrades.</span>
+                            </div>
+                            <div class="role-summary">Role requirements - Require a specific role before members can enter</div>
+                            <div class="role-summary">Bonus entries - Reward select roles with extra entries for special events</div>
+                            <div class="dashboard-access-summary">Premium giveaway controls make promo drops, gated events, and perk-based rewards feel much more intentional.</div>
                         </div>
                     </article>
                 </div>
@@ -954,13 +968,9 @@
                         </div>
                     </article>
 
-                    <article class="greeting-card support-card {% if not subscription.is_premium %}is-locked-card{% endif %}">
-                        <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
-                            <strong>Premium feature</strong>
-                            <span>This feature requires Premium. Turn Premium on above to unlock this autofeed workflow.</span>
-                        </div>
+                    <article class="greeting-card support-card">
                         <div class="command-flags">
-                            <span class="tier tier-premium">Autofeed</span>
+                            <span class="tier tier-free">Autofeed</span>
                             <span class="module-chip">Staff commands</span>
                         </div>
                         <div class="greeting-card-head">
@@ -973,9 +983,18 @@
                         <div class="role-summary">/autofeed create - Choose a channel, write the feed message, and set how often it should repeat</div>
                         <div class="role-summary">/autofeed list - Review every active autofeed in the server</div>
                         <div class="role-summary">/autofeed delete - Stop a feed loop by its autofeed ID</div>
-                        <div class="role-summary">/autofeed edit - Change the channel, copy, or timing later</div>
-                        <div class="role-summary">/autofeed pause - Freeze a loop without deleting it</div>
-                        <div class="role-summary">/autofeed resume - Start a paused loop again</div>
+                        <div class="dashboard-access-summary">Staff can create, review, and delete repeating posts directly in Discord.</div>
+                        <div class="premium-feature-group">
+                            <div class="premium-feature-kicker">Premium autofeed controls</div>
+                            <div class="premium-card-lock{% if subscription.is_premium %} is-hidden{% endif %}">
+                                <strong>Premium feature</strong>
+                                <span>This feature requires Premium. Turn Premium on above to unlock these autofeed controls.</span>
+                            </div>
+                            <div class="role-summary">/autofeed edit - Change the channel, copy, or timing later</div>
+                            <div class="role-summary">/autofeed pause - Freeze a loop without deleting it</div>
+                            <div class="role-summary">/autofeed resume - Start a paused loop again</div>
+                            <div class="dashboard-access-summary">Premium autofeed controls let staff tune or freeze an active loop instead of rebuilding it from scratch.</div>
+                        </div>
                     </article>
                 </div>
             </section>
