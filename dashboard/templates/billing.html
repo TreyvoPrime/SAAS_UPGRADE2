@@ -135,6 +135,30 @@
             </section>
 
             <div class="billing-plan-stack">
+                <article class="surface billing-plan-card billing-redeem-card">
+                    <div class="command-flags">
+                        <span class="tier tier-premium">Redeem</span>
+                    </div>
+                    <h2>Redeem premium key</h2>
+                    <p>Use a reviewer or promo key to unlock Premium for this server without going through checkout.</p>
+                    <label class="search-shell">
+                        <span>Redeem premium key</span>
+                        <input class="search-input" id="billing-redeem-input" type="text" placeholder="Example: SC-REVIEW-AB12CD34" {% if not selected_guild or billing.is_active %}disabled{% endif %}>
+                    </label>
+                    <div class="billing-plan-foot">
+                        {% if selected_guild and not billing.is_active %}
+                        Reviewer keys activate Premium for {{ billing.redeem_days }} days on one server.
+                        {% elif selected_guild %}
+                        Premium is already active for this server.
+                        {% else %}
+                        Select a server first, then redeem the key here.
+                        {% endif %}
+                    </div>
+                    <div class="billing-actions">
+                        <button class="primary-button" type="button" id="billing-redeem-button" {% if not selected_guild or billing.is_active %}disabled{% endif %}>Redeem key</button>
+                    </div>
+                </article>
+
                 <article class="surface billing-plan-card is-free-plan">
                     <div class="command-flags">
                         <span class="tier tier-free">Free</span>
@@ -235,7 +259,7 @@
         </section>
         {% endif %}
     </main>
-    {% if selected_guild and billing.billing_ready %}
+    {% if selected_guild %}
     <script>
         const billingGuildId = document.body.dataset.billingGuildId;
         const billingReady = document.body.dataset.billingReady === "true";
@@ -252,7 +276,10 @@
         const billingInlineNote = document.getElementById("billing-inline-note");
         const billingSyncChip = document.getElementById("billing-sync-chip");
         const billingFlowNote = document.getElementById("billing-flow-note");
+        const billingRedeemInput = document.getElementById("billing-redeem-input");
+        const billingRedeemButton = document.getElementById("billing-redeem-button");
         let billingRefreshInFlight = false;
+        let billingRedeemInFlight = false;
 
         function formatBillingStamp(date = new Date()) {
             return `Checked ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
@@ -269,6 +296,19 @@
             if (billingSyncChip && isBusy) {
                 billingSyncChip.textContent = "Checking Discord";
             }
+        }
+
+        function setBillingRedeemBusy(isBusy) {
+            if (!billingRedeemButton) return;
+            if (!billingRedeemButton.dataset.defaultText) {
+                billingRedeemButton.dataset.defaultText = billingRedeemButton.textContent.trim();
+            }
+            billingRedeemInFlight = isBusy;
+            billingRedeemButton.disabled = isBusy || billingActive;
+            if (billingRedeemInput) {
+                billingRedeemInput.disabled = isBusy || billingActive;
+            }
+            billingRedeemButton.textContent = isBusy ? "Redeeming..." : billingRedeemButton.dataset.defaultText;
         }
 
         if (billingSyncChip && !billingActive && billingGuildId) {
@@ -361,6 +401,37 @@
 
         billingRefreshStatus?.addEventListener("click", () => {
             refreshBillingStatus().catch(() => {});
+        });
+
+        billingRedeemButton?.addEventListener("click", async () => {
+            if (billingRedeemInFlight || billingActive || !billingGuildId) {
+                return;
+            }
+            const key = billingRedeemInput?.value.trim() || "";
+            if (!key) {
+                revealBillingBanner("Enter a premium key before redeeming.", "warning");
+                billingRedeemInput?.focus();
+                return;
+            }
+            setBillingRedeemBusy(true);
+            try {
+                const response = await fetch(`/api/guilds/${billingGuildId}/billing/redeem-key`, {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ key }),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(payload.detail || "The premium key could not be redeemed.");
+                }
+                revealBillingBanner("Premium unlocked with a redeem key. Reloading this page now.", "success");
+                window.setTimeout(() => window.location.reload(), 500);
+            } catch (error) {
+                revealBillingBanner(error.message || "The premium key could not be redeemed.", "warning");
+            } finally {
+                setBillingRedeemBusy(false);
+            }
         });
 
         document.addEventListener("visibilitychange", () => {

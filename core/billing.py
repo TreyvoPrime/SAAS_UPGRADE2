@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import UTC, datetime
+from datetime import timedelta
 from pathlib import Path
 import threading
 from typing import Any
@@ -88,18 +90,62 @@ class BillingStore:
         self.path = Path(path)
         self._default = {
             "guilds": {},
+            "redeem_keys": {},
         }
         self._lock = threading.RLock()
         self.data = read_json(
             self.path,
             self._default,
         )
+        with self._lock:
+            self._ensure_seeded_redeem_keys_locked()
 
     def save(self) -> None:
         write_json(self.path, self.data)
 
     def _refresh(self) -> None:
         self.data = read_json(self.path, self._default)
+        self._ensure_seeded_redeem_keys_locked()
+
+    def reviewer_redeem_days(self) -> int:
+        raw_value = str(os.getenv("SERVERCORE_PREMIUM_REDEEM_KEY_DAYS") or "30").strip()
+        try:
+            parsed = int(raw_value)
+        except (TypeError, ValueError):
+            parsed = 30
+        return max(1, parsed)
+
+    @staticmethod
+    def normalize_redeem_code(code: str | None) -> str:
+        cleaned = str(code or "").strip().upper()
+        return re.sub(r"[^A-Z0-9-]", "", cleaned)
+
+    def _redeem_key_bucket(self) -> dict[str, Any]:
+        return self.data.setdefault("redeem_keys", {})
+
+    def _ensure_seeded_redeem_keys_locked(self) -> None:
+        raw_value = str(os.getenv("SERVERCORE_PREMIUM_REDEEM_KEYS") or "").strip()
+        if not raw_value:
+            return
+        bucket = self._redeem_key_bucket()
+        changed = False
+        duration_days = self.reviewer_redeem_days()
+        for chunk in re.split(r"[\s,]+", raw_value):
+            normalized = self.normalize_redeem_code(chunk)
+            if not normalized or normalized in bucket:
+                continue
+            bucket[normalized] = {
+                "created_at": _to_iso(_utcnow()),
+                "duration_days": duration_days,
+                "max_uses": 1,
+                "redeemed_count": 0,
+                "redeemed_guild_id": None,
+                "redeemed_by_user_id": None,
+                "redeemed_at": None,
+            }
+            changed = True
+        if changed:
+            self.save()
 
     def application_id(self) -> int | None:
         return _clean_snowflake(os.getenv("DISCORD_APP_ID") or os.getenv("DISCORD_CLIENT_ID"))
@@ -131,6 +177,8 @@ class BillingStore:
                 "starts_at": None,
                 "ends_at": None,
                 "deleted": False,
+                "activation_source": None,
+                "redeem_key_code": None,
                 "updated_at": None,
             },
         )
@@ -169,7 +217,53 @@ class BillingStore:
                 bucket["ends_at"] = _to_iso(_parse_datetime(ends_at))
             if deleted is not None:
                 bucket["deleted"] = bool(deleted)
+            if bucket.get("entitlement_id"):
+                bucket["activation_source"] = "discord"
+                bucket["redeem_key_code"] = None
             bucket["updated_at"] = _to_iso(_utcnow())
+            self.save()
+        return self.get_guild_assignment(normalized_guild_id)
+
+    def redeem_key_for_guild(
+        self,
+        code: str,
+        *,
+        guild_id: int | str,
+        premium_user_id: int | str | None = None,
+    ) -> dict[str, Any]:
+        normalized_guild_id = _clean_snowflake(guild_id)
+        if normalized_guild_id is None:
+            raise ValueError("A valid guild ID is required.")
+        normalized_code = self.normalize_redeem_code(code)
+        if not normalized_code:
+            raise ValueError("Enter a valid premium key.")
+
+        with self._lock:
+            self._refresh()
+            key_bucket = self._redeem_key_bucket().get(normalized_code)
+            if key_bucket is None:
+                raise ValueError("That premium key was not recognized.")
+            max_uses = max(1, int(key_bucket.get("max_uses", 1) or 1))
+            redeemed_count = max(0, int(key_bucket.get("redeemed_count", 0) or 0))
+            if redeemed_count >= max_uses:
+                raise ValueError("That premium key has already been redeemed.")
+
+            duration_days = max(1, int(key_bucket.get("duration_days", self.reviewer_redeem_days()) or self.reviewer_redeem_days()))
+            now = _utcnow()
+            bucket = self._guild_bucket(normalized_guild_id)
+            bucket["entitlement_id"] = f"redeem:{normalized_code}"
+            bucket["premium_user_id"] = _clean_snowflake(premium_user_id)
+            bucket["sku_id"] = self.premium_sku_id()
+            bucket["starts_at"] = _to_iso(now)
+            bucket["ends_at"] = _to_iso(now + timedelta(days=duration_days))
+            bucket["deleted"] = False
+            bucket["activation_source"] = "redeem_key"
+            bucket["redeem_key_code"] = normalized_code
+            bucket["updated_at"] = _to_iso(now)
+            key_bucket["redeemed_count"] = redeemed_count + 1
+            key_bucket["redeemed_guild_id"] = normalized_guild_id
+            key_bucket["redeemed_by_user_id"] = _clean_snowflake(premium_user_id)
+            key_bucket["redeemed_at"] = _to_iso(now)
             self.save()
         return self.get_guild_assignment(normalized_guild_id)
 
@@ -242,6 +336,8 @@ class BillingStore:
             bucket["starts_at"] = None
             bucket["ends_at"] = None
             bucket["deleted"] = False
+            bucket["activation_source"] = None
+            bucket["redeem_key_code"] = None
             bucket["updated_at"] = _to_iso(_utcnow())
             self.save()
         return self.get_guild_assignment(normalized_guild_id)
@@ -267,6 +363,7 @@ class BillingStore:
             starts_at = _from_iso(bucket.get("starts_at"))
             assigned_at = _from_iso(bucket.get("updated_at"))
             deleted = bool(bucket.get("deleted", False))
+            activation_source = str(bucket.get("activation_source") or "").strip() or None
             is_active = bool(bucket.get("entitlement_id")) and not deleted
             if is_active and ends_at is not None and _utcnow() >= ends_at:
                 is_active = False
@@ -279,6 +376,8 @@ class BillingStore:
                 "starts_at": _to_iso(starts_at),
                 "ends_at": _to_iso(ends_at),
                 "assigned_at": _to_iso(assigned_at),
+                "activation_source": activation_source,
+                "redeem_key_code": str(bucket.get("redeem_key_code") or "").strip() or None,
                 "is_active": is_active,
             }
 

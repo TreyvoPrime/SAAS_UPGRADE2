@@ -106,6 +106,10 @@ class SubscriptionTierPayload(BaseModel):
     tier: str = Field(min_length=1)
 
 
+class RedeemPremiumKeyPayload(BaseModel):
+    key: str = Field(min_length=1, max_length=120)
+
+
 class ConfigTemplatePayload(BaseModel):
     name: str = Field(min_length=1, max_length=60)
 
@@ -296,6 +300,7 @@ def create_dashboard_app(bot) -> FastAPI:
     discord_client_secret = os.getenv("DISCORD_CLIENT_SECRET")
     redirect_uri = os.getenv("DISCORD_REDIRECT_URI") or f"{dashboard_base_url}/auth/callback"
     install_permissions = os.getenv("DISCORD_INSTALL_PERMISSIONS", "8")
+    install_integration_type = os.getenv("DISCORD_INSTALL_INTEGRATION_TYPE")
     session_store: DashboardSessionStore = app.state.dashboard_sessions
     billing_store: BillingStore = getattr(bot, "billing_store", None) or BillingStore()
     setattr(bot, "billing_store", billing_store)
@@ -340,6 +345,7 @@ def create_dashboard_app(bot) -> FastAPI:
         assignment = billing_store.get_guild_assignment(guild_id)
         period_end = assignment.get("ends_at")
         is_active = bool(assignment.get("is_active"))
+        activation_source = str(assignment.get("activation_source") or "").strip()
         return {
             **assignment,
             "billing_ready": billing_store.billing_ready(),
@@ -349,7 +355,9 @@ def create_dashboard_app(bot) -> FastAPI:
             "active_guild_count": 1 if is_active else 0,
             "status_label": "Premium" if is_active else ("Select a server" if guild_id is None else "Free"),
             "is_active": is_active,
-            "source_label": "Discord",
+            "source_label": "Redeem key" if activation_source == "redeem_key" and is_active else "Discord",
+            "activation_source": activation_source,
+            "redeem_days": billing_store.reviewer_redeem_days(),
         }
 
     def _guild_icon_url(raw_guild: dict, live_guild) -> str:
@@ -366,16 +374,18 @@ def create_dashboard_app(bot) -> FastAPI:
     def build_install_url(guild_id: int) -> str:
         if not discord_client_id:
             return "/"
-        params = urlencode(
-            {
-                "client_id": discord_client_id,
-                "permissions": install_permissions,
-                "guild_id": guild_id,
-                "disable_guild_select": "true",
-                "integration_type": "0",
-                "scope": "bot applications.commands",
-            }
-        )
+        query_params = {
+            "client_id": discord_client_id,
+            "permissions": install_permissions,
+            "guild_id": guild_id,
+            "disable_guild_select": "true",
+            "scope": "bot applications.commands",
+        }
+        # Let Discord use its default install context unless an explicit integration
+        # type is configured. Forcing this value can break some install flows.
+        if install_integration_type:
+            query_params["integration_type"] = install_integration_type
+        params = urlencode(query_params)
         return f"https://discord.com/oauth2/authorize?{params}"
 
     async def fetch_discord_token(code: str) -> dict:
@@ -1864,6 +1874,7 @@ def create_dashboard_app(bot) -> FastAPI:
                 "selected_guild": selected_guild,
                 "notice": None,
                 "notice_tone": "info",
+                "redeem_enabled": True,
             },
         )
 
@@ -2377,6 +2388,47 @@ def create_dashboard_app(bot) -> FastAPI:
         )
         session_store.clear_cached_guilds(session_id(request))
         return JSONResponse(subscription_summary(guild_id, viewer_user_id))
+
+    @app.post("/api/guilds/{guild_id}/billing/redeem-key")
+    async def redeem_premium_key(request: Request, guild_id: int, payload: RedeemPremiumKeyPayload):
+        await require_same_origin(request)
+        await require_guild_access(request, guild_id, require_bot_installed=False)
+        viewer_user_id = session_user_id(request)
+        if viewer_user_id is None:
+            raise HTTPException(status_code=401, detail="Sign in again to redeem a premium key.")
+        if billing_store.guild_has_active_premium(guild_id):
+            return JSONResponse(
+                status_code=409,
+                content={"detail": "Premium is already active for this server."},
+            )
+        try:
+            assignment = billing_store.redeem_key_for_guild(
+                payload.key,
+                guild_id=guild_id,
+                premium_user_id=viewer_user_id,
+            )
+        except ValueError as error:
+            return JSONResponse(status_code=400, content={"detail": str(error)})
+
+        bot.access_manager.controls.set_subscription_tier(guild_id, TIER_PREMIUM)
+        await log_dashboard_event(
+            request,
+            guild_id,
+            title="Premium Redeem Key Applied",
+            description="Redeemed a premium reviewer key for this server.",
+            fields=[
+                ("Source", "Redeem key", True),
+                ("Ends", (assignment.get("ends_at") or "")[:10] or "Unknown", True),
+            ],
+        )
+        session_store.clear_cached_guilds(session_id(request))
+        return JSONResponse(
+            {
+                "ok": True,
+                "billing": billing_summary(guild_id),
+                "subscription": subscription_summary(guild_id, viewer_user_id),
+            }
+        )
 
     @app.post("/api/guilds/{guild_id}/dashboard-access")
     async def update_dashboard_access(request: Request, guild_id: int, payload: DashboardAccessPayload):

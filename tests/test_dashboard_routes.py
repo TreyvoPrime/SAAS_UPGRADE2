@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 import re
+import html
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -400,6 +401,53 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(dashboard.headers["location"], f"/dashboard/{self.bot.guild.id}/setup")
         self.assertEqual(setup.status_code, 200)
 
+    def test_servers_page_install_link_uses_default_discord_install_flow(self) -> None:
+        async def mock_post(_client, url, data=None, headers=None, **kwargs):
+            return MockHTTPResponse({"access_token": "discord-oauth-token"})
+
+        async def mock_get(_client, url, headers=None, **kwargs):
+            if url.endswith("/users/@me"):
+                return MockHTTPResponse(
+                    {
+                        "id": "5001",
+                        "username": "OwnerUser",
+                        "global_name": "Owner User",
+                        "avatar": None,
+                    }
+                )
+            if url.endswith("/users/@me/guilds"):
+                return MockHTTPResponse(
+                    [
+                        {
+                            "id": "9876543210",
+                            "name": "Install Target",
+                            "permissions": str(0x20),
+                            "owner": True,
+                            "icon": None,
+                        }
+                    ]
+                )
+            return MockHTTPResponse({}, status_code=404)
+
+        with mock.patch.object(httpx.AsyncClient, "post", new=mock_post), mock.patch.object(httpx.AsyncClient, "get", new=mock_get):
+            response = self.client.get("/login", follow_redirects=False)
+            self.assertEqual(response.status_code, 302)
+            state = parse_qs(urlparse(response.headers["location"]).query)["state"][0]
+            callback = self.client.get(f"/auth/callback?code=test-code&state={state}", follow_redirects=False)
+            self.assertEqual(callback.status_code, 302)
+            response = self.client.get("/servers")
+
+        self.assertEqual(response.status_code, 200)
+        match = re.search(r'href="(https://discord\.com/oauth2/authorize\?[^\"]+)"', response.text)
+        self.assertIsNotNone(match)
+        install_url = html.unescape(match.group(1))
+        query = parse_qs(urlparse(install_url).query)
+        self.assertEqual(query["client_id"], ["1487599032170975292"])
+        self.assertEqual(query["guild_id"], ["9876543210"])
+        self.assertEqual(query["disable_guild_select"], ["true"])
+        self.assertEqual(query["scope"], ["bot applications.commands"])
+        self.assertNotIn("integration_type", query)
+
     def test_logs_route_requires_authentication_and_then_returns_entries(self) -> None:
         unauthenticated = self.client.get(f"/api/guilds/{self.bot.guild.id}/logs")
         self.assertEqual(unauthenticated.status_code, 401)
@@ -562,6 +610,75 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertIn("Discord billing not ready", response.text)
         self.assertIn("$2.99", response.text)
         self.assertIn("/month", response.text)
+        self.assertIn("Redeem premium key", response.text)
+
+    def test_redeem_key_route_enables_premium_for_selected_server(self) -> None:
+        self._authenticate()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SERVERCORE_PREMIUM_REDEEM_KEYS": "SC-REVIEW-ALPHA1234",
+                "SERVERCORE_PREMIUM_REDEEM_KEY_DAYS": "30",
+            },
+            clear=False,
+        ):
+            response = self.client.post(
+                f"/api/guilds/{self.bot.guild.id}/billing/redeem-key",
+                json={"key": "SC-REVIEW-ALPHA1234"},
+                headers={"origin": "http://testserver"},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(self.bot.command_controls.is_premium_enabled(self.bot.guild.id))
+            assignment = self.bot.billing_store.get_guild_assignment(self.bot.guild.id)
+            self.assertTrue(assignment["is_active"])
+            self.assertEqual(assignment["activation_source"], "redeem_key")
+            self.assertEqual(assignment["redeem_key_code"], "SC-REVIEW-ALPHA1234")
+
+            post_patch, get_patch = self._http_patches()
+            with post_patch, get_patch:
+                billing_page = self.client.get(f"/billing?guild_id={self.bot.guild.id}")
+            self.assertEqual(billing_page.status_code, 200)
+            self.assertIn("Redeem key", billing_page.text)
+            self.assertIn("Premium is active for this server", billing_page.text)
+
+    def test_redeem_key_route_rejects_unknown_or_used_keys(self) -> None:
+        self._authenticate()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SERVERCORE_PREMIUM_REDEEM_KEYS": "SC-REVIEW-BETA5678",
+            },
+            clear=False,
+        ):
+            missing = self.client.post(
+                f"/api/guilds/{self.bot.guild.id}/billing/redeem-key",
+                json={"key": "SC-REVIEW-NOTREAL"},
+                headers={"origin": "http://testserver"},
+            )
+            self.assertEqual(missing.status_code, 400)
+
+            first = self.client.post(
+                f"/api/guilds/{self.bot.guild.id}/billing/redeem-key",
+                json={"key": "SC-REVIEW-BETA5678"},
+                headers={"origin": "http://testserver"},
+            )
+            self.assertEqual(first.status_code, 200)
+
+            self.bot.billing_store.clear_guild_entitlement(self.bot.guild.id)
+            self.bot.command_controls.set_subscription_tier(self.bot.guild.id, "free")
+
+            post_patch, get_patch = self._http_patches()
+            with post_patch, get_patch:
+                second = self.client.post(
+                    f"/api/guilds/{self.bot.guild.id}/billing/redeem-key",
+                    json={"key": "SC-REVIEW-BETA5678"},
+                    headers={"origin": "http://testserver"},
+                )
+            self.assertEqual(second.status_code, 400)
+            self.assertIn("already been redeemed", second.json()["detail"])
 
     def test_dashboard_renders_subscription_workspace_copy(self) -> None:
         self._authenticate()
