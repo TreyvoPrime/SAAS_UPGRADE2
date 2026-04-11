@@ -5536,6 +5536,34 @@ textarea.search-input {
     margin-top: 16px;
 }
 
+.billing-redeem-shell {
+    display: grid;
+    gap: 12px;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+}
+
+.billing-redeem-shell.is-hidden {
+    display: none;
+}
+
+.billing-redeem-copy p {
+    margin: 6px 0 0;
+    color: var(--muted);
+}
+
+.billing-redeem-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.billing-redeem-actions .billing-inline-note {
+    margin: 0;
+}
+
 .billing-status-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.8fr) minmax(220px, 0.8fr);

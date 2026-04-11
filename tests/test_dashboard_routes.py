@@ -680,6 +680,35 @@ class DashboardRouteTests(unittest.TestCase):
             self.assertEqual(second.status_code, 400)
             self.assertIn("already been redeemed", second.json()["detail"])
 
+    def test_billing_page_hides_buy_button_after_redeem_key_activation(self) -> None:
+        self._authenticate()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "DISCORD_APP_ID": "1487599032170975292",
+                "DISCORD_PREMIUM_SKU_ID": "1488888888888888888",
+                "SERVERCORE_PREMIUM_REDEEM_KEYS": "SC-REVIEW-GAMMA9999",
+            },
+            clear=False,
+        ):
+            redeemed = self.client.post(
+                f"/api/guilds/{self.bot.guild.id}/billing/redeem-key",
+                json={"key": "SC-REVIEW-GAMMA9999"},
+                headers={"origin": "http://testserver"},
+            )
+            self.assertEqual(redeemed.status_code, 200)
+
+            post_patch, get_patch = self._http_patches()
+            with post_patch, get_patch:
+                response = self.client.get(f"/billing?guild_id={self.bot.guild.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Redeem key", response.text)
+        self.assertNotIn('id="billing-jump-button"', response.text)
+        self.assertIn("Open billing in Discord", response.text)
+        self.assertIn("Premium is active for this server", response.text)
+
     def test_dashboard_renders_subscription_workspace_copy(self) -> None:
         self._authenticate()
         self.bot.command_controls.set_setup_wizard_completed(self.bot.guild.id, True)

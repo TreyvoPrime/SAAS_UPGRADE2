@@ -53,12 +53,12 @@
                         <span class="billing-metric-price-unit">/month</span>
                     </strong>
                     {% if selected_guild and not billing.is_active %}
-                    <a class="primary-button compact-button billing-jump-button" href="#premium-plan-card">Buy Premium</a>
+                    <a class="primary-button compact-button billing-jump-button" href="#premium-plan-card" id="billing-jump-button">Buy Premium</a>
                     {% endif %}
                 </article>
                 <article class="metric-card">
                     <span>Source</span>
-                    <strong>{{ billing.source_label }}</strong>
+                    <strong id="billing-source-status">{{ billing.source_label }}</strong>
                 </article>
             </div>
         </section>
@@ -135,30 +135,6 @@
             </section>
 
             <div class="billing-plan-stack">
-                <article class="surface billing-plan-card billing-redeem-card">
-                    <div class="command-flags">
-                        <span class="tier tier-premium">Redeem</span>
-                    </div>
-                    <h2>Redeem premium key</h2>
-                    <p>Use a reviewer or promo key to unlock Premium for this server without going through checkout.</p>
-                    <label class="search-shell">
-                        <span>Redeem premium key</span>
-                        <input class="search-input" id="billing-redeem-input" type="text" placeholder="Example: SC-REVIEW-AB12CD34" {% if not selected_guild or billing.is_active %}disabled{% endif %}>
-                    </label>
-                    <div class="billing-plan-foot">
-                        {% if selected_guild and not billing.is_active %}
-                        Reviewer keys activate Premium for {{ billing.redeem_days }} days on one server.
-                        {% elif selected_guild %}
-                        Premium is already active for this server.
-                        {% else %}
-                        Select a server first, then redeem the key here.
-                        {% endif %}
-                    </div>
-                    <div class="billing-actions">
-                        <button class="primary-button" type="button" id="billing-redeem-button" {% if not selected_guild or billing.is_active %}disabled{% endif %}>Redeem key</button>
-                    </div>
-                </article>
-
                 <article class="surface billing-plan-card is-free-plan">
                     <div class="command-flags">
                         <span class="tier tier-free">Free</span>
@@ -191,7 +167,7 @@
                         <li>Unlimited custom commands, autoresponders, and reaction role panels</li>
                         <li>Advanced autofeed, reminders, giveaways, and moderation history</li>
                     </ul>
-                    <div class="billing-plan-foot">One subscription for this server.</div>
+                    <div class="billing-plan-foot" id="billing-plan-foot">{% if billing.is_active %}Premium is active for this server.{% else %}One subscription for this server.{% endif %}</div>
                     <div class="billing-actions">
                         {% if selected_guild and billing.billing_ready %}
                         <a class="primary-button" href="{{ billing.store_url }}" target="_blank" rel="noopener" id="billing-primary-action">
@@ -206,6 +182,28 @@
                         <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
                         {% endif %}
                         {% endif %}
+                    </div>
+                    <div class="billing-redeem-shell{% if billing.is_active %} is-hidden{% endif %}" id="billing-redeem-shell">
+                        <div class="billing-redeem-copy">
+                            <div class="eyebrow">Redeem premium key</div>
+                            <p>Use a reviewer or promo key to unlock Premium for this server without going through checkout.</p>
+                        </div>
+                        <label class="search-shell">
+                            <span>Redeem premium key</span>
+                            <input class="search-input" id="billing-redeem-input" type="text" placeholder="Example: SC-REVIEW-AB12CD34" {% if not selected_guild or billing.is_active %}disabled{% endif %}>
+                        </label>
+                        <div class="billing-redeem-actions">
+                            <button class="primary-button" type="button" id="billing-redeem-button" {% if not selected_guild or billing.is_active %}disabled{% endif %}>Redeem key</button>
+                            <p class="billing-inline-note" id="billing-redeem-note">
+                                {% if selected_guild and not billing.is_active %}
+                                Reviewer keys activate Premium for {{ billing.redeem_days }} days on one server.
+                                {% elif selected_guild %}
+                                Premium is already active for this server.
+                                {% else %}
+                                Select a server first, then redeem the key here.
+                                {% endif %}
+                            </p>
+                        </div>
                     </div>
                 </article>
             </div>
@@ -276,6 +274,11 @@
         const billingInlineNote = document.getElementById("billing-inline-note");
         const billingSyncChip = document.getElementById("billing-sync-chip");
         const billingFlowNote = document.getElementById("billing-flow-note");
+        const billingJumpButton = document.getElementById("billing-jump-button");
+        const billingSourceStatus = document.getElementById("billing-source-status");
+        const billingPlanFoot = document.getElementById("billing-plan-foot");
+        const billingRedeemShell = document.getElementById("billing-redeem-shell");
+        const billingRedeemNote = document.getElementById("billing-redeem-note");
         const billingRedeemInput = document.getElementById("billing-redeem-input");
         const billingRedeemButton = document.getElementById("billing-redeem-button");
         let billingRefreshInFlight = false;
@@ -326,14 +329,18 @@
             activationCopy.textContent = message;
         }
 
-        function syncBillingUi(subscription) {
+        function syncBillingUi(subscription, billingInfo = null) {
             if (!subscription) return;
             const premiumOn = Boolean(subscription.is_premium);
             const guildName = subscription.guild_name || "This server";
             const stamp = formatBillingStamp();
+            const sourceLabel = billingInfo?.source_label || (subscription.activation_source === "redeem_key" ? "Redeem key" : "Discord");
 
             if (billingPlanStatus) {
                 billingPlanStatus.textContent = premiumOn ? "Premium" : (subscription.label || "Free");
+            }
+            if (billingSourceStatus) {
+                billingSourceStatus.textContent = premiumOn ? sourceLabel : "Discord";
             }
             if (billingStatusLabel) {
                 billingStatusLabel.textContent = premiumOn ? "Premium is active" : "Free is active";
@@ -354,6 +361,9 @@
                     ? `Premium is active for ${guildName}. Changes should now appear on the dashboard and premium commands should work right away.`
                     : `After checkout finishes in Discord, this page will update automatically for ${guildName}.`;
             }
+            if (billingPlanFoot) {
+                billingPlanFoot.textContent = premiumOn ? "Premium is active for this server." : "One subscription for this server.";
+            }
             if (billingSyncChip) {
                 billingSyncChip.textContent = premiumOn ? "Premium Active" : stamp;
                 billingSyncChip.classList.toggle("is-premium", premiumOn);
@@ -363,12 +373,27 @@
                     ? `Premium is active for ${guildName} right now.`
                     : `Come back here after checkout and this page will confirm when Discord applies the entitlement to ${guildName}.`;
             }
+            if (billingJumpButton) {
+                billingJumpButton.hidden = premiumOn;
+            }
+            if (billingRedeemShell) {
+                billingRedeemShell.classList.toggle("is-hidden", premiumOn);
+            }
+            if (billingRedeemNote) {
+                billingRedeemNote.textContent = premiumOn
+                    ? `Premium is already active for ${guildName}.`
+                    : `Reviewer keys activate Premium for ${billingInfo?.redeem_days || 30} days on one server.`;
+            }
+            if (billingRedeemInput) {
+                billingRedeemInput.value = premiumOn ? "" : billingRedeemInput.value;
+            }
             if (premiumOn && !billingActive) {
                 revealBillingBanner(`Premium is active for ${guildName}. Guardian and premium commands are now unlocked on this server.`, "success");
             }
             billingActive = premiumOn;
             document.body.dataset.billingActive = premiumOn ? "true" : "false";
             setBillingRefreshBusy(false);
+            setBillingRedeemBusy(false);
         }
 
         async function refreshBillingStatus({ silent = false } = {}) {
@@ -425,8 +450,8 @@
                 if (!response.ok) {
                     throw new Error(payload.detail || "The premium key could not be redeemed.");
                 }
-                revealBillingBanner("Premium unlocked with a redeem key. Reloading this page now.", "success");
-                window.setTimeout(() => window.location.reload(), 500);
+                syncBillingUi(payload.subscription, payload.billing);
+                revealBillingBanner("Premium unlocked with a redeem key. This server now has Premium active.", "success");
             } catch (error) {
                 revealBillingBanner(error.message || "The premium key could not be redeemed.", "warning");
             } finally {

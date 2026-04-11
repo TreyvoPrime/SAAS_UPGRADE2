@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -248,6 +249,8 @@ class StorageTests(unittest.TestCase):
 
     def test_postgres_command_logs_are_retained_and_cleaned_up(self) -> None:
         fake_psycopg, _, command_logs, _ = build_fake_psycopg()
+        recent_timestamp = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+        expired_timestamp = (datetime.now(UTC) - timedelta(days=20)).isoformat()
 
         with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://servercore:test@db/servercore"}, clear=False):
             with mock.patch("core.storage._load_psycopg", return_value=fake_psycopg):
@@ -259,7 +262,7 @@ class StorageTests(unittest.TestCase):
                         "guild_name": "Audit Guild",
                         "command": "warn",
                         "status": "success",
-                        "timestamp": "2026-04-03T12:00:00+00:00",
+                        "timestamp": recent_timestamp,
                     }
                 )
                 logs.append(
@@ -268,7 +271,7 @@ class StorageTests(unittest.TestCase):
                         "guild_name": "Audit Guild",
                         "command": "ban",
                         "status": "success",
-                        "timestamp": "2026-03-20T12:00:00+00:00",
+                        "timestamp": expired_timestamp,
                     }
                 )
                 stored_count = len(command_logs)
@@ -395,6 +398,25 @@ class CommandControlStoreSettingsTests(unittest.TestCase):
             self.assertTrue(self.controls.is_premium_enabled(1001))
             self.billing.clear_guild_entitlement(1001)
             self.assertFalse(self.controls.is_premium_enabled(1001))
+
+    def test_billing_ready_redeem_key_controls_premium_access(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "DISCORD_APP_ID": "1487599032170975292",
+                "DISCORD_PREMIUM_SKU_ID": "1488888888888888888",
+                "SERVERCORE_PREMIUM_REDEEM_KEYS": "SC-REVIEW-LIVE1234",
+            },
+            clear=False,
+        ):
+            self.assertFalse(self.controls.is_premium_enabled(1001))
+
+            self.billing.redeem_key_for_guild("SC-REVIEW-LIVE1234", guild_id=1001, premium_user_id=5001)
+
+            self.assertTrue(self.controls.is_premium_enabled(1001))
+            assignment = self.billing.get_guild_assignment(1001)
+            self.assertEqual(assignment["activation_source"], "redeem_key")
+            self.assertTrue(assignment["is_active"])
 
     def test_set_roles_for_commands_updates_multiple_policies_in_one_call(self) -> None:
         result = self.controls.set_roles_for_commands(1001, ["warn", "ban"], [10], restrict_to_roles=True)

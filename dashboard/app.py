@@ -524,6 +524,8 @@ def create_dashboard_app(bot) -> FastAPI:
                 summary_copy = f"Premium is active for {guild_name}."
             else:
                 summary_copy = f"Free tier is active for {guild_name}."
+        elif is_premium:
+            summary_copy = f"Premium is active for {guild_name}."
         else:
             summary_copy = f"Free tier is active for {guild_name}."
 
@@ -563,6 +565,7 @@ def create_dashboard_app(bot) -> FastAPI:
             "billing_url": f"/billing?guild_id={guild_id}",
             "store_url": guild_billing["store_url"],
             "supports_manual_toggle": not guild_billing["billing_ready"],
+            "activation_source": guild_billing["activation_source"],
         }
 
     async def build_live_guild_entry(guild_id: int, user_id: int) -> dict | None:

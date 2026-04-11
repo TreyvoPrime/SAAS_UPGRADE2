@@ -141,7 +141,10 @@ class ServerCoreBot(commands.Bot):
                 entitlement_match = entitlement
 
         if entitlement_match is None:
-            updated = self.billing_store.clear_guild_entitlement(guild_id)
+            if current.get("activation_source") == "redeem_key" and current.get("is_active"):
+                updated = current
+            else:
+                updated = self.billing_store.clear_guild_entitlement(guild_id)
         else:
             updated = self.billing_store.sync_from_entitlement(entitlement_match) or current
 
@@ -176,6 +179,9 @@ class ServerCoreBot(commands.Bot):
         for guild_id, entitlement in active_by_guild.items():
             self.billing_store.sync_from_entitlement(entitlement)
         for guild_id in known_guild_ids - set(active_by_guild.keys()):
+            current = self.billing_store.get_guild_assignment(guild_id)
+            if current.get("activation_source") == "redeem_key" and current.get("is_active"):
+                continue
             self.billing_store.clear_guild_entitlement(guild_id)
         for guild_id in known_guild_ids:
             await self._enforce_premium_dependencies(guild_id, premium_active=self.billing_store.guild_has_active_premium(guild_id))
