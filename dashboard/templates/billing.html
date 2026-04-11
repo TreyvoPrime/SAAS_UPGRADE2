@@ -175,11 +175,13 @@
                         </a>
                         <button class="ghost-button" type="button" id="billing-refresh-status">Refresh status</button>
                         <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
-                        <p class="billing-inline-note" id="billing-inline-note">{% if billing.is_active %}Premium is already active for this server.{% else %}After checkout finishes in Discord, this page will update automatically for {{ selected_guild.name }}.{% endif %}</p>
+                        <p class="billing-inline-note" id="billing-inline-note">{% if billing.is_active %}Premium is active for this server.{% else %}Use Refresh status after checkout in Discord to confirm activation for {{ selected_guild.name }}.{% endif %}</p>
                         {% else %}
                         <button class="primary-button" type="button" disabled>{% if selected_guild %}Discord billing not ready{% else %}Select a server first{% endif %}</button>
                         {% if selected_guild %}
+                        <button class="ghost-button" type="button" id="billing-refresh-status">Refresh status</button>
                         <a class="ghost-button" href="/dashboard/{{ selected_guild.id }}">Back to dashboard</a>
+                        <p class="billing-inline-note" id="billing-inline-note">{% if billing.is_active %}Premium is active for this server.{% else %}Reviewer keys and manual status checks are available here for {{ selected_guild.name }}.{% endif %}</p>
                         {% endif %}
                         {% endif %}
                     </div>
@@ -347,8 +349,8 @@
             }
             if (billingStatusCopy) {
                 billingStatusCopy.textContent = premiumOn
-                    ? `${guildName} now has Premium active. Guardian and the premium command set are unlocked on this server.`
-                    : `${guildName} is still on the Free tier. Finish checkout in Discord to unlock Guardian and the premium command set here.`;
+                    ? `Premium is active for ${guildName}. Guardian and advanced tools are unlocked here.`
+                    : `This server is on the Free tier right now. Start Premium to unlock Guardian and the advanced staff toolkit here.`;
             }
             if (billingPrimaryAction) {
                 billingPrimaryAction.textContent = premiumOn ? "Open billing in Discord" : "Buy Premium in Discord";
@@ -358,8 +360,8 @@
             }
             if (billingInlineNote) {
                 billingInlineNote.textContent = premiumOn
-                    ? `Premium is active for ${guildName}. Changes should now appear on the dashboard and premium commands should work right away.`
-                    : `After checkout finishes in Discord, this page will update automatically for ${guildName}.`;
+                    ? `Premium is active for this server.`
+                    : `Use Refresh status after checkout in Discord to confirm activation for ${guildName}.`;
             }
             if (billingPlanFoot) {
                 billingPlanFoot.textContent = premiumOn ? "Premium is active for this server." : "One subscription for this server.";
@@ -388,7 +390,7 @@
                 billingRedeemInput.value = premiumOn ? "" : billingRedeemInput.value;
             }
             if (premiumOn && !billingActive) {
-                revealBillingBanner(`Premium is active for ${guildName}. Guardian and premium commands are now unlocked on this server.`, "success");
+                revealBillingBanner(`Premium is active for ${guildName}.`, "success");
             }
             billingActive = premiumOn;
             document.body.dataset.billingActive = premiumOn ? "true" : "false";
@@ -397,7 +399,7 @@
         }
 
         async function refreshBillingStatus({ silent = false } = {}) {
-            if (!billingGuildId || !billingReady) return null;
+            if (!billingGuildId) return null;
             if (billingRefreshInFlight) return null;
             billingRefreshInFlight = true;
             setBillingRefreshBusy(true);
@@ -451,7 +453,7 @@
                     throw new Error(payload.detail || "The premium key could not be redeemed.");
                 }
                 syncBillingUi(payload.subscription, payload.billing);
-                revealBillingBanner("Premium unlocked with a redeem key. This server now has Premium active.", "success");
+                revealBillingBanner("Premium is active for this server.", "success");
             } catch (error) {
                 revealBillingBanner(error.message || "The premium key could not be redeemed.", "warning");
             } finally {
@@ -460,7 +462,7 @@
         });
 
         document.addEventListener("visibilitychange", () => {
-            if (!document.hidden && billingGuildId && billingReady) {
+            if (!document.hidden && billingGuildId) {
                 refreshBillingStatus({ silent: true }).catch(() => {});
             }
         });
